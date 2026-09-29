@@ -30,6 +30,7 @@ import {
   Edit3,
   ExternalLink
 } from 'lucide-react';
+import AdvisorsExpertsView from './AdvisorsExpertsView';
 
 export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -586,6 +587,23 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
               );
             })}
           </nav>
+
+          {/* Sidebar Bottom Status Footer */}
+          {isSidebarOpen && (
+            <div className={`pt-4 mt-auto border-t text-[11px] space-y-2.5 ${
+              isDarkMode ? 'border-slate-800/80 text-slate-400' : 'border-stone-200 text-stone-500'
+            }`}>
+              <div className="flex items-center gap-2 font-medium">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <span className={isDarkMode ? 'text-slate-300 font-semibold' : 'text-slate-700 font-semibold'}>
+                  All systems operational
+                </span>
+              </div>
+              <p className="text-[10px] opacity-75 font-mono">
+                FinRegTech ShipYard Prototype · September 2026
+              </p>
+            </div>
+          )}
         </aside>
 
         {/* Dashboard Content Container */}
@@ -808,6 +826,8 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                             e.stopPropagation();
                             if (action.id === 'new-project') {
                               setActiveTab('Create Project');
+                            } else if (action.id === 'browse-advisors') {
+                              setActiveTab('Advisors / Experts');
                             } else {
                               setActiveQuickActionId(isActionActive ? null : action.id);
                             }
@@ -1654,22 +1674,37 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
             </div>
           )}
 
-          {/* OTHER TABS PLACEHOLDER (Advisors, Support, Tools, Settings) */}
-          {activeTab !== 'Dashboard' && activeTab !== 'My Projects' && activeTab !== 'Create Project' && activeTab !== 'Project Details' && (
-            <div className={`p-8 rounded-2xl border text-center animate-fadeIn ${
-              isDarkMode ? 'bg-[#1a1a1e] border-slate-800' : 'bg-white border-stone-200'
-            }`}>
-              <h2 className="text-xl font-bold mb-2">{activeTab} Workspace</h2>
-              <p className="text-slate-400 text-sm mb-6">This module is part of the FinRegTech Shipyard build.</p>
-              <button
-                type="button"
-                onClick={() => setActiveTab('Dashboard')}
-                className="px-4 py-2 bg-[#7c4a27] text-white font-semibold rounded-xl text-xs cursor-pointer"
-              >
-                ← Return to Dashboard
-              </button>
-            </div>
+          {/* TAB 5: ADVISORS & EXPERTS VIEW */}
+          {activeTab === 'Advisors / Experts' && (
+            <AdvisorsExpertsView
+              isDarkMode={isDarkMode}
+              onInviteAdvisor={(advName) => {
+                setToastMessage(`Invitation sent to ${advName}`);
+                setTimeout(() => setToastMessage(null), 4000);
+              }}
+            />
           )}
+
+          {/* OTHER TABS PLACEHOLDER (Support, Tools, Settings) */}
+          {activeTab !== 'Dashboard' &&
+            activeTab !== 'My Projects' &&
+            activeTab !== 'Create Project' &&
+            activeTab !== 'Project Details' &&
+            activeTab !== 'Advisors / Experts' && (
+              <div className={`p-8 rounded-2xl border text-center animate-fadeIn ${
+                isDarkMode ? 'bg-[#1a1a1e] border-slate-800' : 'bg-white border-stone-200'
+              }`}>
+                <h2 className="text-xl font-bold mb-2">{activeTab} Workspace</h2>
+                <p className="text-slate-400 text-sm mb-6">This module is part of the FinRegTech Shipyard build.</p>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('Dashboard')}
+                  className="px-4 py-2 bg-[#7c4a27] text-white font-semibold rounded-xl text-xs cursor-pointer"
+                >
+                  ← Return to Dashboard
+                </button>
+              </div>
+            )}
         </main>
       </div>
     </div>
