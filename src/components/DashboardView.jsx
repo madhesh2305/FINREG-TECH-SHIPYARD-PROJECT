@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { getProjects, getProjectDetails, createProject } from '../services/projectService';
 import { getCurrentUser, logoutUser } from '../services/authService';
 import { getAdvisors } from '../services/advisorService';
+import AdvisorsExpertsView from './AdvisorsExpertsView';
+
 
 import {
   Menu,
@@ -864,6 +866,8 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                             e.stopPropagation();
                             if (action.id === 'new-project') {
                               setActiveTab('Create Project');
+                            } else if (action.id === 'browse-advisors') {
+                              setActiveTab('Advisors / Experts');
                             } else {
                               setActiveQuickActionId(isActionActive ? null : action.id);
                             }
@@ -1710,8 +1714,13 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
             </div>
           )}
 
-          {/* OTHER TABS PLACEHOLDER (Advisors, Support, Tools, Settings) */}
-          {activeTab !== 'Dashboard' && activeTab !== 'My Projects' && activeTab !== 'Create Project' && activeTab !== 'Project Details' && (
+          {/* TAB: ADVISORS / EXPERTS VIEW */}
+          {activeTab === 'Advisors / Experts' && (
+            <AdvisorsExpertsView isDarkMode={isDarkMode} />
+          )}
+
+          {/* OTHER TABS PLACEHOLDER (Support, Tools, Settings) */}
+          {activeTab !== 'Dashboard' && activeTab !== 'My Projects' && activeTab !== 'Create Project' && activeTab !== 'Project Details' && activeTab !== 'Advisors / Experts' && (
             <div className={`p-8 rounded-2xl border text-center animate-fadeIn ${
               isDarkMode ? 'bg-[#1a1a1e] border-slate-800' : 'bg-white border-stone-200'
             }`}>
