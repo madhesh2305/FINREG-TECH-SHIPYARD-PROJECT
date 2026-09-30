@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, Check, ArrowLeft } from 'lucide-react';
+import { Search, Check, ArrowLeft, UserX } from 'lucide-react';
 import { sendAdvisorInvitation } from '../services/advisorService';
 
 export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
@@ -140,19 +140,13 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
     if (onInviteAdvisor) onInviteAdvisor(modalAdvisor);
   };
 
-  // Toggle or Cancel Invited state
-  const handleToggleInvitedState = (adv) => {
-    if (adv.isInvited) {
-      setAdvisors((prevAdvisors) =>
-        prevAdvisors.map((a) => (a.id === adv.id ? { ...a, isInvited: false } : a))
-      );
-      setToastMsg(`Invitation cancelled for ${adv.name}`);
-      setTimeout(() => setToastMsg(null), 3000);
-    } else {
-      if (!isLimitReached) {
-        handleOpenInviteModal(adv);
-      }
-    }
+  // Cancel Invitation -> Removes advisor from "My Invited Advisors" and re-enables "Invite" button
+  const handleCancelInvitation = (adv) => {
+    setAdvisors((prevAdvisors) =>
+      prevAdvisors.map((a) => (a.id === adv.id ? { ...a, isInvited: false } : a))
+    );
+    setToastMsg(`Invitation cancelled for ${adv.name}. "Invite" button re-enabled.`);
+    setTimeout(() => setToastMsg(null), 3000);
   };
 
   const handleProfileClick = (adv) => {
@@ -208,14 +202,14 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
             </div>
           </div>
 
+          {/* Top Right Action Button */}
           {currentAdv.isInvited ? (
             <button
               type="button"
-              disabled
-              className="px-6 py-3 rounded-xl font-bold text-xs sm:text-sm border border-slate-700/80 bg-slate-800/90 text-slate-400 cursor-not-allowed opacity-80 self-start sm:self-center"
-              title="Advisor already invited"
+              onClick={() => handleCancelInvitation(currentAdv)}
+              className="px-6 py-3 rounded-xl font-bold text-xs sm:text-sm border border-rose-500/40 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-rose-100 transition-colors cursor-pointer self-start sm:self-center shadow-sm"
             >
-              Invited
+              Cancel invitation
             </button>
           ) : isLimitReached ? (
             <button
@@ -522,103 +516,136 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
         </select>
       </div>
 
-      {/* Advisor Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-2">
-        {filteredAdvisors.map((adv) => {
-          const isActive = activeCardId === adv.id;
+      {/* Empty State for My Invited Advisors if none invited */}
+      {activeSubTab === 'My Invited Advisors' && filteredAdvisors.length === 0 && (
+        <div className="p-12 rounded-2xl border border-slate-800 bg-[#161619] text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+            <UserX className="w-6 h-6" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-200">No invited advisors</h3>
+          <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
+            You have not invited any advisors yet. Switch to "Find Advisors" to browse specialists and send invitations.
+          </p>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('Find Advisors')}
+            className="px-4 py-2 rounded-xl bg-[#7c4a27] text-white font-semibold text-xs cursor-pointer hover:bg-[#633a1e] transition-colors"
+          >
+            Browse Advisors
+          </button>
+        </div>
+      )}
 
-          return (
-            <div
-              key={adv.id}
-              onClick={() => setActiveCardId(isActive ? null : adv.id)}
-              title="Click box to toggle brown border, cream edge lighting glow & zoom-in"
-              className={`rounded-2xl border p-5 flex flex-col justify-between transition-all duration-300 cursor-pointer ${
-                isActive
-                  ? isDarkMode
-                    ? 'bg-[#1e1e24] border-[#96562c] scale-[1.015] shadow-[0_0_35px_rgba(251,191,36,0.25),0_12px_36px_rgba(150,86,44,0.35)] ring-2 ring-[#96562c]/40'
-                    : 'bg-[#fdfdf9] border-[#7c4a27] scale-[1.015] shadow-[0_0_40px_rgba(254,243,199,0.95),0_14px_40px_rgba(124,74,39,0.22)] ring-4 ring-amber-100/90'
-                  : isDarkMode
-                  ? 'bg-[#161619] border-slate-800/90 shadow-md hover:border-[#96562c] hover:scale-[1.01]'
-                  : 'bg-white border-stone-200/90 shadow-xs hover:border-[#7c4a27] hover:scale-[1.01]'
-              }`}
-            >
-              <div>
-                {/* Header Row: Initials Badge & Status Pill */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-8 h-8 rounded-md bg-[#7c4a27]/30 dark:bg-[#96562c]/30 text-amber-700 dark:text-amber-300 border border-amber-300/30 dark:border-[#96562c]/50 font-bold text-xs flex items-center justify-center">
-                    {adv.avatar}
+      {/* Advisor Cards Grid */}
+      {filteredAdvisors.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-2">
+          {filteredAdvisors.map((adv) => {
+            const isActive = activeCardId === adv.id;
+
+            return (
+              <div
+                key={adv.id}
+                onClick={() => setActiveCardId(isActive ? null : adv.id)}
+                title="Click box to toggle brown border, cream edge lighting glow & zoom-in"
+                className={`rounded-2xl border p-5 flex flex-col justify-between transition-all duration-300 cursor-pointer ${
+                  isActive
+                    ? isDarkMode
+                      ? 'bg-[#1e1e24] border-[#96562c] scale-[1.015] shadow-[0_0_35px_rgba(251,191,36,0.25),0_12px_36px_rgba(150,86,44,0.35)] ring-2 ring-[#96562c]/40'
+                      : 'bg-[#fdfdf9] border-[#7c4a27] scale-[1.015] shadow-[0_0_40px_rgba(254,243,199,0.95),0_14px_40px_rgba(124,74,39,0.22)] ring-4 ring-amber-100/90'
+                    : isDarkMode
+                    ? 'bg-[#161619] border-slate-800/90 shadow-md hover:border-[#96562c] hover:scale-[1.01]'
+                    : 'bg-white border-stone-200/90 shadow-xs hover:border-[#7c4a27] hover:scale-[1.01]'
+                }`}
+              >
+                <div>
+                  {/* Header Row: Initials Badge & Status Pill */}
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-8 h-8 rounded-md bg-[#7c4a27]/30 dark:bg-[#96562c]/30 text-amber-700 dark:text-amber-300 border border-amber-300/30 dark:border-[#96562c]/50 font-bold text-xs flex items-center justify-center">
+                      {adv.avatar}
+                    </div>
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${adv.statusColor}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${adv.dotColor}`} />
+                      {adv.status}
+                    </span>
                   </div>
-                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${adv.statusColor}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${adv.dotColor}`} />
-                    {adv.status}
-                  </span>
+
+                  {/* Name, Specialty & Firm */}
+                  <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
+                    {adv.name}
+                  </h3>
+                  <p className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mt-1">
+                    {adv.specialty}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-normal">
+                    {adv.firm}
+                  </p>
+
+                  {/* Jurisdiction */}
+                  <p className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-4">
+                    {adv.jurisdiction}
+                  </p>
                 </div>
 
-                {/* Name, Specialty & Firm */}
-                <h3 className="text-lg font-bold text-slate-900 dark:text-slate-100 tracking-tight">
-                  {adv.name}
-                </h3>
-                <p className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-slate-300 mt-1">
-                  {adv.specialty}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-normal">
-                  {adv.firm}
-                </p>
-
-                {/* Jurisdiction */}
-                <p className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-4">
-                  {adv.jurisdiction}
-                </p>
-              </div>
-
-              {/* Bottom Actions Row */}
-              <div className="flex items-center justify-between gap-3 pt-5 mt-5 border-t border-slate-100 dark:border-slate-800/80">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleProfileClick(adv);
-                  }}
-                  className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700/80 bg-stone-50 dark:bg-slate-800/60 hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
-                >
-                  View profile
-                </button>
-
-                {adv.isInvited ? (
-                  <button
-                    type="button"
-                    disabled
-                    className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-700/80 bg-slate-800/90 text-slate-400 cursor-not-allowed opacity-80"
-                    title="Advisor already invited"
-                  >
-                    Invited
-                  </button>
-                ) : isLimitReached ? (
-                  <button
-                    type="button"
-                    disabled
-                    className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-800 bg-slate-900 text-slate-500 cursor-not-allowed opacity-60"
-                    title="Advisor limit of 2 / 2 reached"
-                  >
-                    Limit Reached
-                  </button>
-                ) : (
+                {/* Bottom Actions Row */}
+                <div className="flex items-center justify-between gap-3 pt-5 mt-5 border-t border-slate-100 dark:border-slate-800/80">
                   <button
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleOpenInviteModal(adv);
+                      handleProfileClick(adv);
                     }}
-                    className="px-5 py-2 rounded-xl text-xs font-bold bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 shadow-sm transition-all cursor-pointer border border-amber-300/60 hover:scale-[1.03]"
+                    className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700/80 bg-stone-50 dark:bg-slate-800/60 hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
                   >
-                    Invite
+                    View profile
                   </button>
-                )}
+
+                  {activeSubTab === 'My Invited Advisors' ? (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCancelInvitation(adv);
+                      }}
+                      className="px-3.5 py-2 rounded-xl text-xs font-bold border border-rose-500/40 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-rose-100 transition-colors cursor-pointer shadow-sm"
+                    >
+                      Cancel invitation
+                    </button>
+                  ) : adv.isInvited ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-700/80 bg-slate-800/90 text-slate-400 cursor-not-allowed opacity-80"
+                      title="Advisor already invited"
+                    >
+                      Invited
+                    </button>
+                  ) : isLimitReached ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-800 bg-slate-900 text-slate-500 cursor-not-allowed opacity-60"
+                      title="Advisor limit of 2 / 2 reached"
+                    >
+                      Limit Reached
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenInviteModal(adv);
+                      }}
+                      className="px-5 py-2 rounded-xl text-xs font-bold bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 shadow-sm transition-all cursor-pointer border border-amber-300/60 hover:scale-[1.03]"
+                    >
+                      Invite
+                    </button>
+                  )}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* INVITE ADVISOR MODAL */}
       {isInviteModalOpen && modalAdvisor && (
