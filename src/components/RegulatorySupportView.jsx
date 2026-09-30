@@ -1,18 +1,17 @@
 import React, { useState } from 'react';
-import { Search, ShieldCheck, Check, ExternalLink, Filter, BookOpen } from 'lucide-react';
+import { Search, ShieldCheck, Check } from 'lucide-react';
 
 export default function RegulatorySupportView({ isDarkMode }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [jurisdictionFilter, setJurisdictionFilter] = useState('All jurisdictions');
   const [authorityFilter, setAuthorityFilter] = useState('All authorities');
-  const [topicFilter, setTopicFilter] = useState('All topics');
   const [statusFilter, setStatusFilter] = useState('Validation status');
   const [layerFilter, setLayerFilter] = useState('Regulatory layer');
 
   const [activeRowId, setActiveRowId] = useState(null);
   const [toastMsg, setToastMsg] = useState(null);
 
-  // Master Regulatory Library Data matching reference image media_1790749171409.png
+  // Master Regulatory Library Data matching reference image media_1790749171409.png & media_1790749598018.png
   const regulatoryRequirements = [
     {
       id: 'REQ-142',
@@ -25,6 +24,8 @@ export default function RegulatorySupportView({ isDarkMode }) {
       layer: 'FCA Rules / Principles',
       applicability: 'Applicable to Retail & Commercial Banking',
       validationStatus: 'Validated',
+      validationBadge: 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400',
+      dotColor: 'bg-emerald-500',
       description: 'Firm must apply customer due diligence measures on a risk-sensitive basis depending on customer type and transaction profile.',
     },
     {
@@ -37,7 +38,9 @@ export default function RegulatorySupportView({ isDarkMode }) {
       dateVersion: 'Jul 2024 revision',
       layer: 'Government Guidance',
       applicability: 'Applicable to Payment Services & Credit Institutions',
-      validationStatus: 'Validated',
+      validationStatus: 'Review due',
+      validationBadge: 'border-amber-800/80 bg-amber-950/60 text-amber-400',
+      dotColor: 'bg-amber-500',
       description: 'Continuous monitoring of customer accounts and transactions to detect unusual patterns and potential money laundering indicators.',
     },
     {
@@ -51,6 +54,8 @@ export default function RegulatorySupportView({ isDarkMode }) {
       layer: 'Statutory Law',
       applicability: 'Applicable to All Money Laundering Reporting Officers',
       validationStatus: 'Validated',
+      validationBadge: 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400',
+      dotColor: 'bg-emerald-500',
       description: 'Mandatory obligation to report suspicious activity reports (SARs) directly to the UK National Crime Agency without tipping off.',
     },
     {
@@ -64,6 +69,8 @@ export default function RegulatorySupportView({ isDarkMode }) {
       layer: 'International Standard',
       applicability: 'Applicable to All Financial Institutions',
       validationStatus: 'Validated',
+      validationBadge: 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400',
+      dotColor: 'bg-emerald-500',
       description: 'Enhanced due diligence requirements for PEPs, family members, and close associates across all onboarding channels.',
     },
     {
@@ -76,7 +83,9 @@ export default function RegulatorySupportView({ isDarkMode }) {
       dateVersion: 'Release 124 · Jun 2026',
       layer: 'FCA Rules / Principles',
       applicability: 'Applicable to Retail Financial Products & Services',
-      validationStatus: 'Validated',
+      validationStatus: 'Review due',
+      validationBadge: 'border-amber-800/80 bg-amber-950/60 text-amber-400',
+      dotColor: 'bg-amber-500',
       description: 'Boards must monitor customer outcomes, pricing value, and product governance to ensure good outcomes for retail customers.',
     },
   ];
@@ -181,6 +190,7 @@ export default function RegulatorySupportView({ isDarkMode }) {
         >
           <option value="Validation status">Validation status</option>
           <option value="Validated">Validated</option>
+          <option value="Review due">Review due</option>
         </select>
 
         {/* Regulatory Layer Dropdown */}
@@ -199,7 +209,7 @@ export default function RegulatorySupportView({ isDarkMode }) {
       {/* Main Data Table Container with Horizontal Scrollbar matching reference screenshot */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-[#161619] shadow-md overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[950px]">
+          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1050px]">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800/80 bg-stone-50 dark:bg-[#111215] text-[11px] font-extrabold tracking-wider text-slate-400 dark:text-slate-500 uppercase">
                 <th className="py-4 px-6">REQUIREMENT</th>
@@ -209,7 +219,8 @@ export default function RegulatorySupportView({ isDarkMode }) {
                 <th className="py-4 px-4">REFERENCE</th>
                 <th className="py-4 px-4">DATE / VERSION</th>
                 <th className="py-4 px-4">REGULATORY LAYER</th>
-                <th className="py-4 px-6">APPLICABILITY</th>
+                <th className="py-4 px-5">APPLICABILITY</th>
+                <th className="py-4 px-6">VALIDATION</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
@@ -274,8 +285,16 @@ export default function RegulatorySupportView({ isDarkMode }) {
                     </td>
 
                     {/* APPLICABILITY Column */}
-                    <td className="py-4 px-6 text-slate-600 dark:text-slate-400 text-xs truncate max-w-[200px]" title={req.applicability}>
+                    <td className="py-4 px-5 text-slate-600 dark:text-slate-400 text-xs truncate max-w-[180px]" title={req.applicability}>
                       {req.applicability}
+                    </td>
+
+                    {/* VALIDATION Column (Matching uploaded reference image media_1790749598018.png) */}
+                    <td className="py-4 px-6">
+                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${req.validationBadge}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${req.dotColor}`} />
+                        {req.validationStatus}
+                      </span>
                     </td>
                   </tr>
                 );
