@@ -206,21 +206,21 @@ export default function RegulatorySupportView({ isDarkMode }) {
         </select>
       </div>
 
-      {/* Main Data Table Container with Horizontal Scrollbar matching reference screenshot */}
-      <div className="rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-[#161619] shadow-md overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1050px]">
+      {/* Main Data Table Container with Horizontal Scrollbar */}
+      <div className="rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-[#161619] shadow-lg overflow-hidden">
+        <div className="overflow-x-auto custom-scrollbar pb-2">
+          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1450px]">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800/80 bg-stone-50 dark:bg-[#111215] text-[11px] font-extrabold tracking-wider text-slate-400 dark:text-slate-500 uppercase">
-                <th className="py-4 px-6">REQUIREMENT</th>
-                <th className="py-4 px-4">AUTHORITY</th>
-                <th className="py-4 px-4">JURISDICTION</th>
-                <th className="py-4 px-4">SOURCE</th>
-                <th className="py-4 px-4">REFERENCE</th>
-                <th className="py-4 px-4">DATE / VERSION</th>
-                <th className="py-4 px-4">REGULATORY LAYER</th>
-                <th className="py-4 px-5">APPLICABILITY</th>
-                <th className="py-4 px-6">VALIDATION</th>
+                <th className="py-5 px-7">REQUIREMENT</th>
+                <th className="py-5 px-5">AUTHORITY</th>
+                <th className="py-5 px-5">JURISDICTION</th>
+                <th className="py-5 px-5">SOURCE</th>
+                <th className="py-5 px-5">REFERENCE</th>
+                <th className="py-5 px-5">DATE / VERSION</th>
+                <th className="py-5 px-5">REGULATORY LAYER</th>
+                <th className="py-5 px-6">APPLICABILITY</th>
+                <th className="py-5 px-7">VALIDATION</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
@@ -242,56 +242,56 @@ export default function RegulatorySupportView({ isDarkMode }) {
                     }`}
                   >
                     {/* REQUIREMENT Column */}
-                    <td className="py-4 px-6">
-                      <div className="font-bold text-slate-900 dark:text-slate-100 text-sm">
+                    <td className="py-5 px-7">
+                      <div className="font-bold text-slate-900 dark:text-slate-100 text-sm sm:text-base">
                         {req.requirement}
                       </div>
-                      <div className="text-[11px] font-mono font-semibold text-slate-400 dark:text-slate-500 mt-0.5">
+                      <div className="text-[11px] font-mono font-semibold text-slate-400 dark:text-slate-500 mt-1">
                         {req.id}
                       </div>
                     </td>
 
                     {/* AUTHORITY Column */}
-                    <td className="py-4 px-4 font-bold text-slate-700 dark:text-slate-300">
+                    <td className="py-5 px-5 font-bold text-slate-700 dark:text-slate-200 text-sm">
                       {req.authority}
                     </td>
 
                     {/* JURISDICTION Column */}
-                    <td className="py-4 px-4 text-slate-600 dark:text-slate-400">
+                    <td className="py-5 px-5 text-slate-600 dark:text-slate-300 text-sm">
                       {req.jurisdiction}
                     </td>
 
                     {/* SOURCE Column */}
-                    <td className="py-4 px-4 font-medium text-slate-700 dark:text-slate-300">
+                    <td className="py-5 px-5 font-medium text-slate-700 dark:text-slate-300 text-sm">
                       {req.source}
                     </td>
 
                     {/* REFERENCE Column */}
-                    <td className="py-4 px-4 font-mono text-slate-700 dark:text-slate-300 text-xs">
+                    <td className="py-5 px-5 font-mono text-slate-700 dark:text-slate-300 text-xs sm:text-sm">
                       {req.reference}
                     </td>
 
                     {/* DATE / VERSION Column */}
-                    <td className="py-4 px-4 text-slate-500 dark:text-slate-400 text-xs font-mono">
+                    <td className="py-5 px-5 text-slate-500 dark:text-slate-400 text-xs sm:text-sm font-mono">
                       {req.dateVersion}
                     </td>
 
                     {/* REGULATORY LAYER Column */}
-                    <td className="py-4 px-4">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border border-slate-300 dark:border-slate-800 bg-stone-100 dark:bg-[#1e2026] text-slate-700 dark:text-slate-300">
+                    <td className="py-5 px-5">
+                      <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold border border-slate-300 dark:border-slate-800 bg-stone-100 dark:bg-[#1e2026] text-slate-700 dark:text-slate-300">
                         <span className="w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500" />
                         {req.layer}
                       </span>
                     </td>
 
                     {/* APPLICABILITY Column */}
-                    <td className="py-4 px-5 text-slate-600 dark:text-slate-400 text-xs truncate max-w-[180px]" title={req.applicability}>
+                    <td className="py-5 px-6 text-slate-600 dark:text-slate-300 text-xs sm:text-sm truncate max-w-[280px]" title={req.applicability}>
                       {req.applicability}
                     </td>
 
-                    {/* VALIDATION Column (Matching uploaded reference image media_1790749598018.png) */}
-                    <td className="py-4 px-6">
-                      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${req.validationBadge}`}>
+                    {/* VALIDATION Column */}
+                    <td className="py-5 px-7">
+                      <span className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold border ${req.validationBadge}`}>
                         <span className={`w-1.5 h-1.5 rounded-full ${req.dotColor}`} />
                         {req.validationStatus}
                       </span>

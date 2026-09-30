@@ -80,3 +80,25 @@
   animation: progressLine 3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
+/* Styled horizontal scrollbar for wide tables */
+.custom-scrollbar::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #18191e;
+  border-radius: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #7c4a27;
+  border-radius: 6px;
+  border: 2px solid #18191e;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #f59e0b;
+}
+
+
