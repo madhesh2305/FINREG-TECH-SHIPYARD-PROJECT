@@ -208,12 +208,12 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
             </div>
           </div>
 
-          {/* Top Right Action Button */}
           {currentAdv.isInvited ? (
             <button
               type="button"
-              onClick={() => handleToggleInvitedState(currentAdv)}
-              className="px-6 py-3 rounded-xl font-bold text-xs sm:text-sm border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors cursor-pointer self-start sm:self-center"
+              disabled
+              className="px-6 py-3 rounded-xl font-bold text-xs sm:text-sm border border-slate-700/80 bg-slate-800/90 text-slate-400 cursor-not-allowed opacity-80 self-start sm:self-center"
+              title="Advisor already invited"
             >
               Invited
             </button>
@@ -587,11 +587,9 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
                 {adv.isInvited ? (
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleInvitedState(adv);
-                    }}
-                    className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700 bg-stone-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors cursor-pointer"
+                    disabled
+                    className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-700/80 bg-slate-800/90 text-slate-400 cursor-not-allowed opacity-80"
+                    title="Advisor already invited"
                   >
                     Invited
                   </button>
