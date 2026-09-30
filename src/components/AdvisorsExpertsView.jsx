@@ -74,6 +74,7 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
   ]);
 
   const invitedCount = advisors.filter((a) => a.isInvited).length;
+  const isLimitReached = invitedCount >= 2;
 
   // Filtering Logic
   const filteredAdvisors = advisors.filter((adv) => {
@@ -98,6 +99,7 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
 
   // Open Invite Modal for specific advisor
   const handleOpenInviteModal = (adv) => {
+    if (isLimitReached && !adv.isInvited) return;
     setModalAdvisor(adv);
     setModalProject('AML Compliance Framework');
     setModalRole('Regulatory Reviewer');
@@ -107,7 +109,7 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
     setIsInviteModalOpen(true);
   };
 
-  // Submit Modal Invitation Form
+  // Submit Modal Invitation Form -> Permanently adds advisor to "My Invited Advisors"
   const handleSendInvitation = async (e) => {
     e.preventDefault();
     if (!modalAdvisor) return;
@@ -125,15 +127,15 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
       console.warn('sendAdvisorInvitation fallback executed:', err);
     }
 
-    // Update local state to mark advisor as invited
-    setAdvisors(
-      advisors.map((a) => (a.id === modalAdvisor.id ? { ...a, isInvited: true } : a))
+    // Update local state to mark advisor as invited (permanently available under "My Invited Advisors")
+    setAdvisors((prevAdvisors) =>
+      prevAdvisors.map((a) => (a.id === modalAdvisor.id ? { ...a, isInvited: true } : a))
     );
 
     setIsSubmittingInvite(false);
     setIsInviteModalOpen(false);
 
-    setToastMsg(`Invitation sent to ${modalAdvisor.name}!`);
+    setToastMsg(`Invitation sent to ${modalAdvisor.name}! Saved under My Invited Advisors.`);
     setTimeout(() => setToastMsg(null), 3000);
     if (onInviteAdvisor) onInviteAdvisor(modalAdvisor);
   };
@@ -141,13 +143,15 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
   // Toggle or Cancel Invited state
   const handleToggleInvitedState = (adv) => {
     if (adv.isInvited) {
-      setAdvisors(
-        advisors.map((a) => (a.id === adv.id ? { ...a, isInvited: false } : a))
+      setAdvisors((prevAdvisors) =>
+        prevAdvisors.map((a) => (a.id === adv.id ? { ...a, isInvited: false } : a))
       );
       setToastMsg(`Invitation cancelled for ${adv.name}`);
       setTimeout(() => setToastMsg(null), 3000);
     } else {
-      handleOpenInviteModal(adv);
+      if (!isLimitReached) {
+        handleOpenInviteModal(adv);
+      }
     }
   };
 
@@ -212,6 +216,15 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
               className="px-6 py-3 rounded-xl font-bold text-xs sm:text-sm border border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors cursor-pointer self-start sm:self-center"
             >
               Invited
+            </button>
+          ) : isLimitReached ? (
+            <button
+              type="button"
+              disabled
+              className="px-6 py-3 rounded-xl font-bold text-xs sm:text-sm border border-slate-800 bg-slate-900 text-slate-500 cursor-not-allowed opacity-60 self-start sm:self-center"
+              title="Advisor limit of 2 / 2 reached"
+            >
+              Limit Reached
             </button>
           ) : (
             <button
@@ -304,7 +317,7 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
                 {/* Advisor Limit Pill Badge */}
                 <div>
                   <div className="inline-block px-3.5 py-1.5 rounded-xl border border-slate-800 bg-[#1e2026] text-xs font-medium text-slate-400">
-                    Advisor limit: <span className="font-bold text-slate-200">1 / 2</span>
+                    Advisor limit: <span className="font-bold text-slate-200">{invitedCount} / 2</span>
                   </div>
                 </div>
 
@@ -582,6 +595,15 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
                   >
                     Invited
                   </button>
+                ) : isLimitReached ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-800 bg-slate-900 text-slate-500 cursor-not-allowed opacity-60"
+                    title="Advisor limit of 2 / 2 reached"
+                  >
+                    Limit Reached
+                  </button>
                 ) : (
                   <button
                     type="button"
@@ -626,7 +648,7 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
               {/* Advisor Limit Pill Badge */}
               <div>
                 <div className="inline-block px-3.5 py-1.5 rounded-xl border border-slate-800 bg-[#1e2026] text-xs font-medium text-slate-400">
-                  Advisor limit: <span className="font-bold text-slate-200">1 / 2</span>
+                  Advisor limit: <span className="font-bold text-slate-200">{invitedCount} / 2</span>
                 </div>
               </div>
 
