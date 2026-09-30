@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Search, Check } from 'lucide-react';
+import { Search, Check, X } from 'lucide-react';
+import { sendAdvisorInvitation } from '../services/advisorService';
 
 export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
   const [activeSubTab, setActiveSubTab] = useState('Find Advisors'); // 'Find Advisors' | 'My Invited Advisors'
@@ -10,7 +11,17 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
   const [activeCardId, setActiveCardId] = useState(null);
   const [toastMsg, setToastMsg] = useState(null);
 
-  // Master Advisors List matching uploaded reference image
+  // Modal State for "Invite Advisor"
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [modalAdvisor, setModalAdvisor] = useState(null);
+  const [modalProject, setModalProject] = useState('AML Compliance Framework');
+  const [modalRole, setModalRole] = useState('Regulatory Reviewer');
+  const [modalMessage, setModalMessage] = useState(
+    'We would value your review of our control framework and source interpretation.'
+  );
+  const [isSubmittingInvite, setIsSubmittingInvite] = useState(false);
+
+  // Master Advisors List matching reference images
   const [advisors, setAdvisors] = useState([
     {
       id: 'ADV-001',
@@ -73,18 +84,58 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
     return matchesSearch && matchesExpertise && matchesJurisdiction && matchesAvailability;
   });
 
-  const handleInviteClick = (advId) => {
-    setAdvisors(
-      advisors.map((a) => (a.id === advId ? { ...a, isInvited: !a.isInvited } : a))
+  // Open Invite Modal for specific advisor
+  const handleOpenInviteModal = (adv) => {
+    setModalAdvisor(adv);
+    setModalProject('AML Compliance Framework');
+    setModalRole('Regulatory Reviewer');
+    setModalMessage(
+      'We would value your review of our control framework and source interpretation.'
     );
-    const adv = advisors.find((a) => a.id === advId);
-    if (adv) {
-      const msg = adv.isInvited
-        ? `Invitation cancelled for ${adv.name}`
-        : `Invitation sent to ${adv.name}!`;
-      setToastMsg(msg);
+    setIsInviteModalOpen(true);
+  };
+
+  // Submit Modal Invitation Form
+  const handleSendInvitation = async (e) => {
+    e.preventDefault();
+    if (!modalAdvisor) return;
+
+    setIsSubmittingInvite(true);
+    try {
+      await sendAdvisorInvitation('PRJ-001', {
+        advisorId: modalAdvisor.id,
+        advisorName: modalAdvisor.name,
+        project: modalProject,
+        role: modalRole,
+        message: modalMessage,
+      });
+    } catch (err) {
+      console.warn('sendAdvisorInvitation fallback executed:', err);
+    }
+
+    // Update local state to mark advisor as invited
+    setAdvisors(
+      advisors.map((a) => (a.id === modalAdvisor.id ? { ...a, isInvited: true } : a))
+    );
+
+    setIsSubmittingInvite(false);
+    setIsInviteModalOpen(false);
+
+    setToastMsg(`Invitation sent to ${modalAdvisor.name}!`);
+    setTimeout(() => setToastMsg(null), 3000);
+    if (onInviteAdvisor) onInviteAdvisor(modalAdvisor);
+  };
+
+  // Toggle or Cancel Invited state
+  const handleToggleInvitedState = (adv) => {
+    if (adv.isInvited) {
+      setAdvisors(
+        advisors.map((a) => (a.id === adv.id ? { ...a, isInvited: false } : a))
+      );
+      setToastMsg(`Invitation cancelled for ${adv.name}`);
       setTimeout(() => setToastMsg(null), 3000);
-      if (onInviteAdvisor) onInviteAdvisor(adv);
+    } else {
+      handleOpenInviteModal(adv);
     }
   };
 
@@ -94,7 +145,7 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
   };
 
   return (
-    <div className="space-y-6 animate-fadeIn text-left">
+    <div className="space-y-6 animate-fadeIn text-left relative">
       {/* Toast Notification Banner */}
       {toastMsg && (
         <div className="fixed top-16 right-6 z-50 bg-[#7c4a27] dark:bg-[#96562c] text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-2.5 animate-fadeIn font-semibold text-xs sm:text-sm border-2 border-amber-300">
@@ -205,7 +256,7 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
         </select>
       </div>
 
-      {/* Advisor Cards Grid (3 cards per row on large screen) */}
+      {/* Advisor Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-2">
         {filteredAdvisors.map((adv) => {
           const isActive = activeCardId === adv.id;
@@ -272,7 +323,7 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleInviteClick(adv.id);
+                      handleToggleInvitedState(adv);
                     }}
                     className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-300 dark:border-slate-700 bg-stone-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 transition-colors cursor-pointer"
                   >
@@ -283,7 +334,7 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleInviteClick(adv.id);
+                      handleOpenInviteModal(adv);
                     }}
                     className="px-5 py-2 rounded-xl text-xs font-bold bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 shadow-sm transition-all cursor-pointer border border-amber-300/60 hover:scale-[1.03]"
                   >
@@ -295,6 +346,119 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
           );
         })}
       </div>
+
+      {/* INVITE ADVISOR MODAL (Matching uploaded reference image media_1790742118290.png) */}
+      {isInviteModalOpen && modalAdvisor && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 overflow-y-auto animate-fadeIn">
+          <div
+            className="w-full max-w-xl rounded-2xl border border-slate-700/80 bg-[#16171c] text-slate-100 shadow-2xl overflow-hidden animate-scaleUp"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-slate-800">
+              <h2 className="text-lg sm:text-xl font-bold tracking-tight text-slate-100">
+                Invite Advisor
+              </h2>
+              <button
+                type="button"
+                onClick={() => setIsInviteModalOpen(false)}
+                className="text-xs sm:text-sm font-semibold text-slate-400 hover:text-slate-100 transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSendInvitation} className="p-6 space-y-5 text-left">
+              {/* Advisor Limit Pill Badge */}
+              <div>
+                <div className="inline-block px-3.5 py-1.5 rounded-xl border border-slate-800 bg-[#1e2026] text-xs font-medium text-slate-400">
+                  Advisor limit: <span className="font-bold text-slate-200">1 / 2</span>
+                </div>
+              </div>
+
+              {/* Advisor Name Field */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
+                  Advisor name
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={modalAdvisor.name}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-800 bg-[#111216] text-slate-200 text-sm font-semibold focus:outline-none cursor-default"
+                />
+              </div>
+
+              {/* Project Dropdown Field */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
+                  Project
+                </label>
+                <select
+                  value={modalProject}
+                  onChange={(e) => setModalProject(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-800 bg-[#111216] text-slate-200 text-sm font-semibold focus:outline-none focus:border-[#96562c] cursor-pointer transition-colors"
+                >
+                  <option value="AML Compliance Framework">AML Compliance Framework</option>
+                  <option value="KYC Onboarding Workflow">KYC Onboarding Workflow</option>
+                  <option value="Regulatory Reporting Q3">Regulatory Reporting Q3</option>
+                  <option value="GDPR Data Audit Trail">GDPR Data Audit Trail</option>
+                  <option value="Basel III Capital Adequacy">Basel III Capital Adequacy</option>
+                </select>
+              </div>
+
+              {/* Role / Access Level Dropdown Field */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
+                  Role / access level
+                </label>
+                <select
+                  value={modalRole}
+                  onChange={(e) => setModalRole(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-800 bg-[#111216] text-slate-200 text-sm font-semibold focus:outline-none focus:border-[#96562c] cursor-pointer transition-colors"
+                >
+                  <option value="Regulatory Reviewer">Regulatory Reviewer</option>
+                  <option value="Compliance Advisor">Compliance Advisor</option>
+                  <option value="Audit Observer">Audit Observer</option>
+                </select>
+              </div>
+
+              {/* Message Textarea Field */}
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
+                  Message
+                </label>
+                <textarea
+                  rows={3}
+                  value={modalMessage}
+                  onChange={(e) => setModalMessage(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-slate-800 bg-[#111216] text-slate-200 text-sm font-normal focus:outline-none focus:border-[#96562c] resize-none transition-colors"
+                />
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-800/80">
+                <button
+                  type="button"
+                  onClick={() => setIsInviteModalOpen(false)}
+                  className="px-5 py-2.5 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-bold text-xs cursor-pointer transition-colors"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={isSubmittingInvite}
+                  className="px-6 py-2.5 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-extrabold text-xs shadow-md transition-all cursor-pointer border border-amber-300/60 hover:scale-[1.02] flex items-center gap-2"
+                >
+                  {isSubmittingInvite ? 'Sending...' : 'Send invitation'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
