@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, ShieldCheck, Check } from 'lucide-react';
+import { getRegulatoryRequirements } from '../services/regulatoryService';
 
 export default function RegulatorySupportView({ isDarkMode }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -11,8 +12,8 @@ export default function RegulatorySupportView({ isDarkMode }) {
   const [activeRowId, setActiveRowId] = useState(null);
   const [toastMsg, setToastMsg] = useState(null);
 
-  // Master Regulatory Library Data matching reference image media_1790749171409.png & media_1790749598018.png
-  const regulatoryRequirements = [
+  // Master Regulatory Library Data with live API integration
+  const [requirementsList, setRequirementsList] = useState([
     {
       id: 'REQ-142',
       requirement: 'Risk-sensitive customer due diligence',
@@ -88,10 +89,44 @@ export default function RegulatorySupportView({ isDarkMode }) {
       dotColor: 'bg-amber-500',
       description: 'Boards must monitor customer outcomes, pricing value, and product governance to ensure good outcomes for retail customers.',
     },
-  ];
+  ]);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchReqs() {
+      try {
+        const liveData = await getRegulatoryRequirements();
+        if (isMounted && Array.isArray(liveData) && liveData.length > 0) {
+          // Normalize API items to frontend view schema
+          const mapped = liveData.map((item, idx) => ({
+            id: item.id || `REQ-${140 + idx}`,
+            requirement: item.title || item.requirement || 'Regulatory requirement',
+            authority: item.authority || 'FCA',
+            jurisdiction: item.jurisdiction || 'United Kingdom',
+            source: item.source || item.provenance || 'FCA Handbook',
+            reference: item.code || item.reference || 'SYSC 6.1',
+            dateVersion: item.lastReviewed || item.dateVersion || 'Release 126 · Sep 2026',
+            layer: item.category || item.layer || 'FCA Rules / Principles',
+            applicability: item.applicability || 'Applicable to Financial Services',
+            validationStatus: item.status || 'Validated',
+            validationBadge: item.status === 'Review due'
+              ? 'border-amber-800/80 bg-amber-950/60 text-amber-400'
+              : 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400',
+            dotColor: item.status === 'Review due' ? 'bg-amber-500' : 'bg-emerald-500',
+            description: item.description || '',
+          }));
+          setRequirementsList(mapped);
+        }
+      } catch (err) {
+        console.warn('[RegulatorySupportView] API load warning:', err);
+      }
+    }
+    fetchReqs();
+    return () => { isMounted = false; };
+  }, []);
 
   // Filtering Logic
-  const filteredRequirements = regulatoryRequirements.filter((req) => {
+  const filteredRequirements = requirementsList.filter((req) => {
     const matchesSearch =
       req.requirement.toLowerCase().includes(searchQuery.toLowerCase()) ||
       req.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -209,10 +244,10 @@ export default function RegulatorySupportView({ isDarkMode }) {
       {/* Main Data Table Container with Horizontal Scrollbar */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-[#161619] shadow-lg overflow-hidden">
         <div className="overflow-x-auto custom-scrollbar pb-2">
-          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1450px]">
+          <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[1600px]">
             <thead>
               <tr className="border-b border-slate-200 dark:border-slate-800/80 bg-stone-50 dark:bg-[#111215] text-[11px] font-extrabold tracking-wider text-slate-400 dark:text-slate-500 uppercase">
-                <th className="py-5 px-7">REQUIREMENT</th>
+                <th className="py-5 px-7 min-w-[340px] w-[360px]">REQUIREMENT</th>
                 <th className="py-5 px-5">AUTHORITY</th>
                 <th className="py-5 px-5">JURISDICTION</th>
                 <th className="py-5 px-5">SOURCE</th>
@@ -242,7 +277,7 @@ export default function RegulatorySupportView({ isDarkMode }) {
                     }`}
                   >
                     {/* REQUIREMENT Column */}
-                    <td className="py-5 px-7">
+                    <td className="py-5 px-7 min-w-[340px] w-[360px]">
                       <div className="font-bold text-slate-900 dark:text-slate-100 text-sm sm:text-base">
                         {req.requirement}
                       </div>

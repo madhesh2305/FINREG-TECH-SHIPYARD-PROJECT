@@ -4,6 +4,9 @@ import { getCurrentUser, logoutUser } from '../services/authService';
 import { getAdvisors } from '../services/advisorService';
 import AdvisorsExpertsView from './AdvisorsExpertsView';
 import RegulatorySupportView from './RegulatorySupportView';
+import ToolsView from './ToolsView';
+import SettingsView from './SettingsView';
+
 
 
 
@@ -1726,8 +1729,18 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
             <RegulatorySupportView isDarkMode={isDarkMode} />
           )}
 
-          {/* OTHER TABS PLACEHOLDER (Tools, Settings) */}
-          {activeTab !== 'Dashboard' && activeTab !== 'My Projects' && activeTab !== 'Create Project' && activeTab !== 'Project Details' && activeTab !== 'Advisors / Experts' && activeTab !== 'Regulatory Support' && (
+          {/* TAB: TOOLS VIEW */}
+          {activeTab === 'Tools' && (
+            <ToolsView isDarkMode={isDarkMode} />
+          )}
+
+          {/* TAB: SETTINGS VIEW */}
+          {activeTab === 'Settings' && (
+            <SettingsView isDarkMode={isDarkMode} />
+          )}
+
+          {/* OTHER TABS PLACEHOLDER */}
+          {activeTab !== 'Dashboard' && activeTab !== 'My Projects' && activeTab !== 'Create Project' && activeTab !== 'Project Details' && activeTab !== 'Advisors / Experts' && activeTab !== 'Regulatory Support' && activeTab !== 'Tools' && activeTab !== 'Settings' && (
             <div className={`p-8 rounded-2xl border text-center animate-fadeIn ${
               isDarkMode ? 'bg-[#1a1a1e] border-slate-800' : 'bg-white border-stone-200'
             }`}>
