@@ -1700,8 +1700,99 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                 </div>
               )}
 
-              {/* Sub-Tabs Placeholders for Workflow, Documents, Audit Trail */}
-              {projectSubTab !== 'Overview' && (
+              {/* Sub-Tab 2: WORKFLOW TAB CONTENT (Matching media_1791212953490.png) */}
+              {projectSubTab === 'Workflow' && (
+                <div className="rounded-2xl border border-slate-800 bg-[#161619] p-6 sm:p-8 space-y-6 shadow-lg animate-fadeIn text-left pt-4">
+                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100 mb-6">
+                    Workflow
+                  </h2>
+
+                  <div className="divide-y divide-slate-800/80">
+                    {/* Step 01 */}
+                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4 sm:gap-6">
+                        <span className="text-amber-400 font-mono font-bold text-sm sm:text-base w-8 shrink-0">
+                          01
+                        </span>
+                        <span className="font-bold text-slate-100 text-sm sm:text-base">
+                          Scope &amp; risk assessment
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setToastMessage('Opening Scope & risk assessment workflow step...')}
+                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <span>View</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Step 02 */}
+                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4 sm:gap-6">
+                        <span className="text-amber-400 font-mono font-bold text-sm sm:text-base w-8 shrink-0">
+                          02
+                        </span>
+                        <span className="font-bold text-slate-100 text-sm sm:text-base">
+                          Control design
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setToastMessage('Opening Control design workflow step...')}
+                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <span>View</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Step 03 */}
+                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4 sm:gap-6">
+                        <span className="text-amber-400 font-mono font-bold text-sm sm:text-base w-8 shrink-0">
+                          03
+                        </span>
+                        <span className="font-bold text-slate-100 text-sm sm:text-base">
+                          Advisor validation
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setToastMessage('Opening Advisor validation workflow step...')}
+                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <span>View</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Step 04 */}
+                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4 sm:gap-6">
+                        <span className="text-amber-400 font-mono font-bold text-sm sm:text-base w-8 shrink-0">
+                          04
+                        </span>
+                        <span className="font-bold text-slate-100 text-sm sm:text-base">
+                          Approval &amp; implementation
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setToastMessage('Opening Approval & implementation workflow step...')}
+                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <span>View</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-Tabs Placeholders for Documents, Audit Trail */}
+              {projectSubTab !== 'Overview' && projectSubTab !== 'Workflow' && (
                 <div className={`p-8 rounded-2xl border text-center animate-fadeIn ${
                   isDarkMode ? 'bg-[#1a1a1e] border-slate-800' : 'bg-white border-stone-200'
                 }`}>
