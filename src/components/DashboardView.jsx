@@ -1487,7 +1487,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        alert(`Opening active workflow for ${currentProject.name}...`);
+                        setProjectSubTab('Workflow');
                       }}
                       className="px-5 py-2.5 rounded-xl bg-[#7c4a27] hover:bg-[#633a1e] dark:bg-[#96562c] dark:hover:bg-[#7c4a27] text-white font-bold text-xs sm:text-sm shadow-md shadow-amber-950/20 flex items-center justify-center gap-2 transition-all cursor-pointer border-2 border-stone-300 hover:border-slate-500 hover:scale-[1.03]"
                     >
