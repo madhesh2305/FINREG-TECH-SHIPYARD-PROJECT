@@ -1862,20 +1862,74 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                 </div>
               )}
 
-              {/* Sub-Tabs Placeholders for Audit Trail */}
-              {projectSubTab !== 'Overview' && projectSubTab !== 'Workflow' && projectSubTab !== 'Documents' && (
-                <div className={`p-8 rounded-2xl border text-center animate-fadeIn ${
-                  isDarkMode ? 'bg-[#1a1a1e] border-slate-800' : 'bg-white border-stone-200'
-                }`}>
-                  <h2 className="text-xl font-bold mb-2">{projectSubTab} Module</h2>
-                  <p className="text-slate-400 text-sm mb-6">Detailed {projectSubTab.toLowerCase()} data for {currentProject.name}.</p>
-                  <button
-                    type="button"
-                    onClick={() => setProjectSubTab('Overview')}
-                    className="px-4 py-2 bg-[#7c4a27] text-white font-semibold rounded-xl text-xs cursor-pointer"
-                  >
-                    ← Return to Overview
-                  </button>
+              {/* Sub-Tab 4: AUDIT TRAIL TAB CONTENT (Matching media_1791213504450.png) */}
+              {projectSubTab === 'Audit Trail' && (
+                <div className="rounded-2xl border border-slate-800 bg-[#161619] p-6 sm:p-8 space-y-6 shadow-lg animate-fadeIn text-left pt-4">
+                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100 mb-6">
+                    Audit Trail
+                  </h2>
+
+                  <div className="divide-y divide-slate-800/80">
+                    {/* Row 1: 22 SEP */}
+                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4 sm:gap-6">
+                        <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
+                          22 SEP
+                        </span>
+                        <span className="font-bold text-slate-100 text-sm sm:text-base">
+                          Workflow opened by Jun Nakamura
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setToastMessage('Viewing audit event details...')}
+                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <span>View</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Row 2: 21 SEP */}
+                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4 sm:gap-6">
+                        <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
+                          21 SEP
+                        </span>
+                        <span className="font-bold text-slate-100 text-sm sm:text-base">
+                          Requirement REQ-142 validated by Maya Chen
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setToastMessage('Viewing audit event details...')}
+                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <span>View</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Row 3: 19 SEP */}
+                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4 sm:gap-6">
+                        <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
+                          19 SEP
+                        </span>
+                        <span className="font-bold text-slate-100 text-sm sm:text-base">
+                          Project status changed to In Progress
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setToastMessage('Viewing audit event details...')}
+                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <span>View</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
