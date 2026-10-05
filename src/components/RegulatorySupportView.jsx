@@ -341,7 +341,7 @@ export default function RegulatorySupportView({ isDarkMode }) {
         {/* Table Footer Stats Bar */}
         <div className="py-3 px-6 bg-stone-50 dark:bg-[#111215] border-t border-slate-200 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 font-medium">
           <div>
-            Showing <span className="font-bold text-slate-800 dark:text-slate-200">{filteredRequirements.length}</span> of <span className="font-bold text-slate-800 dark:text-slate-200">{regulatoryRequirements.length}</span> validated regulatory requirements
+            Showing <span className="font-bold text-slate-800 dark:text-slate-200">{filteredRequirements.length}</span> of <span className="font-bold text-slate-800 dark:text-slate-200">{requirementsList.length}</span> validated regulatory requirements
           </div>
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-500" />
