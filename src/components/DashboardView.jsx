@@ -1791,8 +1791,79 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                 </div>
               )}
 
-              {/* Sub-Tabs Placeholders for Documents, Audit Trail */}
-              {projectSubTab !== 'Overview' && projectSubTab !== 'Workflow' && (
+              {/* Sub-Tab 3: DOCUMENTS TAB CONTENT (Matching media_1791213224180.png) */}
+              {projectSubTab === 'Documents' && (
+                <div className="rounded-2xl border border-slate-800 bg-[#161619] p-6 sm:p-8 space-y-6 shadow-lg animate-fadeIn text-left pt-4">
+                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100 mb-6">
+                    Documents
+                  </h2>
+
+                  <div className="divide-y divide-slate-800/80">
+                    {/* Row 1: POLICY */}
+                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4 sm:gap-6">
+                        <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
+                          POLICY
+                        </span>
+                        <span className="font-bold text-slate-100 text-sm sm:text-base">
+                          AML Programme Policy.pdf
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setToastMessage('Opening AML Programme Policy.pdf...')}
+                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <span>View</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Row 2: EVIDENCE */}
+                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4 sm:gap-6">
+                        <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
+                          EVIDENCE
+                        </span>
+                        <span className="font-bold text-slate-100 text-sm sm:text-base">
+                          Transaction Monitoring Matrix.xlsx
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setToastMessage('Opening Transaction Monitoring Matrix.xlsx...')}
+                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <span>View</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    {/* Row 3: SOURCE */}
+                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-4 sm:gap-6">
+                        <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
+                          SOURCE
+                        </span>
+                        <span className="font-bold text-slate-100 text-sm sm:text-base">
+                          FCA Handbook SYSC 6.pdf
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setToastMessage('Opening FCA Handbook SYSC 6.pdf...')}
+                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                      >
+                        <span>View</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-Tabs Placeholders for Audit Trail */}
+              {projectSubTab !== 'Overview' && projectSubTab !== 'Workflow' && projectSubTab !== 'Documents' && (
                 <div className={`p-8 rounded-2xl border text-center animate-fadeIn ${
                   isDarkMode ? 'bg-[#1a1a1e] border-slate-800' : 'bg-white border-stone-200'
                 }`}>
