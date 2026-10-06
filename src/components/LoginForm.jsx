@@ -240,12 +240,140 @@ export default function LoginForm({ isDarkMode = true }) {
                 Don't have an account?{' '}
                 <a
                   href="#signup"
-                  onClick={(e) => e.preventDefault()}
-                  className="text-[#7c4a27] dark:text-amber-400 hover:underline font-semibold ml-1 transition-colors"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setStep('signup');
+                  }}
+                  className="text-[#7c4a27] dark:text-amber-400 hover:underline font-semibold ml-1 transition-colors cursor-pointer"
                 >
                   Sign Up
                 </a>
               </p>
+            </div>
+          )}
+
+          {/* STEP: CREATE YOUR ACCOUNT (Matching media_1791309101386.png) */}
+          {step === 'signup' && (
+            <div className="space-y-5 text-left animate-fadeIn">
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-100">
+                  Create your account
+                </h1>
+                <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                  Set up your secure ShipYard workspace account.
+                </p>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setStep('verifying');
+                }}
+                className="space-y-4"
+              >
+                {/* Full name */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Full name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Your full name"
+                    className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#96562c] focus:ring-2 focus:ring-[#96562c]/20 transition-all"
+                  />
+                </div>
+
+                {/* Email */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="name@organization.com"
+                    className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#96562c] focus:ring-2 focus:ring-[#96562c]/20 transition-all"
+                  />
+                </div>
+
+                {/* Password & Confirm Password */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-slate-300">
+                      Password
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Create a password"
+                      className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#96562c] focus:ring-2 focus:ring-[#96562c]/20 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-slate-300">
+                      Confirm password
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      placeholder="Repeat password"
+                      className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#96562c] focus:ring-2 focus:ring-[#96562c]/20 transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Organization */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Organization
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Organization name"
+                    className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#96562c] focus:ring-2 focus:ring-[#96562c]/20 transition-all"
+                  />
+                </div>
+
+                {/* Role */}
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Role
+                  </label>
+                  <select
+                    defaultValue="Builder"
+                    className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 focus:outline-none focus:border-[#96562c] cursor-pointer transition-all"
+                  >
+                    <option value="Builder">Builder</option>
+                    <option value="Advisor">Advisor</option>
+                    <option value="Compliance Lead">Compliance Lead</option>
+                    <option value="Auditor">Auditor</option>
+                  </select>
+                </div>
+
+                {/* Information hint box */}
+                <div className="p-3.5 rounded-xl border border-slate-800 bg-[#121214] text-xs text-slate-400 font-medium">
+                  Complete all required fields to create your account.
+                </div>
+
+                {/* Create account primary button */}
+                <button
+                  type="submit"
+                  className="w-full py-3.5 px-4 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-extrabold text-sm shadow-md transition-all cursor-pointer border border-amber-300/60 active:scale-[0.99]"
+                >
+                  Create account
+                </button>
+
+                {/* Back to Login button */}
+                <button
+                  type="button"
+                  onClick={() => setStep('login')}
+                  className="w-full py-3 px-4 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-bold text-xs sm:text-sm cursor-pointer transition-colors mt-2"
+                >
+                  Back to Login
+                </button>
+              </form>
             </div>
           )}
 
