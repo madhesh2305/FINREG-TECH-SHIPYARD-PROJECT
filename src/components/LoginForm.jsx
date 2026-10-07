@@ -7,6 +7,7 @@ import CredentialsVerified from './CredentialsVerified';
 import TwoFactorAuth from './TwoFactorAuth';
 import VerificationSuccessful from './VerificationSuccessful';
 import DashboardView from './DashboardView';
+import AdvisorDashboardView from './AdvisorDashboardView';
 
 import { loginUser } from '../services/authService';
 
@@ -18,21 +19,40 @@ export default function LoginForm({ isDarkMode = true }) {
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [userRole, setUserRole] = useState('BUILDER'); // 'BUILDER' | 'ADVISOR'
 
-  // Handle Login submission via POST /auth/login
+  // Handle Login submission via POST /auth/login with strict credential validation
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    if (!email || !password) return;
+    setLoginError('');
 
-    setIsSubmitting(true);
-    try {
-      await loginUser(email, password);
-      setStep('verifying');
-    } catch (err) {
-      console.warn('Login call processed:', err.message);
-      setStep('verifying');
-    } finally {
-      setIsSubmitting(false);
+    const cleanEmail = email.toLowerCase().trim();
+    const cleanPassword = password.trim();
+
+    if (!cleanEmail || !cleanPassword) return;
+
+    if (
+      (cleanEmail === 'builder@gmail.com' && cleanPassword === 'builder') ||
+      (cleanEmail === 'advisor@gmail.com' && cleanPassword === 'advisor')
+    ) {
+      if (cleanEmail === 'advisor@gmail.com') {
+        setUserRole('ADVISOR');
+      } else {
+        setUserRole('BUILDER');
+      }
+
+      setIsSubmitting(true);
+      try {
+        await loginUser(cleanEmail, cleanPassword);
+      } catch (err) {
+        console.warn('Login call processed:', err.message);
+      } finally {
+        setIsSubmitting(false);
+        setStep('verifying');
+      }
+    } else {
+      setLoginError('Invalid credentials. Use builder@gmail.com (pwd: builder) or advisor@gmail.com (pwd: advisor).');
     }
   };
 
@@ -69,8 +89,17 @@ export default function LoginForm({ isDarkMode = true }) {
     );
   }
 
-  // STEP 5: FULL BUILDER DASHBOARD VIEW (Rendered full-screen matching uploaded reference image!)
+  // STEP 5: FULL DASHBOARD VIEW (Renders Builder Workspace or Advisor Workspace dynamically)
   if (step === 'dashboard') {
+    if (userRole === 'ADVISOR') {
+      return (
+        <AdvisorDashboardView
+          isDarkMode={isDarkMode}
+          onSignOut={() => setStep('login')}
+        />
+      );
+    }
+
     return (
       <DashboardView
         isDarkMode={isDarkMode}
@@ -120,6 +149,13 @@ export default function LoginForm({ isDarkMode = true }) {
 
               {/* Login Form */}
               <form onSubmit={handleLoginSubmit} className="space-y-5">
+                {/* Login Error Alert */}
+                {loginError && (
+                  <div className="p-3 rounded-xl bg-rose-950/70 border border-rose-800 text-rose-300 text-xs font-semibold text-left animate-fadeIn">
+                    {loginError}
+                  </div>
+                )}
+
                 {/* Email Field */}
                 <div className="space-y-1.5 text-left">
                   <label htmlFor="email-input" className={`block text-sm font-semibold ${
@@ -136,7 +172,10 @@ export default function LoginForm({ isDarkMode = true }) {
                       type="email"
                       required
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        if (loginError) setLoginError('');
+                      }}
                       placeholder="you@organization.com"
                       className={`w-full pl-10 pr-4 py-3 rounded-xl text-sm placeholder-slate-400 focus:outline-none transition-all border ${
                         isDarkMode
@@ -163,7 +202,10 @@ export default function LoginForm({ isDarkMode = true }) {
                       type={showPassword ? 'text' : 'password'}
                       required
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        if (loginError) setLoginError('');
+                      }}
                       placeholder="Enter your password"
                       className={`w-full pl-10 pr-20 py-3 rounded-xl text-sm placeholder-slate-400 focus:outline-none transition-all border ${
                         isDarkMode
@@ -235,20 +277,36 @@ export default function LoginForm({ isDarkMode = true }) {
                 </div>
               </div>
 
-              {/* Sign Up Footer */}
-              <p className={`text-center text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                Don't have an account?{' '}
-                <a
-                  href="#signup"
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setStep('signup');
-                  }}
-                  className="text-[#7c4a27] dark:text-amber-400 hover:underline font-semibold ml-1 transition-colors cursor-pointer"
-                >
-                  Sign Up
-                </a>
-              </p>
+              {/* Sign Up & Advisor Footer */}
+              <div className="space-y-2 text-center pt-1">
+                <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Don't have an account?{' '}
+                  <a
+                    href="#signup"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setStep('signup');
+                    }}
+                    className="text-[#7c4a27] dark:text-amber-400 hover:underline font-semibold ml-1 transition-colors cursor-pointer"
+                  >
+                    Sign Up
+                  </a>
+                </p>
+
+                <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
+                  Are you an Advisor?{' '}
+                  <a
+                    href="#advisor"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setStep('signup');
+                    }}
+                    className="text-[#7c4a27] dark:text-amber-400 hover:underline font-semibold ml-1 transition-colors cursor-pointer"
+                  >
+                    Advisor
+                  </a>
+                </p>
+              </div>
             </div>
           )}
 
@@ -347,8 +405,7 @@ export default function LoginForm({ isDarkMode = true }) {
                   >
                     <option value="Builder">Builder</option>
                     <option value="Advisor">Advisor</option>
-                    <option value="Compliance Lead">Compliance Lead</option>
-                    <option value="Auditor">Auditor</option>
+                    <option value="Administrator">Administrator</option>
                   </select>
                 </div>
 

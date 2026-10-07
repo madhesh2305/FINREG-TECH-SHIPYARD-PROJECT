@@ -359,12 +359,12 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
     },
   ];
 
-  // Metric Cards Config
+  // Metric Cards Config matching media_1791362867917.png
   const metricsData = [
-    { id: 'total', label: 'TOTAL PROJECTS', val: `${allProjects.length}`, sub: '2 owned by me' },
-    { id: 'progress', label: 'IN PROGRESS', val: '2', sub: 'Active workflows' },
-    { id: 'review', label: 'UNDER REVIEW', val: '1', sub: 'Awaiting approval' },
-    { id: 'completed', label: 'COMPLETED', val: '1', sub: 'All time' },
+    { id: 'active', label: 'Active projects', val: '05', sub: '+2 this month' },
+    { id: 'requirements', label: 'Open requirements', val: '28', sub: '6 need validation' },
+    { id: 'reviews', label: 'Advisor reviews', val: '04', sub: '2 due this week' },
+    { id: 'readiness', label: 'Audit readiness', val: '82%', sub: 'Across active projects' },
   ];
 
   // Default active project fallback if null
@@ -519,56 +519,23 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
               <ChevronDown className="w-4 h-4 text-slate-400" />
             </button>
 
-            {/* User Menu Overlay Matching Uploaded Image */}
+            {/* User Menu Overlay showing Name, Logged-in Email, and Log out option alone */}
             {isUserMenuOpen && (
               <div className={`absolute right-0 mt-2 w-60 rounded-xl shadow-2xl border overflow-hidden z-50 animate-fadeIn ${
                 isDarkMode ? 'bg-[#1a1a1e] border-slate-800 text-slate-200' : 'bg-white border-stone-200 text-slate-800'
               }`}>
+                {/* User Info Header: Name & Logged-in Email */}
                 <div className="p-4 border-b border-slate-200 dark:border-slate-800 text-left">
                   <p className="font-bold text-sm text-slate-900 dark:text-slate-100">Jun Nakamura</p>
-                  <p className="text-slate-400 text-xs mt-0.5 font-normal">jun@finregtech.io</p>
-                  <div className="mt-2.5">
+                  <p className="text-slate-400 text-xs mt-0.5 font-normal">jun@northbank.com</p>
+                  <div className="mt-2">
                     <span className="inline-block px-2.5 py-0.5 border border-slate-200 dark:border-slate-700 bg-stone-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px] font-mono rounded">
                       Builder
                     </span>
                   </div>
                 </div>
 
-                <div className="py-1 border-b border-slate-200 dark:border-slate-800 text-left text-xs sm:text-sm font-medium">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      alert('Opening Profile & Settings...');
-                    }}
-                    className="w-full text-left px-4 py-2.5 hover:bg-stone-100 dark:hover:bg-slate-800/70 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
-                  >
-                    Profile & Settings
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      alert('Opening Billing...');
-                    }}
-                    className="w-full text-left px-4 py-2.5 hover:bg-stone-100 dark:hover:bg-slate-800/70 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
-                  >
-                    Billing
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsUserMenuOpen(false);
-                      alert('Opening Help & Documentation...');
-                    }}
-                    className="w-full text-left px-4 py-2.5 hover:bg-stone-100 dark:hover:bg-slate-800/70 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
-                  >
-                    Help & Documentation
-                  </button>
-                </div>
-
+                {/* Log out Option Alone */}
                 <div className="py-1 text-left">
                   <button
                     type="button"
@@ -576,9 +543,10 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                       logoutUser();
                       if (onSignOut) onSignOut();
                     }}
-                    className="w-full text-left px-4 py-2.5 text-xs sm:text-sm font-semibold text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-xs sm:text-sm font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
                   >
-                    Sign out
+                    <LogOut className="w-4 h-4 shrink-0" />
+                    <span>Log out</span>
                   </button>
                 </div>
               </div>
@@ -659,15 +627,18 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
               {/* Welcome Header Banner */}
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
+                  <span className="text-[11px] font-mono font-extrabold tracking-widest text-slate-400 dark:text-slate-500 uppercase block mb-1">
+                    MONDAY, 22 SEPTEMBER
+                  </span>
                   <h1 className={`text-2xl sm:text-3xl font-bold tracking-tight ${
                     isDarkMode ? 'text-slate-100' : 'text-slate-900'
                   }`}>
-                    Welcome back, J. Nakamura
+                    Welcome back, Jun
                   </h1>
                   <p className={`text-xs sm:text-sm mt-1 font-medium ${
                     isDarkMode ? 'text-slate-300' : 'text-slate-500'
                   }`}>
-                    Monday, 22 September 2026 <span className="mx-1">·</span> Builder workspace
+                    Your regulatory delivery workspace is up to date.
                   </p>
                 </div>
 
@@ -742,18 +713,15 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                 }`}
               >
                 <div className="p-5 border-b flex items-center justify-between border-slate-200 dark:border-slate-800">
-                  <div className="flex items-center gap-2">
+                  <div>
                     <h2 className={`text-base sm:text-lg font-bold tracking-tight ${
                       isDarkMode ? 'text-slate-100' : 'text-slate-900'
                     }`}>
-                      Recent Projects
+                      My Projects
                     </h2>
-                    {isRecentProjectsActive && (
-                      <span className="flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-100 text-[#7c4a27] dark:bg-amber-950/60 dark:text-amber-300 animate-fadeIn">
-                        <Sparkles className="w-3 h-3 text-[#7c4a27] dark:text-amber-400" />
-                        <span>Cream Glow & Zoom Active</span>
-                      </span>
-                    )}
+                    <p className="text-xs text-slate-400 font-normal mt-0.5">
+                      Recently updated regulatory initiatives
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -761,10 +729,9 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                       e.stopPropagation();
                       setActiveTab('My Projects');
                     }}
-                    className="text-xs font-bold text-[#7c4a27] dark:text-amber-400 hover:underline flex items-center gap-1 cursor-pointer"
+                    className="px-4 py-2 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-bold transition-colors cursor-pointer"
                   >
-                    <span>View all</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    View all projects
                   </button>
                 </div>
 
@@ -773,14 +740,15 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                     <thead>
                       <tr className={`border-b text-[11px] font-extrabold uppercase tracking-wider ${
                         isDarkMode
-                          ? 'border-slate-800 bg-slate-900/80 text-slate-200'
+                          ? 'border-slate-800 bg-slate-900/80 text-slate-400'
                           : 'border-stone-100 bg-stone-50/80 text-stone-500'
                       }`}>
-                        <th className="py-3.5 px-5">PROJECT NAME</th>
+                        <th className="py-3.5 px-5">PROJECT</th>
                         <th className="py-3.5 px-5">TYPE</th>
                         <th className="py-3.5 px-5">STATUS</th>
+                        <th className="py-3.5 px-5">OWNER</th>
                         <th className="py-3.5 px-5">LAST UPDATED</th>
-                        <th className="py-3.5 px-5 text-right">ACTION</th>
+                        <th className="py-3.5 px-5 text-right"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
@@ -791,24 +759,32 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                             isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-stone-50/90'
                           }`}
                         >
-                          <td className={`py-4 px-5 font-bold text-sm ${
-                            isDarkMode ? 'text-slate-100' : 'text-slate-900'
-                          }`}>
-                            {project.name}
+                          <td className="py-4 px-5">
+                            <div className={`font-bold text-sm ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                              {project.name}
+                            </div>
+                            <div className="text-[11px] font-mono text-slate-500 mt-0.5">
+                              {project.id}
+                            </div>
                           </td>
-                          <td className={`py-4 px-5 font-medium ${
-                            isDarkMode ? 'text-slate-200' : 'text-slate-600'
+                          <td className={`py-4 px-5 font-medium text-xs sm:text-sm ${
+                            isDarkMode ? 'text-slate-300' : 'text-slate-600'
                           }`}>
                             {project.type}
                           </td>
                           <td className="py-4 px-5">
-                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold border ${project.statusColor}`}>
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${project.statusColor}`}>
                               <span className={`w-1.5 h-1.5 rounded-full ${project.dotColor}`} />
                               {project.status}
                             </span>
                           </td>
-                          <td className={`py-4 px-5 font-medium ${
-                            isDarkMode ? 'text-slate-200' : 'text-slate-600'
+                          <td className={`py-4 px-5 font-medium text-xs sm:text-sm ${
+                            isDarkMode ? 'text-slate-300' : 'text-slate-600'
+                          }`}>
+                            {project.owner || 'J. Nakamura'}
+                          </td>
+                          <td className={`py-4 px-5 font-medium text-xs sm:text-sm ${
+                            isDarkMode ? 'text-slate-300' : 'text-slate-600'
                           }`}>
                             {project.lastUpdated}
                           </td>
@@ -820,7 +796,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                                 handleOpenProject(project);
                               }}
                               className={`text-xs font-bold hover:underline inline-flex items-center gap-1 cursor-pointer ${
-                                isDarkMode ? 'text-amber-400' : 'text-[#7c4a27]'
+                                isDarkMode ? 'text-slate-300 hover:text-white' : 'text-[#7c4a27]'
                               }`}
                             >
                               <span>Open</span>
