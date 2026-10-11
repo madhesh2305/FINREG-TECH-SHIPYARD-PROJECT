@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Lock, Eye, EyeOff, BarChart3 } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, BarChart3, ChevronDown, ArrowLeft } from 'lucide-react';
 import Navbar from './Navbar';
 import FlashPage from './FlashPage';
 import LandingPage from './LandingPage';
@@ -21,8 +21,32 @@ export default function LoginForm({ isDarkMode = true }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState('');
   const [userRole, setUserRole] = useState('BUILDER'); // 'BUILDER' | 'ADVISOR'
+  const [selectedRole, setSelectedRole] = useState('Builder / Project Owner');
 
-  // Handle Login submission via POST /auth/login with strict credential validation
+  // Administrator Sign In states matching media_1791714229768_980157a3.png
+  const [adminEmail, setAdminEmail] = useState('');
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminId, setAdminId] = useState('');
+  const [adminAccessKey, setAdminAccessKey] = useState('');
+  const [adminResponse, setAdminResponse] = useState('Authorized Admin session');
+  const [adminRememberMe, setAdminRememberMe] = useState(false);
+  const [adminShowPassword, setAdminShowPassword] = useState(false);
+  const [adminError, setAdminError] = useState('');
+
+  const handleAdminSubmit = (e) => {
+    e.preventDefault();
+    setAdminError('');
+
+    if (adminResponse === 'Unauthorized Admin session') {
+      setAdminError('Access denied: Selected backend response indicates an unauthorized session.');
+      return;
+    }
+
+    setUserRole('BUILDER');
+    setStep('verifying');
+  };
+
+  // Handle Login submission via POST /auth/login with strict credential and role validation
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setLoginError('');
@@ -32,16 +56,17 @@ export default function LoginForm({ isDarkMode = true }) {
 
     if (!cleanEmail || !cleanPassword) return;
 
-    if (
-      (cleanEmail === 'builder@gmail.com' && cleanPassword === 'builder') ||
-      (cleanEmail === 'advisor@gmail.com' && cleanPassword === 'advisor')
-    ) {
-      if (cleanEmail === 'advisor@gmail.com') {
-        setUserRole('ADVISOR');
-      } else {
-        setUserRole('BUILDER');
-      }
+    const isBuilderRole =
+      selectedRole === 'Builder / Project Owner' || selectedRole === 'Builder';
+    const isAdvisorRole = selectedRole === 'Advisor';
 
+    // 1. Builder login: requires builder@gmail.com + pwd 'builder' + Prototype role as Builder
+    if (
+      cleanEmail === 'builder@gmail.com' &&
+      cleanPassword === 'builder' &&
+      isBuilderRole
+    ) {
+      setUserRole('BUILDER');
       setIsSubmitting(true);
       try {
         await loginUser(cleanEmail, cleanPassword);
@@ -51,8 +76,37 @@ export default function LoginForm({ isDarkMode = true }) {
         setIsSubmitting(false);
         setStep('verifying');
       }
-    } else {
-      setLoginError('Invalid credentials. Use builder@gmail.com (pwd: builder) or advisor@gmail.com (pwd: advisor).');
+    }
+    // 2. Advisor login: requires advisor@gmail.com + pwd 'advisor' + Prototype role as Advisor
+    else if (
+      cleanEmail === 'advisor@gmail.com' &&
+      cleanPassword === 'advisor' &&
+      isAdvisorRole
+    ) {
+      setUserRole('ADVISOR');
+      setIsSubmitting(true);
+      try {
+        await loginUser(cleanEmail, cleanPassword);
+      } catch (err) {
+        console.warn('Login call processed:', err.message);
+      } finally {
+        setIsSubmitting(false);
+        setStep('verifying');
+      }
+    }
+    // 3. Detailed role/credential mismatch validation
+    else {
+      if (cleanEmail === 'builder@gmail.com' && cleanPassword === 'builder' && !isBuilderRole) {
+        setLoginError("Role mismatch. Please select 'Builder / Project Owner' as the role for builder@gmail.com.");
+      } else if (cleanEmail === 'advisor@gmail.com' && cleanPassword === 'advisor' && !isAdvisorRole) {
+        setLoginError("Role mismatch. Please select 'Advisor' as the role for advisor@gmail.com.");
+      } else if (isBuilderRole) {
+        setLoginError("Invalid credentials for Builder role. Use builder@gmail.com with password 'builder'.");
+      } else if (isAdvisorRole) {
+        setLoginError("Invalid credentials for Advisor role. Use advisor@gmail.com with password 'advisor'.");
+      } else {
+        setLoginError("Invalid credentials or role mismatch. Please select the matching role and enter valid credentials.");
+      }
     }
   };
 
@@ -117,33 +171,37 @@ export default function LoginForm({ isDarkMode = true }) {
       {/* Centered Auth Card Container */}
       <main className="flex-1 flex items-center justify-center p-4 sm:p-6 md:p-10">
         <div
-          className={`w-full max-w-[520px] mx-auto rounded-2xl p-8 sm:p-10 transition-all duration-300 border ${
+          className={`w-full max-w-[700px] mx-auto rounded-3xl p-8 sm:p-10 md:p-12 transition-all duration-300 border ${
             isDarkMode
-              ? 'bg-[#1a1a1e] border-slate-800 text-slate-100 shadow-[0_4px_24px_rgba(0,0,0,0.3)] hover:border-[#96562c] hover:shadow-[0_8px_32px_rgba(150,86,44,0.25)]'
-              : 'bg-white border-slate-200/90 text-slate-800 shadow-[0_4px_24px_rgba(0,0,0,0.06)] hover:border-[#7c4a27] hover:shadow-[0_8px_32px_rgba(124,74,39,0.18)]'
+              ? 'bg-[#161619] border-slate-800 text-slate-100 shadow-[0_12px_40px_rgba(0,0,0,0.45)]'
+              : 'bg-white border-slate-200/90 text-slate-800 shadow-[0_12px_40px_rgba(0,0,0,0.08)]'
           }`}
         >
-          {/* STEP 1: INITIAL LOGIN FORM */}
+          {/* STEP 1: INITIAL LOGIN FORM MATCHING media_1791713110077_089f810b.png */}
           {step === 'login' && (
-            <div>
-              {/* Top Icon Box (Rich Brown Badge) */}
-              <div className="flex justify-center mb-5">
-                <div className="w-13 h-13 bg-[#7c4a27] dark:bg-[#96562c] rounded-2xl flex items-center justify-center shadow-md shadow-amber-950/20">
-                  <BarChart3 className="w-7 h-7 text-white stroke-[2.5]" />
-                </div>
+            <div className="space-y-6 animate-fadeIn">
+              {/* Top Left Navigation: Back to home */}
+              <div className="text-left">
+                <button
+                  type="button"
+                  onClick={() => setStep('landing')}
+                  className="inline-flex items-center gap-2 text-xs sm:text-sm font-semibold text-slate-400 hover:text-amber-400 transition-colors cursor-pointer group"
+                >
+                  <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+                  <span>Back to home</span>
+                </button>
               </div>
 
               {/* Header Titles */}
-              <div className="text-center mb-8">
-                <h1 className={`text-2xl sm:text-[26px] font-bold tracking-tight ${
-                  isDarkMode ? 'text-slate-100' : 'text-slate-900'
-                }`}>
-                  Welcome to FinRegTech ShipYard
+              <div className="text-left">
+                <span className="text-[11px] font-mono font-extrabold tracking-widest text-slate-500 uppercase block mb-2">
+                  FINREGTECH SHIPYARD
+                </span>
+                <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-100">
+                  Welcome back
                 </h1>
-                <p className={`text-sm mt-1.5 font-normal ${
-                  isDarkMode ? 'text-slate-400' : 'text-slate-500'
-                }`}>
-                  Sign in to continue to your projects
+                <p className="text-xs sm:text-sm text-slate-400 mt-2 font-normal">
+                  Sign in to manage your regulatory projects and workflows.
                 </p>
               </div>
 
@@ -158,45 +216,29 @@ export default function LoginForm({ isDarkMode = true }) {
 
                 {/* Email Field */}
                 <div className="space-y-1.5 text-left">
-                  <label htmlFor="email-input" className={`block text-sm font-semibold ${
-                    isDarkMode ? 'text-slate-200' : 'text-slate-700'
-                  }`}>
+                  <label htmlFor="email-input" className="block text-xs sm:text-sm font-semibold text-slate-200">
                     Email Address
                   </label>
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                      <Mail className="w-5 h-5" />
-                    </div>
-                    <input
-                      id="email-input"
-                      type="email"
-                      required
-                      value={email}
-                      onChange={(e) => {
-                        setEmail(e.target.value);
-                        if (loginError) setLoginError('');
-                      }}
-                      placeholder="you@organization.com"
-                      className={`w-full pl-10 pr-4 py-3 rounded-xl text-sm placeholder-slate-400 focus:outline-none transition-all border ${
-                        isDarkMode
-                          ? 'bg-slate-800/80 border-slate-700 text-slate-100 hover:border-[#96562c] focus:border-[#96562c] focus:ring-4 focus:ring-[#96562c]/20'
-                          : 'bg-white border-slate-200 text-slate-900 hover:border-[#7c4a27] focus:border-[#7c4a27] focus:ring-4 focus:ring-[#7c4a27]/15'
-                      }`}
-                    />
-                  </div>
+                  <input
+                    id="email-input"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(e) => {
+                      setEmail(e.target.value);
+                      if (loginError) setLoginError('');
+                    }}
+                    placeholder="name@organization.com"
+                    className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-[#121214] border border-slate-700/80 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                  />
                 </div>
 
                 {/* Password Field */}
                 <div className="space-y-1.5 text-left">
-                  <label htmlFor="password-input" className={`block text-sm font-semibold ${
-                    isDarkMode ? 'text-slate-200' : 'text-slate-700'
-                  }`}>
+                  <label htmlFor="password-input" className="block text-xs sm:text-sm font-semibold text-slate-200">
                     Password
                   </label>
                   <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
-                      <Lock className="w-5 h-5" />
-                    </div>
                     <input
                       id="password-input"
                       type={showPassword ? 'text' : 'password'}
@@ -207,105 +249,265 @@ export default function LoginForm({ isDarkMode = true }) {
                         if (loginError) setLoginError('');
                       }}
                       placeholder="Enter your password"
-                      className={`w-full pl-10 pr-20 py-3 rounded-xl text-sm placeholder-slate-400 focus:outline-none transition-all border ${
-                        isDarkMode
-                          ? 'bg-slate-800/80 border-slate-700 text-slate-100 hover:border-[#96562c] focus:border-[#96562c] focus:ring-4 focus:ring-[#96562c]/20'
-                          : 'bg-white border-slate-200 text-slate-900 hover:border-[#7c4a27] focus:border-[#7c4a27] focus:ring-4 focus:ring-[#7c4a27]/15'
-                      }`}
+                      className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-[#121214] border border-slate-700/80 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors pr-10"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className={`absolute inset-y-0 right-0 pr-3.5 flex items-center gap-1 text-xs font-medium cursor-pointer transition-colors ${
-                        isDarkMode ? 'text-slate-400 hover:text-slate-200' : 'text-slate-500 hover:text-slate-800'
-                      }`}
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 hover:text-slate-300 cursor-pointer transition-colors"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      <span>{showPassword ? 'Hide' : 'Show'}</span>
                     </button>
                   </div>
                 </div>
 
+                {/* Prototype assigned account role */}
+                <div className="space-y-1.5 text-left">
+                  <label htmlFor="role-select" className="block text-xs sm:text-sm font-semibold text-slate-200">
+                    Prototype assigned account role
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="role-select"
+                      value={selectedRole}
+                      onChange={(e) => setSelectedRole(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-[#121214] border border-slate-700/80 text-slate-100 focus:outline-none focus:border-amber-500 appearance-none cursor-pointer pr-10 transition-colors"
+                    >
+                      <option value="Builder / Project Owner">Builder / Project Owner</option>
+                      <option value="Advisor">Advisor</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
+                      <ChevronDown className="w-4 h-4" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Information hint box */}
+                <div className="p-3.5 rounded-xl border border-slate-800 bg-[#121214] text-xs text-slate-400 font-normal leading-relaxed text-left">
+                  Prototype selector only. Production access is determined by the authenticated account's backend-assigned role.
+                </div>
+
                 {/* Remember Me & Forgot Password */}
-                <div className="flex items-center justify-between pt-0.5 text-sm">
-                  <label className={`flex items-center gap-2.5 cursor-pointer select-none text-xs sm:text-sm ${
-                    isDarkMode ? 'text-slate-400' : 'text-slate-600'
-                  }`}>
+                <div className="flex items-center justify-between pt-1 text-xs sm:text-sm">
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none text-slate-300">
                     <input
                       type="checkbox"
                       checked={rememberMe}
                       onChange={(e) => setRememberMe(e.target.checked)}
-                      className="w-4 h-4 text-[#7c4a27] rounded border-slate-300 focus:ring-[#7c4a27] accent-[#7c4a27] cursor-pointer"
+                      className="w-4 h-4 rounded border-slate-700 bg-[#121214] text-amber-500 focus:ring-amber-500 accent-amber-500 cursor-pointer"
                     />
-                    <span className="font-normal">Remember me on this device</span>
+                    <span>Remember me</span>
                   </label>
 
                   <a
                     href="#forgot-password"
                     onClick={(e) => e.preventDefault()}
-                    className="text-[#7c4a27] dark:text-amber-400 hover:underline font-semibold text-xs sm:text-sm transition-colors"
+                    className="text-amber-500 hover:text-amber-400 font-bold text-xs sm:text-sm transition-colors cursor-pointer"
                   >
                     Forgot password?
                   </a>
                 </div>
 
-                {/* Login Button (Rich Brown) */}
+                {/* Log in Button */}
                 <button
                   type="submit"
                   disabled={!isFormValid}
-                  className={`w-full py-3.5 px-4 rounded-xl font-semibold text-sm transition-all duration-200 flex items-center justify-center gap-2 ${
+                  className={`w-full py-3.5 px-4 rounded-xl font-bold text-xs sm:text-sm transition-all duration-200 flex items-center justify-center ${
                     isFormValid
-                      ? 'bg-[#7c4a27] hover:bg-[#633a1e] dark:bg-[#96562c] dark:hover:bg-[#7c4a27] text-white shadow-md shadow-amber-950/20 active:scale-[0.99] cursor-pointer'
-                      : isDarkMode
-                      ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                      : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                      ? 'bg-[#e59b38] hover:bg-[#d68a27] text-slate-950 shadow-md cursor-pointer active:scale-[0.99]'
+                      : 'bg-[#e59b38]/50 text-slate-950/60 cursor-not-allowed'
                   }`}
                 >
-                  Login
+                  Log in
                 </button>
               </form>
 
-              {/* Divider */}
-              <div className="relative my-7">
-                <div className="absolute inset-0 flex items-center">
-                  <div className={`w-full border-t ${isDarkMode ? 'border-slate-800' : 'border-slate-200'}`} />
-                </div>
-                <div className="relative flex justify-center text-xs">
-                  <span className={`px-3 font-medium ${isDarkMode ? 'bg-[#1a1a1e] text-slate-500' : 'bg-white text-slate-400'}`}>
-                    or
-                  </span>
-                </div>
+              {/* Footer matching media_1791713597320_8e3c87db.png */}
+              <div className="pt-6 -mx-8 sm:-mx-10 md:-mx-12 px-8 sm:px-10 md:px-12 border-t border-slate-800 text-center">
+                <p className="text-xs sm:text-sm text-slate-400">
+                  New to ShipYard?{' '}
+                  <button
+                    type="button"
+                    onClick={() => setStep('signup')}
+                    className="text-amber-500 hover:text-amber-400 font-semibold cursor-pointer transition-colors inline"
+                  >
+                    Sign up
+                  </button>
+                  <span className="mx-1.5 text-slate-400 font-bold">·</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep('admin-login');
+                    }}
+                    className="text-amber-500 hover:text-amber-400 font-semibold cursor-pointer transition-colors inline"
+                  >
+                    Admin Login
+                  </button>
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* STEP: ADMINISTRATOR SIGN IN (Matching media_1791714229768_980157a3.png & media_1791714241674_8afcfed5.png) */}
+          {step === 'admin-login' && (
+            <div className="space-y-6 animate-fadeIn">
+              {/* Header Titles */}
+              <div className="text-left">
+                <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-100">
+                  Administrator sign in
+                </h1>
+                <p className="text-xs sm:text-sm text-slate-400 mt-2 font-normal leading-relaxed">
+                  Enter company-provisioned credentials for the global Admin workspace.
+                </p>
               </div>
 
-              {/* Sign Up & Advisor Footer */}
-              <div className="space-y-2 text-center pt-1">
-                <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Don't have an account?{' '}
-                  <a
-                    href="#signup"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setStep('signup');
-                    }}
-                    className="text-[#7c4a27] dark:text-amber-400 hover:underline font-semibold ml-1 transition-colors cursor-pointer"
-                  >
-                    Sign Up
-                  </a>
-                </p>
+              {/* Form */}
+              <form onSubmit={handleAdminSubmit} className="space-y-4">
+                {/* Admin Error Alert */}
+                {adminError && (
+                  <div className="p-3 rounded-xl bg-rose-950/70 border border-rose-800 text-rose-300 text-xs font-semibold text-left animate-fadeIn">
+                    {adminError}
+                  </div>
+                )}
 
-                <p className={`text-xs sm:text-sm ${isDarkMode ? 'text-slate-400' : 'text-slate-600'}`}>
-                  Are you an Advisor?{' '}
+                {/* Email Address */}
+                <div className="space-y-1.5 text-left">
+                  <label htmlFor="admin-email" className="block text-xs sm:text-sm font-semibold text-slate-200">
+                    Email Address
+                  </label>
+                  <input
+                    id="admin-email"
+                    type="email"
+                    required
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    placeholder="name@organization.com"
+                    className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-[#121214] border border-slate-700/80 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                  />
+                </div>
+
+                {/* Password */}
+                <div className="space-y-1.5 text-left">
+                  <label htmlFor="admin-password" className="block text-xs sm:text-sm font-semibold text-slate-200">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="admin-password"
+                      type={adminShowPassword ? 'text' : 'password'}
+                      required
+                      value={adminPassword}
+                      onChange={(e) => setAdminPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-[#121214] border border-slate-700/80 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setAdminShowPassword(!adminShowPassword)}
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 hover:text-slate-300 cursor-pointer transition-colors"
+                    >
+                      {adminShowPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Admin ID */}
+                <div className="space-y-1.5 text-left">
+                  <label htmlFor="admin-id" className="block text-xs sm:text-sm font-semibold text-slate-200">
+                    Admin ID
+                  </label>
+                  <input
+                    id="admin-id"
+                    type="text"
+                    required
+                    value={adminId}
+                    onChange={(e) => setAdminId(e.target.value)}
+                    placeholder="Company-issued administrator ID"
+                    className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-[#121214] border border-slate-700/80 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                  />
+                </div>
+
+                {/* Admin Access Key */}
+                <div className="space-y-1.5 text-left">
+                  <label htmlFor="admin-key" className="block text-xs sm:text-sm font-semibold text-slate-200">
+                    Admin Access Key
+                  </label>
+                  <input
+                    id="admin-key"
+                    type="text"
+                    required
+                    value={adminAccessKey}
+                    onChange={(e) => setAdminAccessKey(e.target.value)}
+                    placeholder="Enter company-issued access key"
+                    className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-[#121214] border border-slate-700/80 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                  />
+                </div>
+
+                {/* Prototype backend response */}
+                <div className="space-y-1.5 text-left">
+                  <label htmlFor="admin-response" className="block text-xs sm:text-sm font-semibold text-slate-200">
+                    Prototype backend response
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="admin-response"
+                      value={adminResponse}
+                      onChange={(e) => setAdminResponse(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-[#121214] border border-slate-700/80 text-slate-100 focus:outline-none focus:border-amber-500 appearance-none cursor-pointer pr-10 transition-colors"
+                    >
+                      <option value="Authorized Admin session">Authorized Admin session</option>
+                      <option value="Unauthorized Admin session">Unauthorized Admin session</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
+                      <ChevronDown className="w-4 h-4" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Prototype Note Box */}
+                <div className="p-3.5 rounded-xl border border-slate-800 bg-[#121214] text-xs text-slate-400 font-normal leading-relaxed text-left">
+                  Prototype only: production authentication must verify credentials, assigned Admin role, and the additional key on the backend. No real key is stored or exposed here.
+                </div>
+
+                {/* Remember Me & Forgot Password */}
+                <div className="flex items-center justify-between pt-1 text-xs sm:text-sm">
+                  <label className="flex items-center gap-2.5 cursor-pointer select-none text-slate-300">
+                    <input
+                      type="checkbox"
+                      checked={adminRememberMe}
+                      onChange={(e) => setAdminRememberMe(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-700 bg-[#121214] text-amber-500 focus:ring-amber-500 accent-amber-500 cursor-pointer"
+                    />
+                    <span>Remember me</span>
+                  </label>
+
                   <a
-                    href="#advisor"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      setStep('signup');
-                    }}
-                    className="text-[#7c4a27] dark:text-amber-400 hover:underline font-semibold ml-1 transition-colors cursor-pointer"
+                    href="#forgot-password"
+                    onClick={(e) => e.preventDefault()}
+                    className="text-amber-500 hover:text-amber-400 font-bold text-xs sm:text-sm transition-colors cursor-pointer"
                   >
-                    Advisor
+                    Forgot password?
                   </a>
-                </p>
+                </div>
+
+                {/* Verify Admin credentials Button */}
+                <button
+                  type="submit"
+                  className="w-full py-3.5 px-4 rounded-xl font-bold text-xs sm:text-sm transition-all duration-200 flex items-center justify-center bg-[#e59b38] hover:bg-[#d68a27] text-slate-950 shadow-md cursor-pointer active:scale-[0.99]"
+                >
+                  Verify Admin credentials
+                </button>
+              </form>
+
+              {/* Bottom Footer: Back to user login */}
+              <div className="pt-6 -mx-8 sm:-mx-10 md:-mx-12 px-8 sm:px-10 md:px-12 border-t border-slate-800 text-center">
+                <button
+                  type="button"
+                  onClick={() => setStep('login')}
+                  className="text-amber-500 hover:text-amber-400 font-semibold text-xs sm:text-sm cursor-pointer transition-colors"
+                >
+                  Back to user login
+                </button>
               </div>
             </div>
           )}
