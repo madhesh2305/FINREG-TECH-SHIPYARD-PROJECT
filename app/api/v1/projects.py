@@ -78,6 +78,8 @@ def create_new_project(
         profile=project.profile
     )
 
+from typing import List, Optional, Union
+
 @router.get(
     "/{projectId}",
     response_model=ProjectResponse,
@@ -86,11 +88,11 @@ def create_new_project(
     description="Returns project details and regulatory profile. Enforces project-level authorization (returns 403 if caller is not an active member)."
 )
 def get_project(
-    projectId: int,
+    projectId: Union[int, str],
     membership: ProjectMember = Depends(require_project_member),
     db: Session = Depends(get_db)
 ):
-    project = get_project_by_id(db=db, project_id=projectId)
+    project = get_project_by_id(db=db, project_id=membership.project_id)
     return ProjectResponse(
         project_id=project.project_id,
         project_name=project.project_name,
@@ -111,13 +113,13 @@ def get_project(
     description="Updates project metadata, status, or regulatory profile. Restricted to project OWNER."
 )
 def patch_project(
-    projectId: int,
+    projectId: Union[int, str],
     request: ProjectUpdate,
     membership: ProjectMember = Depends(require_project_owner),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    project = update_project(db=db, project_id=projectId, request=request, actor=current_user)
+    project = update_project(db=db, project_id=membership.project_id, request=request, actor=current_user)
     return ProjectResponse(
         project_id=project.project_id,
         project_name=project.project_name,

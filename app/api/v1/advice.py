@@ -16,6 +16,8 @@ from app.security.authorization import require_project_member
 
 router = APIRouter(prefix="/projects/{projectId}/advice", tags=["Advice & Reviews"])
 
+from typing import List, Optional, Union
+
 @router.post(
     "",
     response_model=AdviceResponse,
@@ -24,13 +26,13 @@ router = APIRouter(prefix="/projects/{projectId}/advice", tags=["Advice & Review
     description="Allows advisors to submit formal opinions, recommendations, and regulatory source citations for a project."
 )
 def create_advice(
-    projectId: int,
+    projectId: Union[int, str],
     request: AdviceCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     _membership: ProjectMember = Depends(require_project_member),
 ):
-    return submit_advice(db=db, project_id=projectId, request=request, actor=current_user)
+    return submit_advice(db=db, project_id=_membership.project_id, request=request, actor=current_user)
 
 @router.get(
     "",
@@ -40,12 +42,12 @@ def create_advice(
     description="Retrieves all advisory submissions and reviews recorded for the project."
 )
 def get_all_advice(
-    projectId: int,
+    projectId: Union[int, str],
     status: Optional[str] = Query(None, description="Filter by status (DRAFT, SUBMITTED, REVIEWED, ARCHIVED)"),
     db: Session = Depends(get_db),
     _membership: ProjectMember = Depends(require_project_member),
 ):
-    return list_project_advice(db=db, project_id=projectId, status_filter=status)
+    return list_project_advice(db=db, project_id=_membership.project_id, status_filter=status)
 
 @router.get(
     "/{adviceId}",
@@ -55,12 +57,12 @@ def get_all_advice(
     description="Retrieves a specific advisory review by ID with source citations and status."
 )
 def get_single_advice(
-    projectId: int,
+    projectId: Union[int, str],
     adviceId: int,
     db: Session = Depends(get_db),
     _membership: ProjectMember = Depends(require_project_member),
 ):
-    return get_advice_by_id(db=db, project_id=projectId, advice_id=adviceId)
+    return get_advice_by_id(db=db, project_id=_membership.project_id, advice_id=adviceId)
 
 @router.patch(
     "/{adviceId}",
@@ -70,11 +72,11 @@ def get_single_advice(
     description="Updates advice content or status (e.g. project owner reviewing or accepting advice)."
 )
 def patch_single_advice(
-    projectId: int,
+    projectId: Union[int, str],
     adviceId: int,
     request: AdviceUpdate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     _membership: ProjectMember = Depends(require_project_member),
 ):
-    return update_advice(db=db, project_id=projectId, advice_id=adviceId, request=request, actor=current_user)
+    return update_advice(db=db, project_id=_membership.project_id, advice_id=adviceId, request=request, actor=current_user)

@@ -70,6 +70,8 @@ def get_advisor(
     advisor = get_advisor_by_id(db=db, advisor_id=advisorId)
     return _to_advisor_response(advisor)
 
+from typing import List, Union
+
 # -------------------------------------------------------------
 # Project Advisor Invitations (Scoped under /projects/{projectId})
 # -------------------------------------------------------------
@@ -82,11 +84,11 @@ def get_advisor(
     description="Lists all advisor invitations issued for this project. Caller must be an active project member."
 )
 def get_project_invitations(
-    projectId: int,
+    projectId: Union[int, str],
     membership: ProjectMember = Depends(require_project_member),
     db: Session = Depends(get_db)
 ):
-    return list_advisor_invitations(db=db, project_id=projectId)
+    return list_advisor_invitations(db=db, project_id=membership.project_id)
 
 @router.post(
     "/projects/{projectId}/advisor-invitations",
@@ -96,13 +98,13 @@ def get_project_invitations(
     description="Issues an advisor invitation token with expiration. Requires project OWNER role."
 )
 def invite_advisor(
-    projectId: int,
+    projectId: Union[int, str],
     request: AdvisorInvitationCreate,
     current_user: User = Depends(get_current_user),
     membership: ProjectMember = Depends(require_project_owner),
     db: Session = Depends(get_db)
 ):
-    return create_advisor_invitation(db=db, project_id=projectId, request=request, actor=current_user)
+    return create_advisor_invitation(db=db, project_id=membership.project_id, request=request, actor=current_user)
 
 @router.post(
     "/projects/{projectId}/advisor-invitations/{invitationId}/resend",
@@ -112,13 +114,13 @@ def invite_advisor(
     description="Regenerates invitation token and extends expiration. Requires project OWNER role. Validates project boundaries."
 )
 def resend_invitation(
-    projectId: int,
+    projectId: Union[int, str],
     invitationId: int,
     current_user: User = Depends(get_current_user),
     membership: ProjectMember = Depends(require_project_owner),
     db: Session = Depends(get_db)
 ):
-    return resend_advisor_invitation(db=db, project_id=projectId, invitation_id=invitationId, actor=current_user)
+    return resend_advisor_invitation(db=db, project_id=membership.project_id, invitation_id=invitationId, actor=current_user)
 
 @router.post(
     "/projects/{projectId}/advisor-invitations/{invitationId}/revoke",
@@ -128,10 +130,10 @@ def resend_invitation(
     description="Marks a pending invitation as REVOKED. Requires project OWNER role. Validates project boundaries."
 )
 def revoke_invitation(
-    projectId: int,
+    projectId: Union[int, str],
     invitationId: int,
     current_user: User = Depends(get_current_user),
     membership: ProjectMember = Depends(require_project_owner),
     db: Session = Depends(get_db)
 ):
-    return revoke_advisor_invitation(db=db, project_id=projectId, invitation_id=invitationId, actor=current_user)
+    return revoke_advisor_invitation(db=db, project_id=membership.project_id, invitation_id=invitationId, actor=current_user)

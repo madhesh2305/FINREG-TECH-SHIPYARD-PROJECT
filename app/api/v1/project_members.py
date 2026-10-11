@@ -30,6 +30,8 @@ def _to_member_response(m: ProjectMember) -> MemberResponse:
         joined_at=m.joined_at
     )
 
+from typing import List, Union
+
 @router.get(
     "",
     response_model=List[MemberResponse],
@@ -38,11 +40,11 @@ def _to_member_response(m: ProjectMember) -> MemberResponse:
     description="Returns all active members assigned to the project. Caller must be an active member of this project."
 )
 def get_members(
-    projectId: int,
+    projectId: Union[int, str],
     membership: ProjectMember = Depends(require_project_member),
     db: Session = Depends(get_db)
 ):
-    members = list_project_members(db=db, project_id=projectId)
+    members = list_project_members(db=db, project_id=membership.project_id)
     return [_to_member_response(m) for m in members]
 
 @router.post(
@@ -53,13 +55,13 @@ def get_members(
     description="Adds an existing platform user to this project with a project service role. Requires project OWNER role."
 )
 def add_member(
-    projectId: int,
+    projectId: Union[int, str],
     request: MemberCreate,
     current_user: User = Depends(get_current_user),
     membership: ProjectMember = Depends(require_project_owner),
     db: Session = Depends(get_db)
 ):
-    member = add_project_member(db=db, project_id=projectId, request=request, actor=current_user)
+    member = add_project_member(db=db, project_id=membership.project_id, request=request, actor=current_user)
     return _to_member_response(member)
 
 @router.patch(
@@ -70,14 +72,14 @@ def add_member(
     description="Updates a member's service role, scope, or status. Requires project OWNER role. Validates project boundaries."
 )
 def update_member(
-    projectId: int,
+    projectId: Union[int, str],
     memberId: int,
     request: MemberUpdate,
     current_user: User = Depends(get_current_user),
     membership: ProjectMember = Depends(require_project_owner),
     db: Session = Depends(get_db)
 ):
-    member = update_project_member(db=db, project_id=projectId, member_id=memberId, request=request, actor=current_user)
+    member = update_project_member(db=db, project_id=membership.project_id, member_id=memberId, request=request, actor=current_user)
     return _to_member_response(member)
 
 @router.delete(
@@ -88,11 +90,11 @@ def update_member(
     description="Revokes a project member's access (soft delete / status='REVOKED'). Requires project OWNER role."
 )
 def revoke_member(
-    projectId: int,
+    projectId: Union[int, str],
     memberId: int,
     current_user: User = Depends(get_current_user),
     membership: ProjectMember = Depends(require_project_owner),
     db: Session = Depends(get_db)
 ):
-    member = revoke_project_member(db=db, project_id=projectId, member_id=memberId, actor=current_user)
+    member = revoke_project_member(db=db, project_id=membership.project_id, member_id=memberId, actor=current_user)
     return _to_member_response(member)

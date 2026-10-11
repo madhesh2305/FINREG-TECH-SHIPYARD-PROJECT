@@ -69,3 +69,14 @@ def test_login_with_demo_credentials(client: TestClient):
     resp2 = client.post("/api/v1/auth/login", json={"email": "advisor@gmail.com", "password": "advisor"})
     assert resp2.status_code == 200
     assert resp2.json()["platform_role"] == "ADVISOR"
+
+def test_register_admin_forbidden(client: TestClient):
+    payload = {
+        "email": f"admin_try_{uuid.uuid4().hex[:8]}@example.com",
+        "password": "Password123!",
+        "full_name": "Unauthorized Admin",
+        "role": "ADMIN"
+    }
+    response = client.post("/api/v1/auth/register", json=payload)
+    assert response.status_code == 403
+    assert "cannot be self-registered" in response.json()["detail"].lower()

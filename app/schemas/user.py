@@ -2,6 +2,9 @@ from datetime import datetime
 from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, EmailStr
 
+class UserUpdateRequest(BaseModel):
+    full_name: Optional[str] = None
+
 class UserMembershipContext(BaseModel):
     project_id: int
     project_name: str

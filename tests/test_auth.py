@@ -70,3 +70,25 @@ def test_inactive_user_cannot_login(client: TestClient):
         user.is_active = True
         db.commit()
         db.close()
+
+def test_patch_current_user_me(client: TestClient, builder_auth_headers: dict):
+    # Test update
+    response = client.patch(
+        "/api/v1/users/me",
+        headers=builder_auth_headers,
+        json={"full_name": "Jun Chen Updated"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["full_name"] == "Jun Chen Updated"
+    assert data["email"] == "jun@finregtech.io"
+
+    # Restore original name
+    restore_resp = client.patch(
+        "/api/v1/users/me",
+        headers=builder_auth_headers,
+        json={"full_name": "Jun Chen"}
+    )
+    assert restore_resp.status_code == 200
+    assert restore_resp.json()["full_name"] == "Jun Chen"
+

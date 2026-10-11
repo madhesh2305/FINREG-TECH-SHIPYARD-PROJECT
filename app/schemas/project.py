@@ -19,13 +19,41 @@ class ProjectProfileResponse(ProjectProfileBase):
     created_at: datetime
     updated_at: datetime
 
+import uuid
+from pydantic import model_validator, computed_field
+
 class ProjectCreate(BaseModel):
-    project_name: str = Field(..., min_length=2, max_length=200, description="Project Name")
-    project_code: str = Field(..., min_length=2, max_length=50, description="Unique Project Code, e.g. PRJ-ABC-01")
-    description: str = Field(..., description="Project Description")
+    project_name: Optional[str] = Field(None, min_length=2, max_length=200, description="Project Name")
+    name: Optional[str] = Field(None, description="Project Name alias")
+    project_code: Optional[str] = Field(None, max_length=50, description="Unique Project Code, e.g. PRJ-ABC-01")
+    code: Optional[str] = Field(None, description="Project Code alias")
+    type: Optional[str] = Field(None, description="Project Type alias")
+    description: Optional[str] = Field("Compliance infrastructure project", description="Project Description")
     jurisdiction: str = Field("UK / EU", description="Jurisdiction")
     regulatory_scope: str = Field("Anti-Bribery and Corruption (ABC)", description="Regulatory Scope")
     objectives: str = Field("Establish defensible source-traceable compliance and advisor governance", description="Project Objectives")
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_aliases(cls, data):
+        if isinstance(data, dict):
+            # Resolve project_name
+            if not data.get("project_name") and data.get("name"):
+                data["project_name"] = data["name"]
+            if not data.get("project_name"):
+                data["project_name"] = "Untitled Compliance Project"
+            # Resolve project_code
+            if not data.get("project_code") and data.get("code"):
+                data["project_code"] = data["code"]
+            if not data.get("project_code"):
+                data["project_code"] = f"PRJ-{uuid.uuid4().hex[:6].upper()}"
+            # Resolve regulatory_scope from type
+            if data.get("type") and data.get("regulatory_scope") in (None, "Anti-Bribery and Corruption (ABC)"):
+                data["regulatory_scope"] = data["type"]
+            # Ensure description
+            if not data.get("description"):
+                data["description"] = f"{data.get('project_name')} setup."
+        return data
 
 class ProjectUpdate(BaseModel):
     project_name: Optional[str] = Field(None, min_length=2, max_length=200)
@@ -47,6 +75,23 @@ class ProjectResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     profile: Optional[ProjectProfileResponse] = None
+
+    @computed_field
+    @property
+    def id(self) -> int:
+        return self.project_id
+
+    @computed_field
+    @property
+    def name(self) -> str:
+        return self.project_name
+
+    @computed_field
+    @property
+    def type(self) -> str:
+        if self.profile and self.profile.regulatory_scope:
+            return self.profile.regulatory_scope
+        return "Anti-Bribery & Corruption (ABC)"
 
 class DashboardSummary(BaseModel):
     total_projects: int

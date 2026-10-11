@@ -93,6 +93,91 @@ def create_source(
 ):
     return create_regulatory_source(db=db, request=request, actor=current_user)
 
+from typing import Union
+from app.core.exceptions import NotFoundError
+
+# -------------------------------------------------------------
+# Global Regulatory Requirements Library (Consumed by frontend Regulatory Support view)
+# -------------------------------------------------------------
+
+@router.get(
+    "/regulatory-requirements",
+    response_model=List[dict],
+    status_code=status.HTTP_200_OK,
+    summary="List Regulatory Corpus Requirements",
+    description="Returns global regulatory requirements and curated sources for the regulatory library view."
+)
+def get_global_regulatory_requirements(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    sources = db.query(RegulatorySource).all()
+    results = []
+    for s in sources:
+        is_validated = (s.validation_status == "VALIDATED")
+        results.append({
+            "id": f"REQ-{s.source_id:03d}",
+            "source_id": s.source_id,
+            "code": f"SRC-{s.source_id:03d}",
+            "title": s.source_title,
+            "requirement": s.source_title,
+            "authority": s.issuing_authority,
+            "jurisdiction": s.jurisdiction,
+            "source": s.source_title,
+            "provenance": s.version_label or s.source_title,
+            "reference": s.version_label or f"SRC-{s.source_id:03d}",
+            "dateVersion": str(s.publication_date) if s.publication_date else "Release 2026",
+            "layer": s.topic,
+            "category": s.topic,
+            "applicability": s.applicability_rationale or "Applicable to Regulated Financial Institutions",
+            "validationStatus": "Validated" if is_validated else "Review due",
+            "status": "Validated" if is_validated else "Review due",
+            "sourceUrl": s.source_url,
+            "description": s.relevance or s.source_title,
+        })
+    return results
+
+@router.get(
+    "/regulatory-requirements/{reqId}",
+    response_model=dict,
+    status_code=status.HTTP_200_OK,
+    summary="Get Regulatory Corpus Requirement Details"
+)
+def get_global_regulatory_requirement_details(
+    reqId: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    clean_id = reqId.replace("REQ-", "").replace("SRC-", "")
+    source = None
+    if clean_id.isdigit():
+        source = db.query(RegulatorySource).filter(RegulatorySource.source_id == int(clean_id)).first()
+    if not source:
+        source = db.query(RegulatorySource).filter(RegulatorySource.source_title.ilike(f"%{clean_id}%")).first()
+    if not source:
+        req = db.query(RegulatoryRequirement).filter(RegulatoryRequirement.requirement_code == reqId).first()
+        if req:
+            return {
+                "id": req.requirement_code,
+                "code": req.requirement_code,
+                "title": req.requirement_title,
+                "description": req.requirement_text,
+                "status": req.requirement_status,
+                "applicability": req.applicability_status
+            }
+        raise NotFoundError(f"Regulatory requirement '{reqId}' not found")
+    return {
+        "id": f"REQ-{source.source_id:03d}",
+        "code": f"SRC-{source.source_id:03d}",
+        "title": source.source_title,
+        "authority": source.issuing_authority,
+        "jurisdiction": source.jurisdiction,
+        "provenance": source.version_label,
+        "sourceUrl": source.source_url,
+        "status": "Validated" if source.validation_status == "VALIDATED" else "Review due",
+        "description": source.relevance
+    }
+
 # -------------------------------------------------------------
 # Project Regulatory Requirements (Scoped under /projects/{projectId})
 # -------------------------------------------------------------
@@ -105,7 +190,7 @@ def create_source(
     description="Returns all regulatory compliance requirements linked to this project. Requires project membership."
 )
 def get_requirements(
-    projectId: int,
+    projectId: Union[int, str],
     status_filter: Optional[str] = Query(None, alias="status", pattern="^(OPEN|IN_REVIEW|COMPLETED|BLOCKED)$"),
     applicability_filter: Optional[str] = Query(None, alias="applicability", pattern="^(APPLICABLE|NOT_APPLICABLE|UNDER_REVIEW)$"),
     membership: ProjectMember = Depends(require_project_member),
@@ -113,7 +198,7 @@ def get_requirements(
 ):
     return list_project_requirements(
         db=db,
-        project_id=projectId,
+        project_id=membership.project_id,
         status=status_filter,
         applicability=applicability_filter
     )
@@ -126,7 +211,7 @@ def get_requirements(
     description="Maps a project requirement to an approved regulatory source. Validates source provenance and logs audit event."
 )
 def create_requirement(
-    projectId: int,
+    projectId: Union[int, str],
     request: RegulatoryRequirementCreate,
     current_user: User = Depends(get_current_user),
     membership: ProjectMember = Depends(require_project_member),
@@ -134,7 +219,7 @@ def create_requirement(
 ):
     return create_project_requirement(
         db=db,
-        project_id=projectId,
+        project_id=membership.project_id,
         request=request,
         actor=current_user
     )
@@ -147,12 +232,12 @@ def create_requirement(
     description="Returns requirement details with associated source metadata. Validates cross-project isolation."
 )
 def get_requirement(
-    projectId: int,
+    projectId: Union[int, str],
     requirementId: int,
     membership: ProjectMember = Depends(require_project_member),
     db: Session = Depends(get_db)
 ):
-    return get_project_requirement_by_id(db=db, project_id=projectId, requirement_id=requirementId)
+    return get_project_requirement_by_id(db=db, project_id=membership.project_id, requirement_id=requirementId)
 
 @router.patch(
     "/projects/{projectId}/requirements/{requirementId}",
@@ -162,7 +247,7 @@ def get_requirement(
     description="Updates requirement title, text, applicability or workflow status. Validates project boundaries and logs audit event."
 )
 def update_requirement(
-    projectId: int,
+    projectId: Union[int, str],
     requirementId: int,
     request: RegulatoryRequirementUpdate,
     current_user: User = Depends(get_current_user),
@@ -171,7 +256,7 @@ def update_requirement(
 ):
     return update_project_requirement(
         db=db,
-        project_id=projectId,
+        project_id=membership.project_id,
         requirement_id=requirementId,
         request=request,
         actor=current_user

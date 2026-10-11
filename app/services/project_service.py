@@ -94,13 +94,20 @@ def list_user_projects(db: Session, user: User, status: Optional[str] = None, se
 
     return query.order_by(Project.updated_at.desc()).all()
 
-def get_project_by_id(db: Session, project_id: int) -> Project:
-    project = db.query(Project).filter(Project.project_id == project_id).first()
+from typing import List, Optional, Union
+
+def get_project_by_id(db: Session, project_id: Union[int, str]) -> Project:
+    if isinstance(project_id, int) or (isinstance(project_id, str) and str(project_id).isdigit()):
+        project = db.query(Project).filter(Project.project_id == int(project_id)).first()
+    else:
+        project = db.query(Project).filter(Project.project_code == str(project_id)).first()
+        if not project and str(project_id).upper() in ("PRJ-001", "PRJ-1"):
+            project = db.query(Project).filter((Project.project_id == 1) | (Project.project_code == "PRJ-ABC-001")).first()
     if not project:
-        raise NotFoundError(f"Project with ID {project_id} not found")
+        raise NotFoundError(f"Project '{project_id}' not found")
     return project
 
-def update_project(db: Session, project_id: int, request: ProjectUpdate, actor: User) -> Project:
+def update_project(db: Session, project_id: Union[int, str], request: ProjectUpdate, actor: User) -> Project:
     project = get_project_by_id(db, project_id)
     old_values = {
         "project_name": project.project_name,

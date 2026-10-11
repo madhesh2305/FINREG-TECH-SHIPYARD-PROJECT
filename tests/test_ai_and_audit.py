@@ -39,3 +39,35 @@ def test_audit_events_retrieval(client: TestClient, builder_auth_headers: dict):
     assert "event_type" in event
     assert "event_description" in event
     assert "created_at" in event
+
+def test_rag_analyze_conflict(client: TestClient, builder_auth_headers: dict):
+    payload = {
+        "query": "Compare advisor recommendations on data retention against FCA guidelines"
+    }
+    response = client.post("/api/v1/rag/analyze", json=payload, headers=builder_auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["schema_version"] == "1.0"
+    assert data["status"] == "CONFLICT_DETECTED"
+    assert data["grounded"] is True
+    assert len(data["conflicts"]) > 0
+    assert len(data["citations"]) > 0
+    assert len(data["provenance"]) > 0
+
+def test_project_readiness_calculation(client: TestClient, builder_auth_headers: dict):
+    response = client.get("/api/v1/projects/1/readiness", headers=builder_auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert "readiness_percentage" in data
+    assert "readiness_score" in data
+    assert "readiness_status" in data
+    assert "breakdown" in data
+    assert len(data["breakdown"]) == 3
+
+def test_project_access_by_code(client: TestClient, builder_auth_headers: dict):
+    response = client.get("/api/v1/projects/PRJ-ABC-001", headers=builder_auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["project_code"] == "PRJ-ABC-001"
+    assert data["id"] == 1
+    assert data["name"] == "ABC Shield Compliance Infrastructure (Updated)" or "ABC Shield" in data["name"]

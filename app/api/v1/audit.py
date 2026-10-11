@@ -9,6 +9,8 @@ from app.services.audit_service import list_project_audit_events
 
 router = APIRouter(prefix="/projects/{projectId}/audit-events", tags=["Audit Log"])
 
+from typing import List, Optional, Union
+
 @router.get(
     "",
     response_model=List[AuditEventResponse],
@@ -17,13 +19,13 @@ router = APIRouter(prefix="/projects/{projectId}/audit-events", tags=["Audit Log
     description="Returns chronological immutable audit trail for the project. Caller must be an active project member."
 )
 def get_audit_events(
-    projectId: int,
+    projectId: Union[int, str],
     event_type: Optional[str] = Query(None, description="Filter by event type, e.g. PROJECT_CREATED, MEMBER_ADDED"),
     limit: int = Query(100, ge=1, le=500, description="Max records to return"),
     membership: ProjectMember = Depends(require_project_member),
     db: Session = Depends(get_db)
 ):
-    events = list_project_audit_events(db=db, project_id=projectId, event_type=event_type, limit=limit)
+    events = list_project_audit_events(db=db, project_id=membership.project_id, event_type=event_type, limit=limit)
     return [
         AuditEventResponse(
             audit_event_id=e.audit_event_id,

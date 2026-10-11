@@ -15,6 +15,8 @@ from app.security.authorization import require_project_member, require_project_o
 
 router = APIRouter(prefix="/projects/{projectId}/decisions", tags=["Compliance Decisions"])
 
+from typing import List, Union
+
 @router.post(
     "",
     response_model=DecisionResponse,
@@ -23,13 +25,13 @@ router = APIRouter(prefix="/projects/{projectId}/decisions", tags=["Compliance D
     description="Allows project owners to record binding compliance decisions (ACCEPT, REJECT, REVIEW_REQUIRED, FOLLOW_UP_REQUIRED) with executive rationale and follow-up actions."
 )
 def create_decision(
-    projectId: int,
+    projectId: Union[int, str],
     request: DecisionCreate,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
     _membership: ProjectMember = Depends(require_project_owner),
 ):
-    return record_decision(db=db, project_id=projectId, request=request, actor=current_user)
+    return record_decision(db=db, project_id=_membership.project_id, request=request, actor=current_user)
 
 @router.get(
     "",
@@ -39,11 +41,11 @@ def create_decision(
     description="Retrieves the full decision history for a compliance project."
 )
 def get_all_decisions(
-    projectId: int,
+    projectId: Union[int, str],
     db: Session = Depends(get_db),
     _membership: ProjectMember = Depends(require_project_member),
 ):
-    return list_project_decisions(db=db, project_id=projectId)
+    return list_project_decisions(db=db, project_id=_membership.project_id)
 
 @router.get(
     "/{decisionId}",
@@ -53,9 +55,9 @@ def get_all_decisions(
     description="Retrieves an individual compliance decision with decider details and audit trail."
 )
 def get_single_decision(
-    projectId: int,
+    projectId: Union[int, str],
     decisionId: int,
     db: Session = Depends(get_db),
     _membership: ProjectMember = Depends(require_project_member),
 ):
-    return get_decision_by_id(db=db, project_id=projectId, decision_id=decisionId)
+    return get_decision_by_id(db=db, project_id=_membership.project_id, decision_id=decisionId)

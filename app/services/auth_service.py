@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from sqlalchemy.orm import Session
 from app.core.security import verify_password, create_access_token, get_password_hash
-from app.core.exceptions import AuthenticationError, InactiveUserError, ConflictError, ValidationError
+from app.core.exceptions import AuthenticationError, InactiveUserError, ConflictError, ValidationError, ForbiddenError
 from app.core.config import settings
 from app.models.identity import User, Role
 from app.models.advisor import AdvisorProfile
@@ -20,18 +20,7 @@ def authenticate_user(db: Session, request: LoginRequest) -> TokenResponse:
     clean_email = request.email.lower().strip()
     user = db.query(User).filter(User.email == clean_email).first()
     
-    is_valid = False
-    if user:
-        if verify_password(request.password, user.password_hash):
-            is_valid = True
-        elif request.password in ("Builder@123", "Password123!") and verify_password("Password123!", user.password_hash):
-            is_valid = True
-        elif clean_email == "builder@gmail.com" and request.password == "builder":
-            is_valid = True
-        elif clean_email == "advisor@gmail.com" and request.password == "advisor":
-            is_valid = True
-
-    if not user or not is_valid:
+    if not user or not verify_password(request.password, user.password_hash):
         raise AuthenticationError("Invalid email or password")
 
     if not user.is_active:
@@ -70,7 +59,10 @@ def register_user(db: Session, request: RegisterRequest) -> TokenResponse:
     raw_role = request.role.upper().strip()
     role_name = ROLE_NORMALIZATION.get(raw_role)
     if not role_name:
-        raise ValidationError(f"Invalid role '{request.role}'. Allowed roles: BUILDER, ADVISOR, ADMIN")
+        raise ValidationError(f"Invalid role '{request.role}'. Allowed roles: BUILDER, ADVISOR")
+
+    if role_name == "ADMIN":
+        raise ForbiddenError("Platform Administrator accounts cannot be self-registered. Contact platform operations.")
 
     # Get or create Role object
     role_obj = db.query(Role).filter(Role.role_name == role_name).first()

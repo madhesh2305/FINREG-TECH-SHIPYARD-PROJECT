@@ -54,22 +54,28 @@ def create_db_engine():
                 pass
             return engine
         except Exception as e:
-            # Fallback for offline development if PostgreSQL instance is unreachable
-            print(f"[DB Warning] Could not connect to PostgreSQL ({e}). Using SQLite fallback.")
-            engine = create_engine(
-                settings.SQLITE_FALLBACK_URL,
-                connect_args={"check_same_thread": False}
-            )
-            sqlite_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".sqlite_data"))
-            os.makedirs(sqlite_dir, exist_ok=True)
-            @event.listens_for(engine, "connect")
-            def attach_sqlite_schemas(dbapi_connection, connection_record):
-                cursor = dbapi_connection.cursor()
-                for schema in SCHEMAS:
-                    db_path = os.path.join(sqlite_dir, f"{schema}.db").replace("\\", "/")
-                    cursor.execute(f"ATTACH DATABASE '{db_path}' AS {schema}")
-                cursor.close()
-            return engine
+            # Check if explicit SQLite fallback is requested via environment
+            if os.getenv("ALLOW_SQLITE_FALLBACK", "false").lower() == "true":
+                print(f"[DB Warning] Could not connect to PostgreSQL ({e}). Using SQLite fallback per ALLOW_SQLITE_FALLBACK=true.")
+                engine = create_engine(
+                    settings.SQLITE_FALLBACK_URL,
+                    connect_args={"check_same_thread": False}
+                )
+                sqlite_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".sqlite_data"))
+                os.makedirs(sqlite_dir, exist_ok=True)
+                @event.listens_for(engine, "connect")
+                def attach_sqlite_schemas(dbapi_connection, connection_record):
+                    cursor = dbapi_connection.cursor()
+                    for schema in SCHEMAS:
+                        db_path = os.path.join(sqlite_dir, f"{schema}.db").replace("\\", "/")
+                        cursor.execute(f"ATTACH DATABASE '{db_path}' AS {schema}")
+                    cursor.close()
+                return engine
+            else:
+                raise RuntimeError(
+                    f"FATAL: PostgreSQL connection failed for '{url}'. "
+                    f"Error: {e}. Silent SQLite fallback is strictly disabled to guarantee data persistence."
+                )
 
 engine = create_db_engine()
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

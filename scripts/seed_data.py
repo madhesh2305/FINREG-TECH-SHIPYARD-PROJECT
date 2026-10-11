@@ -87,11 +87,13 @@ def seed_database():
         users_map = {}
         for u_data in users_to_seed:
             user = db.query(User).filter(User.email == u_data["email"]).first()
+            user_pwd = "builder" if u_data["email"] == "builder@gmail.com" else ("advisor" if u_data["email"] == "advisor@gmail.com" else "Password123!")
+            user_hash = get_password_hash(user_pwd)
             if not user:
                 role_obj = roles_map[u_data["role_name"]]
                 user = User(
                     email=u_data["email"],
-                    password_hash=password_hash,
+                    password_hash=user_hash,
                     full_name=u_data["full_name"],
                     role_id=role_obj.role_id,
                     is_active=u_data["is_active"],
@@ -101,6 +103,8 @@ def seed_database():
                 db.add(user)
                 db.flush()
                 print(f"Created user: {user.email}")
+            else:
+                user.password_hash = user_hash
             users_map[u_data["email"]] = user
 
         db.commit()
@@ -433,6 +437,40 @@ def seed_database():
                 },
             )
             print("Created demo project: ABC Shield")
+
+        builder_user = users_map.get("builder@gmail.com")
+        if builder_user:
+            demo_prj = db.query(Project).filter(Project.project_code == "PRJ-001").first()
+            if not demo_prj:
+                demo_prj = Project(
+                    project_name="AML Compliance Framework",
+                    project_code="PRJ-001",
+                    status="ACTIVE",
+                    created_by=builder_user.user_id,
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc),
+                )
+                db.add(demo_prj)
+                db.flush()
+
+                db.add(ProjectProfile(
+                    project_id=demo_prj.project_id,
+                    description="End-to-end anti-money laundering workflow for retail banking operations.",
+                    jurisdiction="United Kingdom - FCA",
+                    regulatory_scope="AML/CTF",
+                    objectives="Establish defensible source-traceable compliance and advisor governance",
+                    created_at=datetime.now(timezone.utc),
+                    updated_at=datetime.now(timezone.utc),
+                ))
+
+                db.add(ProjectMember(
+                    project_id=demo_prj.project_id,
+                    user_id=builder_user.user_id,
+                    service_role="OWNER",
+                    service_scope="PROJECT_CONTROL",
+                    member_status="ACTIVE",
+                    joined_at=datetime.now(timezone.utc),
+                ))
 
         db.commit()
 
