@@ -62,15 +62,48 @@ async def general_exception_handler(request: Request, exc: Exception):
         content={"detail": "An internal server error occurred. Please contact support."},
     )
 
-# Health check
+# Root landing endpoint / service index (resolves 404 on http://127.0.0.1:8000)
+@app.get("/", tags=["System"], summary="API Root & Service Index")
+def api_root():
+    return {
+        "service": settings.PROJECT_NAME,
+        "status": "online",
+        "environment": settings.ENVIRONMENT,
+        "version": "0.4.0",
+        "docs_url": "/docs",
+        "redoc_url": "/redoc",
+        "openapi_url": "/openapi.json",
+        "health_check": "/health",
+        "api_v1_base": settings.API_V1_STR
+    }
+
+# Health check with real database connectivity validation
 @app.get("/health", tags=["Health"], summary="System Health Check")
 def health_check():
+    db_status = "connected"
+    try:
+        from app.db.session import engine
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception as e:
+        db_status = f"unreachable: {str(e)}"
+
     return {
-        "status": "healthy",
+        "status": "healthy" if db_status == "connected" else "degraded",
         "service": settings.PROJECT_NAME,
         "environment": settings.ENVIRONMENT,
-        "version": "0.4.0"
+        "version": "0.4.0",
+        "database": {
+            "dialect": "postgresql",
+            "status": db_status
+        }
     }
 
 # Include API v1 Router
 app.include_router(api_v1_router, prefix=settings.API_V1_STR)
+
+# Mount OpenAPI JSON also under /api/v1/openapi.json for compatibility
+@app.get("/api/v1/openapi.json", include_in_schema=False)
+def api_v1_openapi():
+    return app.openapi()

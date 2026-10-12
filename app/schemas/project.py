@@ -88,6 +88,11 @@ class ProjectResponse(BaseModel):
 
     @computed_field
     @property
+    def code(self) -> str:
+        return self.project_code
+
+    @computed_field
+    @property
     def type(self) -> str:
         if self.profile and self.profile.regulatory_scope:
             return self.profile.regulatory_scope
