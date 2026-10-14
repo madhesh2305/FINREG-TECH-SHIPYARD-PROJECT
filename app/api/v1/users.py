@@ -66,3 +66,62 @@ def update_me(
 
     return _build_user_context(current_user, db)
 
+@router.get(
+    "/me/notifications",
+    status_code=status.HTTP_200_OK,
+    summary="Get User Notifications",
+    description="Returns real activity notifications and workflow invitations for the authenticated user."
+)
+def get_user_notifications(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    from app.models.advisor import AdvisorInvitation
+    from app.models.audit import AuditEvent
+    from app.models.project import Project, ProjectMember
+
+    notifications = []
+
+    # 1. Any invitations for this user's email
+    invitations = db.query(AdvisorInvitation).filter(
+        AdvisorInvitation.advisor_email == current_user.email
+    ).order_by(AdvisorInvitation.created_at.desc()).limit(10).all()
+
+    for inv in invitations:
+        proj = db.query(Project).filter(Project.project_id == inv.project_id).first()
+        proj_name = proj.project_name if proj else f"Project {inv.project_id}"
+        notifications.append({
+            "id": f"inv-{inv.invitation_id}",
+            "type": "INVITATION",
+            "title": f"Advisory Invitation: {proj_name}",
+            "message": f"You were invited to project '{proj_name}' with {inv.access_level} access.",
+            "status": inv.invitation_status,
+            "project_id": inv.project_id,
+            "created_at": inv.created_at.isoformat() if inv.created_at else None,
+            "is_read": inv.invitation_status != "PENDING"
+        })
+
+    # 2. Recent audit events for projects the user belongs to
+    member_projects = db.query(ProjectMember.project_id).filter(
+        ProjectMember.user_id == current_user.user_id
+    ).all()
+    project_ids = [p[0] for p in member_projects]
+
+    if project_ids:
+        recent_events = db.query(AuditEvent).filter(
+            AuditEvent.project_id.in_(project_ids)
+        ).order_by(AuditEvent.created_at.desc()).limit(15).all()
+
+        for ev in recent_events:
+            notifications.append({
+                "id": f"evt-{ev.audit_event_id}",
+                "type": ev.event_type,
+                "title": ev.event_type.replace("_", " ").title(),
+                "message": ev.event_description,
+                "project_id": ev.project_id,
+                "created_at": ev.created_at.isoformat() if ev.created_at else None,
+                "is_read": False
+            })
+
+    return notifications
+

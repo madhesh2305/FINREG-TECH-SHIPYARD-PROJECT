@@ -5,8 +5,9 @@ from app.core.exceptions import AuthenticationError, InactiveUserError, Conflict
 from app.core.config import settings
 from app.models.identity import User, Role
 from app.models.advisor import AdvisorProfile
+from app.models.project import Project, ProjectMember
 from app.services.audit_service import log_audit_event
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
+from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, ChangePasswordRequest, PasswordResetRequest, PasswordResetResponse
 
 ROLE_NORMALIZATION = {
     "BUILDER": "BUILDER",
@@ -101,6 +102,25 @@ def register_user(db: Session, request: RegisterRequest) -> TokenResponse:
         db.add(profile)
         db.flush()
 
+    # Automatically link newly registered advisors to initial demonstrator Project 1 (PRJ-ABC-001) for workspace access
+    if role_name == "ADVISOR":
+        demo_projects = db.query(Project).filter((Project.project_id == 1) | (Project.project_code == "PRJ-ABC-001")).all()
+        for dp in demo_projects:
+            existing_mem = db.query(ProjectMember).filter(
+                ProjectMember.project_id == dp.project_id,
+                ProjectMember.user_id == new_user.user_id
+            ).first()
+            if not existing_mem:
+                db.add(ProjectMember(
+                    project_id=dp.project_id,
+                    user_id=new_user.user_id,
+                    service_role="REGULATORY",
+                    service_scope="ADVISORY_REVIEW",
+                    member_status="ACTIVE",
+                    joined_at=now,
+                ))
+                db.flush()
+
     # Audit log
     log_audit_event(
         db=db,
@@ -138,4 +158,54 @@ def register_user(db: Session, request: RegisterRequest) -> TokenResponse:
         full_name=new_user.full_name,
         email=new_user.email,
         platform_role=role_name
+    )
+
+def change_user_password(db: Session, user: User, request: ChangePasswordRequest) -> dict:
+    """Safely updates user password after verifying current credentials."""
+    if not verify_password(request.current_password, user.password_hash):
+        raise AuthenticationError("Current password does not match registered credentials")
+
+    if len(request.new_password.strip()) < 6:
+        raise ValidationError("New password must be at least 6 characters")
+
+    user.password_hash = get_password_hash(request.new_password.strip())
+    user.updated_at = datetime.now(timezone.utc)
+
+    log_audit_event(
+        db=db,
+        project_id=None,
+        actor_user_id=user.user_id,
+        event_type="USER_PASSWORD_CHANGED",
+        entity_type="USER",
+        entity_id=user.user_id,
+        event_description=f"User {user.email} successfully updated their account password",
+        new_values={"user_id": user.user_id, "status": "PASSWORD_UPDATED"}
+    )
+
+    db.commit()
+    return {"status": "success", "message": "Password updated successfully in PostgreSQL"}
+
+def request_password_reset(db: Session, request: PasswordResetRequest) -> PasswordResetResponse:
+    """Processes password reset request with safe anti-enumeration and truthful delivery messaging."""
+    clean_email = request.email.lower().strip()
+    user = db.query(User).filter(User.email == clean_email).first()
+
+    # Safe log event without exposing token
+    if user:
+        log_audit_event(
+            db=db,
+            project_id=None,
+            actor_user_id=user.user_id,
+            event_type="PASSWORD_RESET_REQUESTED",
+            entity_type="USER",
+            entity_id=user.user_id,
+            event_description=f"Password recovery requested for {clean_email}. SMTP provider unconfigured.",
+            new_values={"email": clean_email, "provider_configured": False}
+        )
+        db.commit()
+
+    return PasswordResetResponse(
+        status="pending_configuration",
+        message="Password recovery requested. Automated SMTP email delivery is currently unconfigured in this environment. Please contact your Workspace Administrator to reset credentials.",
+        delivery_channel="SMTP (Unconfigured)"
     )

@@ -19,3 +19,15 @@ class TokenResponse(BaseModel):
     full_name: str
     email: str
     platform_role: str
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(..., min_length=4, description="Current password")
+    new_password: str = Field(..., min_length=6, description="New password")
+
+class PasswordResetRequest(BaseModel):
+    email: EmailStr = Field(..., description="Email address to request password reset for")
+
+class PasswordResetResponse(BaseModel):
+    status: str
+    message: str
+    delivery_channel: str
