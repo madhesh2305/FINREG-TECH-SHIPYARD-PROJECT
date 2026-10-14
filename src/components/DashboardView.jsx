@@ -6,6 +6,11 @@ import AdvisorsExpertsView from './AdvisorsExpertsView';
 import RegulatorySupportView from './RegulatorySupportView';
 import ToolsView from './ToolsView';
 import SettingsView from './SettingsView';
+import AdvisorAdviceView from './AdvisorAdviceView';
+import AdviceDecisionsView from './AdviceDecisionsView';
+import AiRagFindingsView from './AiRagFindingsView';
+import ReadinessView from './ReadinessView';
+import AuditTrailView from './AuditTrailView';
 
 
 
@@ -42,16 +47,80 @@ import {
   ExternalLink
 } from 'lucide-react';
 
-export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) {
+export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, currentUser }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('Dashboard'); // 'Dashboard' | 'My Projects' | 'Create Project' | 'Project Details'
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationMenuOpen, setIsNotificationMenuOpen] = useState(false);
-  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(true);
+
+  // Authenticated user profile state (DEF-03)
+  const [userProfile, setUserProfile] = useState(currentUser || null);
+
+  useEffect(() => {
+    if (currentUser) {
+      setUserProfile(currentUser);
+    } else {
+      async function loadUser() {
+        const u = await getCurrentUser();
+        if (u) setUserProfile(u);
+      }
+      loadUser();
+    }
+  }, [currentUser]);
+
+  const userName = userProfile?.name || 'Jun Nakamura';
+  const userEmail = userProfile?.email || 'jun@northbank.com';
+  const userRoleTitle = userProfile?.role || 'Builder';
+  const userInitials = userName
+    .split(' ')
+    .filter(Boolean)
+    .map((n) => n[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase() || 'JN';
+
+  // Interactive Notifications State (DEF-05)
+  const [notificationsList, setNotificationsList] = useState([
+    {
+      id: 'notif-1',
+      text: 'Advisor review added to ABC Shield',
+      tab: 'Advisor Advice',
+      read: false,
+    },
+    {
+      id: 'notif-2',
+      text: 'New FCA source version available',
+      tab: 'Regulatory Requirements',
+      read: false,
+    },
+    {
+      id: 'notif-3',
+      text: 'Project invitation accepted by Dr. Chen',
+      tab: 'Advisors / Experts',
+      read: true,
+    },
+  ]);
+
+  const unreadCount = notificationsList.filter((n) => !n.read).length;
+
+  const handleNotificationClick = (item) => {
+    setNotificationsList((prev) =>
+      prev.map((n) => (n.id === item.id ? { ...n, read: true } : n))
+    );
+    setIsNotificationMenuOpen(false);
+    if (item.tab) {
+      setActiveTab(item.tab);
+    }
+  };
+
+  const handleMarkAllRead = () => {
+    setNotificationsList((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
 
   // Selected Project State for Project Details View
   const [selectedProject, setSelectedProject] = useState(null);
   const [projectSubTab, setProjectSubTab] = useState('Overview');
+  const [targetRequirementId, setTargetRequirementId] = useState(null);
 
   // Box Click & Active States for Cream Glow + Zoom-in
   const [isCreateProjectTouched, setIsCreateProjectTouched] = useState(false);
@@ -73,6 +142,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
   const [viewMode, setViewMode] = useState('list'); // 'list' | 'grid'
 
   // Create Project Form States
+  const [createProjectStep, setCreateProjectStep] = useState(1);
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectType, setNewProjectType] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
@@ -228,6 +298,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
     setToastMessage(`Project "${newProjectName}" created successfully!`);
 
     // Reset Form
+    setCreateProjectStep(1);
     setNewProjectName('');
     setNewProjectType('');
     setNewProjectDescription('');
@@ -323,41 +394,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
     },
   ];
 
-  // Notifications Data (Advisor 1, Advisor 2 & System alerts)
-  const notificationsList = [
-    {
-      id: 1,
-      sender: 'Advisor 1 (S. Okonkwo)',
-      avatar: 'SO',
-      avatarBg: 'bg-[#7c4a27] text-white',
-      title: 'Review Feedback Submitted',
-      message: 'Advisor 1 (S. Okonkwo) submitted feedback for KYC Onboarding Workflow: "CDD verification steps approved, pending final compliance sign-off."',
-      time: '10 minutes ago',
-      unread: true,
-      projectId: 'PRJ-002',
-    },
-    {
-      id: 2,
-      sender: 'Advisor 2 (A. Petrov)',
-      avatar: 'AP',
-      avatarBg: 'bg-[#96562c] text-white',
-      title: 'Draft Pack Approved',
-      message: 'Advisor 2 (A. Petrov) approved draft submission for Regulatory Reporting Q3 pack.',
-      time: '1 hour ago',
-      unread: true,
-      projectId: 'PRJ-003',
-    },
-    {
-      id: 3,
-      sender: 'System Alert',
-      avatar: 'FRT',
-      avatarBg: 'bg-slate-800 text-amber-400 border border-amber-500/30',
-      title: 'Regulatory Guidance Updated',
-      message: 'FCA published new Anti-Money Laundering & CTF compliance standards for Q4 2026.',
-      time: '3 hours ago',
-      unread: false,
-    },
-  ];
+
 
   // Metric Cards Config matching media_1791362867917.png
   const metricsData = [
@@ -419,81 +456,65 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
         {/* Right Controls: Notifications & User Profile */}
         <div className="flex items-center gap-3">
 
-          {/* Notification Bell with Interactive Dropdown */}
+          {/* Notification Bell with Interactive Dropdown (DEF-05) */}
           <div className="relative">
             <button
               type="button"
               onClick={() => {
                 setIsNotificationMenuOpen(!isNotificationMenuOpen);
                 setIsUserMenuOpen(false);
-                setHasUnreadNotifications(false);
               }}
-              title="Click to view notifications from Advisor 1 & Advisor 2"
-              className={`relative p-2 rounded-xl border transition-all cursor-pointer ${
-                isDarkMode
-                  ? 'border-slate-800 hover:border-slate-700 bg-slate-900/60 text-slate-200'
-                  : 'border-stone-200 hover:border-stone-300 bg-stone-50 text-slate-700'
-              }`}
+              title="Notifications"
+              className="p-2 text-slate-400 hover:text-white transition-colors cursor-pointer relative"
             >
-              <Bell className="w-5 h-5 text-amber-400" />
-              {hasUnreadNotifications && (
-                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-rose-500 rounded-full ring-2 ring-[#121214] animate-pulse" />
+              <Bell className="w-5 h-5 text-slate-300" />
+              {unreadCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 rounded-full bg-amber-400 border-2 border-[#16181d] animate-pulse" />
               )}
             </button>
 
-            {/* Notifications Dropdown Panel */}
+            {/* Notifications Dropdown Panel (DEF-05) */}
             {isNotificationMenuOpen && (
-              <div className={`absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl shadow-2xl border overflow-hidden z-50 animate-fadeIn ${
-                isDarkMode ? 'bg-[#1a1a1e] border-slate-800 text-slate-100' : 'bg-white border-stone-200 text-slate-900'
-              }`}>
+              <div className="absolute right-0 mt-3 w-80 sm:w-[350px] rounded-2xl bg-[#16181d] border border-slate-700/80 shadow-2xl overflow-hidden z-50 text-left animate-fadeIn">
                 {/* Panel Header */}
-                <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-sm sm:text-base text-slate-100">Notifications</h3>
-                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#7c4a27] text-white">
-                      {notificationsList.length}
-                    </span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsNotificationMenuOpen(false)}
-                    className="text-xs text-slate-400 hover:text-slate-200 cursor-pointer font-semibold"
-                  >
-                    Close
-                  </button>
+                <div className="px-6 pt-5 pb-3 flex items-center justify-between border-b border-slate-800">
+                  <h3 className="text-base sm:text-lg font-bold text-white">Notifications</h3>
+                  {unreadCount > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleMarkAllRead}
+                      className="text-xs text-amber-400 hover:text-amber-300 font-semibold cursor-pointer"
+                    >
+                      Mark all as read
+                    </button>
+                  )}
                 </div>
 
                 {/* Notifications List */}
-                <div className="max-h-96 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/80 text-left">
-                  {notificationsList.map((notif) => (
+                <div className="divide-y divide-slate-800/80 max-h-80 overflow-y-auto">
+                  {notificationsList.map((item) => (
                     <div
-                      key={notif.id}
-                      onClick={() => {
-                        if (notif.projectId) {
-                          const proj = allProjects.find((p) => p.id === notif.projectId);
-                          if (proj) handleOpenProject(proj);
-                        }
-                        setIsNotificationMenuOpen(false);
-                      }}
-                      className={`p-4 transition-colors cursor-pointer ${
-                        isDarkMode
-                          ? 'hover:bg-slate-800/60'
-                          : 'hover:bg-stone-50'
+                      key={item.id}
+                      onClick={() => handleNotificationClick(item)}
+                      className={`px-6 py-4 flex items-center justify-between gap-3 text-sm transition-colors cursor-pointer ${
+                        item.read
+                          ? 'text-slate-400 hover:bg-white/[0.04]'
+                          : 'text-slate-100 font-semibold bg-amber-500/[0.04] hover:bg-amber-500/[0.08]'
                       }`}
                     >
-                      <div className="flex items-start gap-3">
-                        <div className={`w-8 h-8 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 ${notif.avatarBg}`}>
-                          {notif.avatar}
-                        </div>
-                        <div className="flex-1 space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-xs text-amber-400">{notif.sender}</span>
-                            <span className="text-[11px] text-slate-400 font-medium">{notif.time}</span>
-                          </div>
-                          <p className="font-semibold text-xs text-slate-200">{notif.title}</p>
-                          <p className="text-xs text-slate-300 leading-relaxed font-normal">{notif.message}</p>
-                        </div>
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`w-2 h-2 rounded-full shrink-0 ${
+                            item.read ? 'bg-slate-600' : 'bg-amber-400'
+                          }`}
+                        />
+                        <span>{item.text}</span>
                       </div>
+                      {!item.read && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono">
+                          New
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -501,7 +522,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
             )}
           </div>
 
-          {/* User Profile Dropdown */}
+          {/* User Profile Dropdown (DEF-03) */}
           <div className="relative">
             <button
               type="button"
@@ -513,29 +534,29 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
               }`}
             >
               <div className="w-8 h-8 rounded-lg bg-[#7c4a27]/15 dark:bg-amber-500/20 text-[#7c4a27] dark:text-amber-300 font-bold text-xs flex items-center justify-center border border-[#7c4a27]/20">
-                JN
+                {userInitials}
               </div>
-              <span className="text-sm font-semibold hidden md:inline-block">J. Nakamura</span>
+              <span className="text-sm font-semibold hidden md:inline-block">{userName}</span>
               <ChevronDown className="w-4 h-4 text-slate-400" />
             </button>
 
-            {/* User Menu Overlay showing Name, Logged-in Email, and Log out option alone */}
+            {/* User Menu Overlay showing Name, Logged-in Email, and Log out option */}
             {isUserMenuOpen && (
               <div className={`absolute right-0 mt-2 w-60 rounded-xl shadow-2xl border overflow-hidden z-50 animate-fadeIn ${
                 isDarkMode ? 'bg-[#1a1a1e] border-slate-800 text-slate-200' : 'bg-white border-stone-200 text-slate-800'
               }`}>
                 {/* User Info Header: Name & Logged-in Email */}
                 <div className="p-4 border-b border-slate-200 dark:border-slate-800 text-left">
-                  <p className="font-bold text-sm text-slate-900 dark:text-slate-100">Jun Nakamura</p>
-                  <p className="text-slate-400 text-xs mt-0.5 font-normal">jun@northbank.com</p>
+                  <p className="font-bold text-sm text-slate-900 dark:text-slate-100">{userName}</p>
+                  <p className="text-slate-400 text-xs mt-0.5 font-normal">{userEmail}</p>
                   <div className="mt-2">
                     <span className="inline-block px-2.5 py-0.5 border border-slate-200 dark:border-slate-700 bg-stone-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px] font-mono rounded">
-                      Builder
+                      {userRoleTitle}
                     </span>
                   </div>
                 </div>
 
-                {/* Log out Option Alone */}
+                {/* Log out Option */}
                 <div className="py-1 text-left">
                   <button
                     type="button"
@@ -571,22 +592,33 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
               { name: 'Dashboard', icon: LayoutDashboard },
               { name: 'My Projects', icon: FolderKanban, badge: allProjects.length },
               { name: 'Create Project', icon: PlusCircle },
+              { name: 'Regulatory Requirements', icon: ShieldCheck },
               { name: 'Advisors / Experts', icon: Users },
-              { name: 'Regulatory Support', icon: ShieldCheck },
+              { name: 'Advisor Advice', icon: FileText },
+              { name: 'Advice & Decisions', icon: FileText },
+              { name: 'AI / RAG Findings', icon: Search },
+              { name: 'Readiness', icon: LayoutGrid },
+              { name: 'Audit Trail', icon: List },
               { name: 'Tools', icon: Wrench },
               { name: 'Settings', icon: Settings },
             ].map((item) => {
               const Icon = item.icon;
               const isActive =
                 activeTab === item.name ||
-                (item.name === 'My Projects' && activeTab === 'Project Details');
+                (item.name === 'My Projects' && activeTab === 'Project Details') ||
+                (item.name === 'Regulatory Requirements' && activeTab === 'Regulatory Support');
 
               return (
                 <button
                   key={item.name}
                   type="button"
-                  onClick={() => setActiveTab(item.name)}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                  onClick={() => {
+                    setActiveTab(item.name);
+                    if (item.name === 'Regulatory Requirements') {
+                      setTargetRequirementId(null);
+                    }
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                     isActive
                       ? isDarkMode
                         ? 'bg-[#96562c]/20 text-amber-400 border border-[#96562c]/30'
@@ -696,6 +728,119 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                     </div>
                   );
                 })}
+              </div>
+
+              {/* ADVISOR ADVICE & LIVE WORKFLOW OVERVIEW SECTION MATCHING media_1791775936383_c278f0e5.png */}
+              <div className="space-y-4">
+                {/* TOP CARD: ADVISOR ADVICE */}
+                <div className="rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-[#161619] p-6 shadow-sm">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                    {/* Left: Eyebrow + Title */}
+                    <div className="min-w-[260px]">
+                      <div className="text-[11px] font-mono tracking-widest text-slate-400 uppercase font-semibold mb-1">
+                        ADVISOR ADVICE
+                      </div>
+                      <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
+                        Expert reviews for ABC Shield
+                      </h2>
+                    </div>
+
+                    {/* Center: 3 Metrics with vertical divider lines */}
+                    <div className="grid grid-cols-3 gap-6 sm:gap-8 flex-1 max-w-xl">
+                      <div className="lg:border-l lg:border-slate-800/80 lg:pl-6">
+                        <div className="text-[10px] font-mono tracking-wider text-slate-400 uppercase font-semibold mb-1">
+                          PENDING REVIEWS
+                        </div>
+                        <div className="text-xl sm:text-2xl font-bold text-[#e6a13d] dark:text-[#f59e0b]">
+                          2
+                        </div>
+                      </div>
+
+                      <div className="border-l border-slate-200 dark:border-slate-800/80 pl-6">
+                        <div className="text-[10px] font-mono tracking-wider text-slate-400 uppercase font-semibold mb-1">
+                          ACCEPTED
+                        </div>
+                        <div className="text-xl sm:text-2xl font-bold text-[#e6a13d] dark:text-[#f59e0b]">
+                          3
+                        </div>
+                      </div>
+
+                      <div className="border-l border-slate-200 dark:border-slate-800/80 pl-6">
+                        <div className="text-[10px] font-mono tracking-wider text-slate-400 uppercase font-semibold mb-1">
+                          NEEDS CLARIFICATION
+                        </div>
+                        <div className="text-xl sm:text-2xl font-bold text-[#e6a13d] dark:text-[#f59e0b]">
+                          1
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Right: Action Button */}
+                    <div className="shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('Advisor Advice')}
+                        className="px-4 py-2.5 rounded-md border border-slate-700/80 bg-[#1e2025] hover:bg-slate-800 text-slate-200 hover:text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-sm"
+                      >
+                        <span>View advisor advice</span>
+                        <span>→</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* BOTTOM 2 CARDS: AI / RAG FINDINGS and READINESS SUMMARY */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Card 1: AI / RAG Findings */}
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-[#161619] p-6 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="text-[11px] font-mono tracking-widest text-slate-400 uppercase font-semibold mb-1.5">
+                        AI / RAG FINDINGS
+                      </div>
+                      <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white mb-2">
+                        3 findings require human review
+                      </h3>
+                      <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-normal leading-relaxed mb-6">
+                        One evidence gap and one possible interpretation conflict are open for ABC Shield.
+                      </p>
+                    </div>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('AI / RAG Findings')}
+                        className="px-4 py-2.5 rounded-md border border-slate-700/80 bg-[#1e2025] hover:bg-slate-800 text-slate-200 hover:text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-sm"
+                      >
+                        <span>Review AI findings</span>
+                        <span>→</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Card 2: Readiness Summary */}
+                  <div className="rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-[#161619] p-6 shadow-sm flex flex-col justify-between">
+                    <div>
+                      <div className="text-[11px] font-mono tracking-widest text-slate-400 uppercase font-semibold mb-1.5">
+                        READINESS SUMMARY
+                      </div>
+                      <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white mb-2">
+                        70% progressing
+                      </h3>
+                      <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-normal leading-relaxed mb-6">
+                        7 items complete, 4 open, and 1 blocked. Readiness is not a compliance certificate.
+                      </p>
+                    </div>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('Readiness')}
+                        className="px-4 py-2.5 rounded-md border border-slate-700/80 bg-[#1e2025] hover:bg-slate-800 text-slate-200 hover:text-white text-xs sm:text-sm font-semibold transition-colors cursor-pointer inline-flex items-center gap-1.5 shadow-sm"
+                      >
+                        <span>Open readiness</span>
+                        <span>→</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               {/* RECENT PROJECTS CONTAINER BOX */}
@@ -1194,190 +1339,319 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
             </div>
           )}
 
-          {/* TAB 3: CREATE NEW PROJECT VIEW */}
+          {/* TAB 3: CREATE PROJECT VIEW (Matching uploaded image media_1791737402091_0e2c6bea.png) */}
           {activeTab === 'Create Project' && (
-            <div className="space-y-6 animate-fadeIn max-w-4xl">
-              <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-300">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('Dashboard')}
-                  className="hover:text-[#7c4a27] dark:hover:text-amber-400 cursor-pointer transition-colors"
-                >
-                  Dashboard
-                </button>
-                <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
-                <span className="text-slate-800 dark:text-slate-200 font-bold">Create Project</span>
-              </div>
-
-              <div className="text-left">
-                <h1 className={`text-2xl sm:text-3xl font-bold tracking-tight ${
-                  isDarkMode ? 'text-slate-100' : 'text-slate-900'
-                }`}>
-                  Create New Project
+            <div className="space-y-6 animate-fadeIn max-w-5xl text-left">
+              {/* Header Title & Subtitle */}
+              <div className="space-y-1.5">
+                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-100">
+                  Create Project
                 </h1>
-                <p className={`text-xs sm:text-sm mt-1.5 font-medium ${
-                  isDarkMode ? 'text-slate-300' : 'text-slate-500'
-                }`}>
-                  Define your compliance or regulatory project. You can edit all details later.
+                <p className="text-xs sm:text-sm text-slate-400 font-normal">
+                  Add the essentials now. Optional profile information and documents can be completed later.
                 </p>
               </div>
 
-              <div
-                onClick={() => setIsFormCardActive(!isFormCardActive)}
-                title="Click box to toggle brown border, cream edge lighting glow & zoom-in"
-                className={`rounded-2xl border p-6 sm:p-8 transition-all duration-300 text-left cursor-pointer ${
-                  isFormCardActive
-                    ? isDarkMode
-                      ? 'bg-[#1a1a1e] border-[#96562c] scale-[1.01] shadow-[0_0_35px_rgba(251,191,36,0.25),0_12px_36px_rgba(150,86,44,0.35)] ring-2 ring-[#96562c]/40'
-                      : 'bg-[#fdfdf9] border-[#7c4a27] scale-[1.01] shadow-[0_0_40px_rgba(254,243,199,0.95),0_14px_40px_rgba(124,74,39,0.22)] ring-4 ring-amber-100/90'
-                    : isDarkMode
-                    ? 'bg-[#1a1a1e] border-slate-800 shadow-sm hover:border-[#96562c] hover:scale-[1.005]'
-                    : 'bg-white border-stone-200/90 shadow-xs hover:border-[#7c4a27] hover:scale-[1.005] hover:bg-[#fdfdfc]'
-                }`}
-              >
-                <form onSubmit={handleCreateProjectSubmit} className="space-y-8">
-                  <div className="space-y-5">
-                    <h2 className="text-xs font-bold tracking-wider uppercase text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-2">
-                      PROJECT BASICS
-                    </h2>
+              {/* 3-Step Wizard Navigation Bar matching media_1791737402091_0e2c6bea.png */}
+              <div className="rounded-xl border border-slate-800 bg-[#161619] grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-slate-800 overflow-hidden shadow-sm">
+                {/* Step 1: Project Information */}
+                <button
+                  type="button"
+                  onClick={() => setCreateProjectStep(1)}
+                  className={`p-3.5 sm:px-6 flex items-center justify-center sm:justify-start gap-3 transition-colors cursor-pointer ${
+                    createProjectStep === 1 ? 'bg-amber-500/5' : 'hover:bg-slate-800/30'
+                  }`}
+                >
+                  <div className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 ${
+                    createProjectStep === 1
+                      ? 'border-amber-500/90 text-amber-400 bg-amber-500/10'
+                      : 'border-slate-700 text-slate-400'
+                  }`}>
+                    1
+                  </div>
+                  <span className={`text-xs sm:text-sm font-bold ${
+                    createProjectStep === 1 ? 'text-slate-100' : 'text-slate-400'
+                  }`}>
+                    Project Information
+                  </span>
+                </button>
 
-                    <div className="space-y-1.5">
-                      <label className={`block text-xs sm:text-sm font-semibold ${
-                        isDarkMode ? 'text-slate-200' : 'text-slate-700'
-                      }`}>
-                        PROJECT NAME <span className="text-[#7c4a27] dark:text-amber-400 font-bold">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={newProjectName}
-                        onChange={(e) => setNewProjectName(e.target.value)}
-                        placeholder="e.g. SMCR Compliance Review 2026"
-                        className={`w-full px-4 py-3 text-sm rounded-xl border focus:outline-none transition-all ${
-                          isDarkMode
-                            ? 'bg-slate-800/80 border-slate-700 text-slate-100 placeholder-slate-500 hover:border-[#96562c] focus:border-[#96562c] focus:ring-4 focus:ring-[#96562c]/20'
-                            : 'bg-white border-stone-200 text-slate-900 placeholder-slate-400 hover:border-[#7c4a27] focus:border-[#7c4a27] focus:ring-4 focus:ring-[#7c4a27]/15'
-                        }`}
-                      />
+                {/* Step 2: Project Profile */}
+                <button
+                  type="button"
+                  onClick={() => setCreateProjectStep(2)}
+                  className={`p-3.5 sm:px-6 flex items-center justify-center sm:justify-start gap-3 transition-colors cursor-pointer ${
+                    createProjectStep === 2 ? 'bg-amber-500/5' : 'hover:bg-slate-800/30'
+                  }`}
+                >
+                  <div className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 ${
+                    createProjectStep === 2
+                      ? 'border-amber-500/90 text-amber-400 bg-amber-500/10'
+                      : 'border-slate-700 text-slate-400'
+                  }`}>
+                    2
+                  </div>
+                  <span className={`text-xs sm:text-sm font-semibold ${
+                    createProjectStep === 2 ? 'text-slate-100' : 'text-slate-400'
+                  }`}>
+                    Project Profile
+                  </span>
+                </button>
+
+                {/* Step 3: Review */}
+                <button
+                  type="button"
+                  onClick={() => setCreateProjectStep(3)}
+                  className={`p-3.5 sm:px-6 flex items-center justify-center sm:justify-start gap-3 transition-colors cursor-pointer ${
+                    createProjectStep === 3 ? 'bg-amber-500/5' : 'hover:bg-slate-800/30'
+                  }`}
+                >
+                  <div className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 ${
+                    createProjectStep === 3
+                      ? 'border-amber-500/90 text-amber-400 bg-amber-500/10'
+                      : 'border-slate-700 text-slate-400'
+                  }`}>
+                    3
+                  </div>
+                  <span className={`text-xs sm:text-sm font-semibold ${
+                    createProjectStep === 3 ? 'text-slate-100' : 'text-slate-400'
+                  }`}>
+                    Review
+                  </span>
+                </button>
+              </div>
+
+              {/* STEP 1: PROJECT INFORMATION FORM (Direct match with media_1791737402091_0e2c6bea.png) */}
+              {createProjectStep === 1 && (
+                <div className="rounded-2xl border border-slate-800/90 bg-[#161619] p-6 sm:p-8 space-y-6 text-left shadow-xl animate-fadeIn">
+                  <h2 className="text-lg sm:text-xl font-bold text-slate-100">
+                    Project Information
+                  </h2>
+
+                  <form onSubmit={(e) => { e.preventDefault(); setCreateProjectStep(2); }} className="space-y-6">
+                    {/* Row 1: Project Name & Project Type */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="block text-xs font-semibold text-slate-200">
+                          Project Name <span className="text-amber-400">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newProjectName}
+                          onChange={(e) => setNewProjectName(e.target.value)}
+                          placeholder="e.g. ABC Shield"
+                          className="w-full px-4 py-3 text-sm rounded-xl border border-slate-800 bg-[#121214] text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#96562c] focus:ring-2 focus:ring-[#96562c]/20 transition-all"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-xs font-semibold text-slate-200">
+                          Project Type <span className="text-amber-400">*</span>
+                        </label>
+                        <select
+                          required
+                          value={newProjectType}
+                          onChange={(e) => setNewProjectType(e.target.value)}
+                          className="w-full px-4 py-3 text-sm rounded-xl border border-slate-800 bg-[#121214] text-slate-200 focus:outline-none focus:border-[#96562c] cursor-pointer transition-all"
+                        >
+                          <option value="">Select project type</option>
+                          <option value="AML/CTF">AML/CTF (Anti-Money Laundering)</option>
+                          <option value="KYC/CDD">KYC/CDD (Know Your Customer)</option>
+                          <option value="Regulatory Reporting">Regulatory Reporting</option>
+                          <option value="Data Governance">Data Governance</option>
+                          <option value="Consumer Duty / Conduct">Consumer Duty / Conduct</option>
+                        </select>
+                      </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className={`block text-xs sm:text-sm font-semibold ${
-                        isDarkMode ? 'text-slate-200' : 'text-slate-700'
-                      }`}>
-                        PROJECT TYPE <span className="text-[#7c4a27] dark:text-amber-400 font-bold">*</span>
-                      </label>
-                      <select
-                        required
-                        value={newProjectType}
-                        onChange={(e) => setNewProjectType(e.target.value)}
-                        className={`w-full px-4 py-3 text-sm rounded-xl border focus:outline-none cursor-pointer transition-all ${
-                          isDarkMode
-                            ? 'bg-slate-800/80 border-slate-700 text-slate-100 hover:border-[#96562c] focus:border-[#96562c]'
-                            : 'bg-white border-stone-200 text-slate-900 hover:border-[#7c4a27] focus:border-[#7c4a27]'
-                        }`}
-                      >
-                        <option value="">Select type...</option>
-                        <option value="AML/CTF">AML/CTF (Anti-Money Laundering)</option>
-                        <option value="KYC/CDD">KYC/CDD (Know Your Customer)</option>
-                        <option value="Regulatory Reporting">Regulatory Reporting</option>
-                        <option value="Data Governance">Data Governance</option>
-                        <option value="Consumer Duty / Conduct">Consumer Duty / Conduct</option>
-                      </select>
+                    {/* Row 2: Jurisdiction */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="block text-xs font-semibold text-slate-200">
+                          Jurisdiction <span className="text-amber-400">*</span>
+                        </label>
+                        <select
+                          required
+                          value={newProjectJurisdiction}
+                          onChange={(e) => setNewProjectJurisdiction(e.target.value)}
+                          className="w-full px-4 py-3 text-sm rounded-xl border border-slate-800 bg-[#121214] text-slate-200 focus:outline-none focus:border-[#96562c] cursor-pointer transition-all"
+                        >
+                          <option value="">Select jurisdiction</option>
+                          <option value="United Kingdom">United Kingdom</option>
+                          <option value="European Union">European Union</option>
+                          <option value="United States">United States</option>
+                          <option value="Global / International">Global / International</option>
+                        </select>
+                      </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className={`block text-xs sm:text-sm font-semibold ${
-                        isDarkMode ? 'text-slate-200' : 'text-slate-700'
-                      }`}>
-                        DESCRIPTION
+                    {/* Row 3: Description */}
+                    <div className="space-y-2">
+                      <label className="block text-xs font-semibold text-slate-200">
+                        Description <span className="text-amber-400">*</span>
                       </label>
                       <textarea
-                        rows={4}
+                        rows={5}
+                        required
                         value={newProjectDescription}
                         onChange={(e) => setNewProjectDescription(e.target.value)}
-                        placeholder="Brief description of the project scope and objectives..."
-                        className={`w-full px-4 py-3 text-sm rounded-xl border focus:outline-none transition-all ${
-                          isDarkMode
-                            ? 'bg-slate-800/80 border-slate-700 text-slate-100 placeholder-slate-500 hover:border-[#96562c] focus:border-[#96562c] focus:ring-4 focus:ring-[#96562c]/20'
-                            : 'bg-white border-stone-200 text-slate-900 placeholder-slate-400 hover:border-[#7c4a27] focus:border-[#7c4a27] focus:ring-4 focus:ring-[#7c4a27]/15'
-                        }`}
+                        placeholder="Briefly describe the project objective"
+                        className="w-full px-4 py-3 text-sm rounded-xl border border-slate-800 bg-[#121214] text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#96562c] focus:ring-2 focus:ring-[#96562c]/20 transition-all leading-relaxed"
                       />
                     </div>
-                  </div>
 
-                  <div className="space-y-5 pt-2">
-                    <h2 className="text-xs font-bold tracking-wider uppercase text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-2">
-                      REGULATORY CONTEXT
-                    </h2>
-
-                    <div className="space-y-1.5">
-                      <label className={`block text-xs sm:text-sm font-semibold ${
-                        isDarkMode ? 'text-slate-200' : 'text-slate-700'
-                      }`}>
-                        JURISDICTION
-                      </label>
-                      <select
-                        value={newProjectJurisdiction}
-                        onChange={(e) => setNewProjectJurisdiction(e.target.value)}
-                        className={`w-full px-4 py-3 text-sm rounded-xl border focus:outline-none cursor-pointer transition-all ${
-                          isDarkMode
-                            ? 'bg-slate-800/80 border-slate-700 text-slate-100 hover:border-[#96562c] focus:border-[#96562c]'
-                            : 'bg-white border-stone-200 text-slate-900 hover:border-[#7c4a27] focus:border-[#7c4a27]'
-                        }`}
+                    {/* Actions */}
+                    <div className="flex items-center justify-between pt-4 border-t border-slate-800/80">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('Dashboard')}
+                        className="px-5 py-2.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-900/60 text-slate-400 hover:text-slate-200 font-medium text-xs sm:text-sm cursor-pointer transition-colors"
                       >
-                        <option value="">Select jurisdiction...</option>
-                        <option value="UK (FCA / PRA)">UK (FCA / PRA)</option>
-                        <option value="EU (EBA / ESMA)">EU (EBA / ESMA)</option>
-                        <option value="US (SEC / FINRA)">US (SEC / FINRA)</option>
-                        <option value="Global / Cross-border">Global / Cross-border</option>
-                      </select>
+                        Cancel
+                      </button>
+
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!newProjectName.trim()) {
+                              setToastMessage('Please enter a Project Name');
+                              setTimeout(() => setToastMessage(null), 2500);
+                              return;
+                            }
+                            if (!newProjectType) {
+                              setToastMessage('Please select a Project Type');
+                              setTimeout(() => setToastMessage(null), 2500);
+                              return;
+                            }
+                            setCreateProjectStep(2);
+                          }}
+                          className="px-6 py-2.5 rounded-xl bg-[#e6a13d] hover:bg-[#d8932f] text-slate-950 font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 cursor-pointer transition-colors"
+                        >
+                          <span>Next: Project Profile</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {/* STEP 2: PROJECT PROFILE */}
+              {createProjectStep === 2 && (
+                <div className="rounded-2xl border border-slate-800/90 bg-[#161619] p-6 sm:p-8 space-y-6 text-left shadow-xl animate-fadeIn">
+                  <h2 className="text-lg sm:text-xl font-bold text-slate-100">
+                    Project Profile
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Optional governance and scope parameters to align your compliance workflow.
+                  </p>
+
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <label className="block text-xs font-semibold text-slate-200">
+                          Regulatory Framework / Standard
+                        </label>
+                        <input
+                          type="text"
+                          value={newProjectDomain}
+                          onChange={(e) => setNewProjectDomain(e.target.value)}
+                          placeholder="e.g. FCA SYSC 6.3, UK MLR 2017"
+                          className="w-full px-4 py-3 text-sm rounded-xl border border-slate-800 bg-[#121214] text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#96562c] transition-all"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-xs font-semibold text-slate-200">
+                          Target Delivery Date
+                        </label>
+                        <input
+                          type="date"
+                          defaultValue="2026-11-30"
+                          className="w-full px-4 py-3 text-sm rounded-xl border border-slate-800 bg-[#121214] text-slate-100 focus:outline-none focus:border-[#96562c] transition-all"
+                        />
+                      </div>
                     </div>
 
-                    <div className="space-y-1.5">
-                      <label className={`block text-xs sm:text-sm font-semibold ${
-                        isDarkMode ? 'text-slate-200' : 'text-slate-700'
-                      }`}>
-                        REGULATORY DOMAIN / FRAMEWORK
-                      </label>
-                      <input
-                        type="text"
-                        value={newProjectDomain}
-                        onChange={(e) => setNewProjectDomain(e.target.value)}
-                        placeholder="e.g. Anti-Bribery & Corruption, SMCR, MiFID II..."
-                        className={`w-full px-4 py-3 text-sm rounded-xl border focus:outline-none transition-all ${
-                          isDarkMode
-                            ? 'bg-slate-800/80 border-slate-700 text-slate-100 placeholder-slate-500 hover:border-[#96562c] focus:border-[#96562c] focus:ring-4 focus:ring-[#96562c]/20'
-                            : 'bg-white border-stone-200 text-slate-900 placeholder-slate-400 hover:border-[#7c4a27] focus:border-[#7c4a27] focus:ring-4 focus:ring-[#7c4a27]/15'
-                        }`}
-                      />
+                    <div className="flex items-center justify-between pt-4 border-t border-slate-800/80">
+                      <button
+                        type="button"
+                        onClick={() => setCreateProjectStep(1)}
+                        className="px-5 py-2.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-900/60 text-slate-400 hover:text-slate-200 font-medium text-xs sm:text-sm cursor-pointer transition-colors"
+                      >
+                        ← Back
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCreateProjectStep(3)}
+                        className="px-6 py-2.5 rounded-xl bg-[#e6a13d] hover:bg-[#d8932f] text-slate-950 font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 cursor-pointer transition-colors"
+                      >
+                        <span>Next: Review</span>
+                        <ArrowRight className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* STEP 3: REVIEW & SUBMIT */}
+              {createProjectStep === 3 && (
+                <div className="rounded-2xl border border-slate-800/90 bg-[#161619] p-6 sm:p-8 space-y-6 text-left shadow-xl animate-fadeIn">
+                  <h2 className="text-lg sm:text-xl font-bold text-slate-100">
+                    Review Project Information
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Verify project parameters before adding to your delivery workspace.
+                  </p>
+
+                  <div className="divide-y divide-slate-800/80 rounded-xl border border-slate-800/80 bg-[#121214] p-5 text-sm space-y-3.5">
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Project Name</span>
+                      <span className="font-bold text-slate-100">{newProjectName || 'Untitled Project'}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-3.5">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Project Type</span>
+                      <span className="font-semibold text-amber-400">{newProjectType || 'AML/CTF'}</span>
+                    </div>
+                    <div className="flex items-center justify-between pt-3.5">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Jurisdiction</span>
+                      <span className="font-semibold text-slate-200">{newProjectJurisdiction || 'United Kingdom'}</span>
+                    </div>
+                    {newProjectDomain && (
+                      <div className="flex items-center justify-between pt-3.5">
+                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Regulatory Framework</span>
+                        <span className="font-semibold text-slate-200">{newProjectDomain}</span>
+                      </div>
+                    )}
+                    <div className="pt-3.5">
+                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Description</span>
+                      <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">{newProjectDescription || 'None provided.'}</p>
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-800">
+                  <div className="flex items-center justify-between pt-4 border-t border-slate-800/80">
                     <button
                       type="button"
-                      onClick={() => setActiveTab('Dashboard')}
-                      className={`px-5 py-3 rounded-xl font-bold text-sm transition-all cursor-pointer ${
-                        isDarkMode
-                          ? 'bg-slate-800 hover:bg-slate-700 text-slate-300'
-                          : 'bg-stone-100 hover:bg-stone-200 text-slate-700'
-                      }`}
+                      onClick={() => setCreateProjectStep(2)}
+                      className="px-5 py-2.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-900/60 text-slate-400 hover:text-slate-200 font-medium text-xs sm:text-sm cursor-pointer transition-colors"
                     >
-                      Cancel
+                      ← Back to Profile
                     </button>
 
                     <button
-                      type="submit"
-                      onClick={(e) => e.stopPropagation()}
-                      className="px-6 py-3 rounded-xl bg-[#7c4a27] hover:bg-[#633a1e] dark:bg-[#96562c] dark:hover:bg-[#7c4a27] text-white font-bold text-sm shadow-md shadow-amber-950/20 flex items-center justify-center gap-2 transition-all cursor-pointer border-2 border-stone-300 hover:border-slate-500 hover:scale-[1.03] hover:shadow-[0_0_35px_rgba(254,243,199,0.95)]"
+                      type="button"
+                      onClick={handleCreateProjectSubmit}
+                      className="px-7 py-3 rounded-xl bg-[#e6a13d] hover:bg-[#d8932f] text-slate-950 font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 cursor-pointer transition-colors"
                     >
                       <Plus className="w-4 h-4 stroke-[3]" />
                       <span>Create Project</span>
                     </button>
                   </div>
-                </form>
-              </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -1916,9 +2190,41 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
             <AdvisorsExpertsView isDarkMode={isDarkMode} />
           )}
 
-          {/* TAB: REGULATORY SUPPORT VIEW */}
-          {activeTab === 'Regulatory Support' && (
-            <RegulatorySupportView isDarkMode={isDarkMode} />
+          {/* TAB: ADVISOR ADVICE VIEW (Matching uploaded image media_1791737929366_a3b12230.png) */}
+          {activeTab === 'Advisor Advice' && (
+            <AdvisorAdviceView isDarkMode={isDarkMode} />
+          )}
+
+          {/* TAB: REGULATORY REQUIREMENTS / REGULATORY SUPPORT VIEW */}
+          {(activeTab === 'Regulatory Requirements' || activeTab === 'Regulatory Support') && (
+            <RegulatorySupportView isDarkMode={isDarkMode} initialRequirementId={targetRequirementId} />
+          )}
+
+          {/* TAB: ADVICE & DECISIONS VIEW (Matching media_1791738876275_cf9f871c.png) */}
+          {activeTab === 'Advice & Decisions' && (
+            <AdviceDecisionsView isDarkMode={isDarkMode} />
+          )}
+
+          {/* TAB: AI / RAG FINDINGS VIEW (Matching uploaded images) */}
+          {activeTab === 'AI / RAG Findings' && (
+            <AiRagFindingsView isDarkMode={isDarkMode} />
+          )}
+
+          {/* TAB: READINESS VIEW (Matching uploaded images media_1791739750674_a1d6ca4d.png and media_1791739798112_b0256e69.png) */}
+          {activeTab === 'Readiness' && (
+            <ReadinessView
+              isDarkMode={isDarkMode}
+              onOpenRelatedItem={(item) => {
+                const reqId = (item && item.reqId) || (item && item.code && item.code.startsWith('REQ-') ? item.code : 'REQ-142');
+                setTargetRequirementId(reqId);
+                setActiveTab('Regulatory Requirements');
+              }}
+            />
+          )}
+
+          {/* TAB: AUDIT TRAIL VIEW (Matching uploaded images media_1791740746094_bb421bec.png and media_1791740799469_3c3a4c41.png) */}
+          {activeTab === 'Audit Trail' && (
+            <AuditTrailView isDarkMode={isDarkMode} />
           )}
 
           {/* TAB: TOOLS VIEW */}
@@ -1928,11 +2234,11 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
 
           {/* TAB: SETTINGS VIEW */}
           {activeTab === 'Settings' && (
-            <SettingsView isDarkMode={isDarkMode} />
+            <SettingsView isDarkMode={isDarkMode} onSignOut={onSignOut} currentUser={userProfile} />
           )}
 
           {/* OTHER TABS PLACEHOLDER */}
-          {activeTab !== 'Dashboard' && activeTab !== 'My Projects' && activeTab !== 'Create Project' && activeTab !== 'Project Details' && activeTab !== 'Advisors / Experts' && activeTab !== 'Regulatory Support' && activeTab !== 'Tools' && activeTab !== 'Settings' && (
+          {activeTab !== 'Dashboard' && activeTab !== 'My Projects' && activeTab !== 'Create Project' && activeTab !== 'Project Details' && activeTab !== 'Advisors / Experts' && activeTab !== 'Advisor Advice' && activeTab !== 'Advice & Decisions' && activeTab !== 'AI / RAG Findings' && activeTab !== 'Readiness' && activeTab !== 'Audit Trail' && activeTab !== 'Regulatory Requirements' && activeTab !== 'Regulatory Support' && activeTab !== 'Tools' && activeTab !== 'Settings' && (
             <div className={`p-8 rounded-2xl border text-center animate-fadeIn ${
               isDarkMode ? 'bg-[#1a1a1e] border-slate-800' : 'bg-white border-stone-200'
             }`}>
