@@ -1,4 +1,4 @@
-from app.models.identity import Role, User
+from app.models.identity import Role, User, RevokedToken
 from app.models.project import Project, ProjectProfile, ProjectMember
 from app.models.advisor import AdvisorProfile, AdvisorInvitation
 from app.models.regulatory import RegulatorySource, RegulatoryRequirement
@@ -11,6 +11,7 @@ from app.models.readiness import ReadinessItem
 __all__ = [
     "Role",
     "User",
+    "RevokedToken",
     "Project",
     "ProjectProfile",
     "ProjectMember",

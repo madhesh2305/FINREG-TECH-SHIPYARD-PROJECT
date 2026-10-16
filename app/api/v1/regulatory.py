@@ -129,6 +129,7 @@ def get_global_regulatory_requirements(
             "dateVersion": str(s.publication_date) if s.publication_date else "Release 2026",
             "layer": s.topic,
             "category": s.topic,
+            "topic": s.topic,
             "applicability": s.applicability_rationale or "Applicable to Regulated Financial Institutions",
             "validationStatus": "Validated" if is_validated else "Review due",
             "status": "Validated" if is_validated else "Review due",

@@ -15,15 +15,21 @@ from app.models.project import Project, ProjectProfile, ProjectMember
 from app.models.regulatory import RegulatorySource, RegulatoryRequirement
 from app.services.audit_service import log_audit_event
 
-def seed_database():
-    print(f"Starting seed on dialect: {engine.dialect.name}")
+def seed_database(session_override: Session = None, engine_override=None):
+    use_engine = engine_override or engine
+    print(f"Starting seed on dialect: {use_engine.dialect.name}")
     
     # In SQLite fallback or testing, initialize schemas
-    if engine.dialect.name == "sqlite":
+    if use_engine.dialect.name == "sqlite":
         print("Initializing tables for SQLite fallback...")
-        Base.metadata.create_all(bind=engine)
+        Base.metadata.create_all(bind=use_engine)
 
-    db: Session = SessionLocal()
+    owns_session = False
+    if session_override is not None:
+        db = session_override
+    else:
+        db = SessionLocal()
+        owns_session = True
     try:
         # 1. Seed Platform Roles
         roles_to_seed = [
@@ -572,7 +578,8 @@ def seed_database():
         print(f"Error during seeding: {e}")
         raise
     finally:
-        db.close()
+        if owns_session:
+            db.close()
 
 if __name__ == "__main__":
     seed_database()

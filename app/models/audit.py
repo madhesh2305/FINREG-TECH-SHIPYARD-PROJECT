@@ -8,14 +8,14 @@ class AuditEvent(Base):
     __table_args__ = {"schema": "audit"}
 
     audit_event_id = Column(PK_BIGINT, primary_key=True, autoincrement=True)
-    project_id = Column(BigInteger, ForeignKey("project_management.projects.project_id"), nullable=False, index=True)
-    actor_user_id = Column(BigInteger, ForeignKey("identity.users.user_id"), nullable=False)
+    project_id = Column(BigInteger, ForeignKey("project_management.projects.project_id"), nullable=True, index=True)
+    actor_user_id = Column(BigInteger, ForeignKey("identity.users.user_id"), nullable=True)
     event_type = Column(String(100), nullable=False)
     entity_type = Column(String(100), nullable=False)
-    entity_id = Column(BigInteger, nullable=False)
-    old_values = Column(JSON, default=dict, nullable=False)
-    new_values = Column(JSON, default=dict, nullable=False)
-    event_description = Column(Text, nullable=False)
+    entity_id = Column(BigInteger, nullable=True)
+    old_values = Column(JSON, default=dict, nullable=True)
+    new_values = Column(JSON, default=dict, nullable=True)
+    event_description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
 
     project = relationship("Project", back_populates="audit_events")

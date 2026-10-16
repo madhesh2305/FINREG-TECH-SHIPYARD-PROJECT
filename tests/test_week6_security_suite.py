@@ -475,7 +475,12 @@ def test_w6_rag_security_suite(db: Session):
     rag_inj = client.post("/api/v1/rag/analyze", json={"query": injection_query}, headers=headers)
     assert rag_inj.status_code == 200
     res_text = str(rag_inj.json())
-    assert "vishal1516" not in res_text
+    from urllib.parse import urlparse
+    from app.core.config import settings
+    parsed_db = urlparse(settings.DATABASE_URL)
+    if parsed_db.password:
+        assert parsed_db.password not in res_text
+    assert settings.SECRET_KEY not in res_text
     assert "password_hash" not in res_text
     assert "secret-key" not in res_text
 
