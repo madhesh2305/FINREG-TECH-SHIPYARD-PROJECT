@@ -3,6 +3,9 @@ from typing import List, Union
 from pydantic import AnyHttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_backend_env = os.path.join(_backend_dir, ".env")
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "FinRegTech Shipyard - FCC Project Cockpit"
     API_V1_STR: str = "/api/v1"
@@ -10,7 +13,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
     HOST: str = "127.0.0.1"
 
-    DATABASE_URL: str = "postgresql://finreg_app:finreg_secure_pass@localhost:5432/FinRegTech ShipYard"
+    DATABASE_URL: str = "postgresql://postgres:vishal1516@localhost:5432/FinRegTech%20ShipYard"
     SQLITE_FALLBACK_URL: str = "sqlite:///./finregtech_dev.db"
 
     SECRET_KEY: str = "finregtech-shipyard-secret-key-change-in-production-min-32-bytes"
@@ -25,7 +28,7 @@ class Settings(BaseSettings):
     ]
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=[_backend_env, ".env"],
         env_file_encoding="utf-8",
         extra="ignore"
     )

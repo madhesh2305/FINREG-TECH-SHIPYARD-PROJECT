@@ -2,7 +2,7 @@ from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.core.config import settings
-from app.core.security import decode_access_token
+from app.core.security import decode_access_token, is_token_revoked
 from app.core.exceptions import AuthenticationError, InactiveUserError
 from app.db.session import get_db
 from app.models.identity import User
@@ -26,6 +26,9 @@ def get_current_user(
 
     if not actual_token:
         raise AuthenticationError("Authentication token is missing")
+
+    if is_token_revoked(actual_token, db):
+        raise AuthenticationError("Authentication token has been revoked. Please log in again.")
 
     payload = decode_access_token(actual_token)
     if not payload or "sub" not in payload:

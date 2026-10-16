@@ -153,6 +153,12 @@ def update_advice(db: Session, project_id: int, advice_id: int, request: AdviceU
         raise NotFoundError(f"Advice with ID {advice_id} not found")
     verify_object_belongs_to_project(advice.project_id, project_id, "Advice")
 
+    # W6-ADV-02 Security: An advisor cannot modify advice submitted by another advisor
+    if actor.role and actor.role.role_name == "ADVISOR":
+        actor_profile = db.query(AdvisorProfile).filter(AdvisorProfile.user_id == actor.user_id).first()
+        if not actor_profile or advice.advisor_profile_id != actor_profile.advisor_profile_id:
+            raise ForbiddenError("Advisors are not permitted to modify advice submitted by another advisor")
+
     old_status = advice.advice_status
 
     if request.title is not None:

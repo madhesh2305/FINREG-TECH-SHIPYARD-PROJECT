@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Header, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.identity import User
+from app.core.security import revoke_token
 from app.schemas.auth import (
     LoginRequest,
     RegisterRequest,
@@ -19,6 +20,27 @@ from app.services.auth_service import (
 from app.security.authentication import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+@router.post(
+    "/logout",
+    status_code=status.HTTP_200_OK,
+    summary="Revoke Current User Session & Token",
+    description="Securely revokes caller's JWT bearer token in PostgreSQL and memory, preventing reuse across all subsequent requests."
+)
+def logout_endpoint(
+    current_user: User = Depends(get_current_user),
+    authorization: str = Header(None),
+    db: Session = Depends(get_db)
+):
+    actual_token = None
+    if authorization:
+        parts = authorization.split()
+        if len(parts) == 2 and parts[0].lower() == "bearer":
+            actual_token = parts[1]
+    if actual_token:
+        revoke_token(token=actual_token, db=db, user=current_user)
+    return {"status": "success", "message": "Successfully logged out. Session token has been revoked."}
+
 
 @router.post(
     "/login",

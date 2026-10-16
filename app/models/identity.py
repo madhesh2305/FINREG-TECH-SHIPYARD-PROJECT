@@ -30,3 +30,13 @@ class User(Base):
     role = relationship("Role", back_populates="users")
     memberships = relationship("ProjectMember", back_populates="user")
     advisor_profile = relationship("AdvisorProfile", back_populates="user", uselist=False)
+
+class RevokedToken(Base):
+    __tablename__ = "revoked_tokens"
+    __table_args__ = {"schema": "identity"}
+
+    token_id = Column(PK_BIGINT, primary_key=True, autoincrement=True)
+    jti = Column(String(255), unique=True, index=True, nullable=True)
+    token_signature = Column(String(255), unique=True, index=True, nullable=False)
+    revoked_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
