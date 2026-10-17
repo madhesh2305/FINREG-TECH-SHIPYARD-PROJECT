@@ -40,13 +40,14 @@ def get_engine():
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode."""
     url = get_database_url()
+    is_pg = not url.startswith("sqlite")
     context.configure(
         url=url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
-        include_schemas=True,
-        version_table_schema="public",
+        include_schemas=is_pg,
+        version_table_schema="public" if is_pg else None,
     )
 
     with context.begin_transaction():
@@ -57,11 +58,12 @@ def run_migrations_online() -> None:
     connectable = get_engine()
 
     with connectable.connect() as connection:
+        is_pg = connection.dialect.name == "postgresql"
         context.configure(
             connection=connection,
             target_metadata=target_metadata,
-            include_schemas=True,
-            version_table_schema="public",
+            include_schemas=is_pg,
+            version_table_schema="public" if is_pg else None,
         )
 
         with context.begin_transaction():
