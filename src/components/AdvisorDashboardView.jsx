@@ -199,39 +199,14 @@ export default function AdvisorDashboardView({
     setNotificationsList((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
-  // 4 Metric Stat Cards matching media_1791949893756_6c538f7d.png
-  const submittedCount = reviewsList.filter((r) => r.status === 'Submitted' || r.status === 'Accepted').length;
-  const metricsData = [
-    {
-      label: 'Assigned Projects',
-      val: '01',
-      sub: 'Explicitly granted access',
-    },
-    {
-      label: 'Pending Advice',
-      val: '01',
-      sub: 'Requirements awaiting advice',
-    },
-    {
-      label: 'Submitted Advice',
-      val: String(submittedCount).padStart(2, '0'),
-      sub: 'Current expertise profile',
-    },
-    {
-      label: 'Pending Invitations',
-      val: '01',
-      sub: 'Shown here instead of separate navigation',
-    },
-  ];
-
-  // Assigned Projects list for My Projects tab
-  const assignedProjectsFullList = [
+  // Predefined sample projects for demonstration account (advisor@gmail.com)
+  const SEEDED_ADVISOR_PROJECTS = [
     {
       id: 'PRJ-001',
       name: 'ABC Shield',
       company: 'Northbank Financial',
-      domain: currentExpertise.domain || 'Financial Crime Compliance',
-      nextAction: currentExpertise.nextAction || 'Review legal requirements',
+      domain: currentExpertise?.domain || 'Financial Crime Compliance',
+      nextAction: currentExpertise?.nextAction || 'Review legal requirements',
       type: 'AML / CTF',
       status: 'In Progress',
       statusColor: 'bg-amber-950/40 text-amber-400 border-amber-800/50',
@@ -267,8 +242,115 @@ export default function AdvisorDashboardView({
     },
   ];
 
+  // DEF-01: Load dynamically assigned projects for this specific advisor account
+  const [assignedProjectsFullList, setAssignedProjectsFullList] = useState(() => {
+    try {
+      const email = (currentUser?.email || '').toLowerCase();
+      const name = currentUser?.name || '';
+      const rawAssignments = localStorage.getItem('finreg_advisor_assignments');
+      const assignments = rawAssignments ? JSON.parse(rawAssignments) : [];
+
+      const myAssignments = assignments.filter((a) => {
+        const matchesEmail = email && a.advisorEmail && a.advisorEmail.toLowerCase() === email;
+        const matchesName = name && a.advisorName && a.advisorName.toLowerCase() === name.toLowerCase();
+        const matchesId = a.advisorId && (a.advisorId === currentUser?.id);
+        return matchesEmail || matchesName || matchesId;
+      });
+
+      if (myAssignments.length > 0) {
+        return myAssignments.map((a) => ({
+          id: a.projectId || 'PRJ-001',
+          name: a.project || a.projectName || 'Assigned Project',
+          company: a.company || 'Northbank Financial',
+          domain: a.role || currentExpertise?.domain || 'Regulatory Advisory',
+          nextAction: 'Review project requirements & provide compliance guidance',
+          type: a.projectType || 'AML / CTF',
+          status: 'In Progress',
+          statusColor: 'bg-amber-950/40 text-amber-400 border-amber-800/50',
+          dotColor: 'bg-amber-400',
+          owner: a.invitedBy || 'Project Owner',
+          lastUpdated: 'Recently assigned',
+        }));
+      }
+
+      // Default demo account gets seeded projects; newly registered advisors strictly start with an EMPTY list (DEF-01)
+      if (email === 'advisor@gmail.com' || name === 'Dr. Maya Chen') {
+        return SEEDED_ADVISOR_PROJECTS;
+      }
+
+      return [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // Re-sync assignments whenever currentUser updates
+  useEffect(() => {
+    try {
+      const email = (currentUser?.email || userProfile?.email || '').toLowerCase();
+      const name = currentUser?.name || userProfile?.name || '';
+      const rawAssignments = localStorage.getItem('finreg_advisor_assignments');
+      const assignments = rawAssignments ? JSON.parse(rawAssignments) : [];
+
+      const myAssignments = assignments.filter((a) => {
+        const matchesEmail = email && a.advisorEmail && a.advisorEmail.toLowerCase() === email;
+        const matchesName = name && a.advisorName && a.advisorName.toLowerCase() === name.toLowerCase();
+        const matchesId = a.advisorId && (a.advisorId === currentUser?.id || a.advisorId === userProfile?.id);
+        return matchesEmail || matchesName || matchesId;
+      });
+
+      if (myAssignments.length > 0) {
+        setAssignedProjectsFullList(
+          myAssignments.map((a) => ({
+            id: a.projectId || 'PRJ-001',
+            name: a.project || a.projectName || 'Assigned Project',
+            company: a.company || 'Northbank Financial',
+            domain: a.role || currentExpertise?.domain || 'Regulatory Advisory',
+            nextAction: 'Review project requirements & provide compliance guidance',
+            type: a.projectType || 'AML / CTF',
+            status: 'In Progress',
+            statusColor: 'bg-amber-950/40 text-amber-400 border-amber-800/50',
+            dotColor: 'bg-amber-400',
+            owner: a.invitedBy || 'Project Owner',
+            lastUpdated: 'Recently assigned',
+          }))
+        );
+      } else if (email === 'advisor@gmail.com' || name === 'Dr. Maya Chen') {
+        setAssignedProjectsFullList(SEEDED_ADVISOR_PROJECTS);
+      } else {
+        setAssignedProjectsFullList([]);
+      }
+    } catch (e) {}
+  }, [currentUser, userProfile, currentExpertise]);
+
+  // 4 Metric Stat Cards matching media_1791949893756_6c538f7d.png
+  const submittedCount = reviewsList.filter((r) => r.status === 'Submitted' || r.status === 'Accepted').length;
+  const assignedCount = assignedProjectsFullList.length;
+  const metricsData = [
+    {
+      label: 'Assigned Projects',
+      val: String(assignedCount).padStart(2, '0'),
+      sub: assignedCount > 0 ? 'Explicitly granted access' : 'No projects assigned yet',
+    },
+    {
+      label: 'Pending Advice',
+      val: assignedCount > 0 ? '01' : '00',
+      sub: assignedCount > 0 ? 'Requirements awaiting advice' : 'No requirements pending',
+    },
+    {
+      label: 'Submitted Advice',
+      val: String(submittedCount).padStart(2, '0'),
+      sub: 'Current expertise profile',
+    },
+    {
+      label: 'Pending Invitations',
+      val: assignedCount > 0 ? '01' : '00',
+      sub: 'Shown here instead of separate navigation',
+    },
+  ];
+
   // Authoritative active project based on selectedProject ID (DEF-08, DEF-10)
-  const activeProject = assignedProjectsFullList.find((p) => p.id === selectedProject) || assignedProjectsFullList[0];
+  const activeProject = assignedProjectsFullList.find((p) => p.id === selectedProject) || assignedProjectsFullList[0] || null;
 
   // Requirements List for Requirements tab
   const requirementsList = [
@@ -642,74 +724,84 @@ export default function AdvisorDashboardView({
                   </button>
                 </div>
 
-                {/* Table matching exact columns in media_1791949893756_6c538f7d.png */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[700px]">
-                    <thead>
-                      <tr className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 pb-3">
-                        <th className="py-2.5 px-3">PROJECT NAME</th>
-                        <th className="py-2.5 px-3">COMPANY</th>
-                        <th className="py-2.5 px-3">PROJECT STATUS</th>
-                        <th className="py-2.5 px-3">RELEVANT EXPERTISE / DOMAIN</th>
-                        <th className="py-2.5 px-3">NEXT ACTION</th>
-                        <th className="py-2.5 px-3 text-right"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60 font-medium">
-                      {assignedProjectsFullList.map((proj) => (
-                        <tr key={proj.id} className="hover:bg-slate-800/20 transition-colors">
-                          {/* Project Name */}
-                          <td className="py-4 px-3">
-                            <div className="font-bold text-white text-sm">
-                              {proj.name}
-                            </div>
-                            <div className="text-[11px] font-mono text-slate-500 mt-0.5">
-                              {proj.id}
-                            </div>
-                          </td>
-
-                          {/* Company */}
-                          <td className="py-4 px-3 text-slate-300 font-medium text-xs sm:text-sm">
-                            {proj.company}
-                          </td>
-
-                          {/* Project Status */}
-                          <td className="py-4 px-3">
-                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${proj.statusColor}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${proj.dotColor}`} />
-                              <span>{proj.status}</span>
-                            </span>
-                          </td>
-
-                          {/* Relevant Expertise / Domain */}
-                          <td className="py-4 px-3 text-slate-300 font-medium text-xs sm:text-sm">
-                            {proj.domain}
-                          </td>
-
-                          {/* Next Action */}
-                          <td className="py-4 px-3 text-slate-300 font-medium text-xs sm:text-sm">
-                            {proj.nextAction}
-                          </td>
-
-                          {/* Action link */}
-                          <td className="py-4 px-3 text-right">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedProject(proj.id);
-                                setActiveTab('My Projects');
-                              }}
-                              className="text-xs sm:text-sm font-semibold text-slate-300 hover:text-white inline-flex items-center gap-1 cursor-pointer transition-colors"
-                            >
-                              <span>Open Project</span>
-                              <span>→</span>
-                            </button>
-                          </td>
+                {/* Table or Empty State (DEF-01) */}
+                {assignedProjectsFullList.length === 0 ? (
+                  <div className="py-12 px-6 text-center border border-dashed border-slate-800 rounded-xl bg-slate-900/30">
+                    <Folder className="w-10 h-10 text-slate-600 mx-auto mb-3 stroke-[1.5]" />
+                    <h3 className="text-base font-bold text-slate-200">No Projects Assigned Yet</h3>
+                    <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                      You are not currently assigned to any regulatory compliance projects. When a Project Owner invites you to review their project, it will appear here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[700px]">
+                      <thead>
+                        <tr className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 pb-3">
+                          <th className="py-2.5 px-3">PROJECT NAME</th>
+                          <th className="py-2.5 px-3">COMPANY</th>
+                          <th className="py-2.5 px-3">PROJECT STATUS</th>
+                          <th className="py-2.5 px-3">RELEVANT EXPERTISE / DOMAIN</th>
+                          <th className="py-2.5 px-3">NEXT ACTION</th>
+                          <th className="py-2.5 px-3 text-right"></th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 font-medium">
+                        {assignedProjectsFullList.map((proj) => (
+                          <tr key={proj.id} className="hover:bg-slate-800/20 transition-colors">
+                            {/* Project Name */}
+                            <td className="py-4 px-3">
+                              <div className="font-bold text-white text-sm">
+                                {proj.name}
+                              </div>
+                              <div className="text-[11px] font-mono text-slate-500 mt-0.5">
+                                {proj.id}
+                              </div>
+                            </td>
+
+                            {/* Company */}
+                            <td className="py-4 px-3 text-slate-300 font-medium text-xs sm:text-sm">
+                              {proj.company}
+                            </td>
+
+                            {/* Project Status */}
+                            <td className="py-4 px-3">
+                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${proj.statusColor}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${proj.dotColor}`} />
+                                <span>{proj.status}</span>
+                              </span>
+                            </td>
+
+                            {/* Relevant Expertise / Domain */}
+                            <td className="py-4 px-3 text-slate-300 font-medium text-xs sm:text-sm">
+                              {proj.domain}
+                            </td>
+
+                            {/* Next Action */}
+                            <td className="py-4 px-3 text-slate-300 font-medium text-xs sm:text-sm">
+                              {proj.nextAction}
+                            </td>
+
+                            {/* Action link */}
+                            <td className="py-4 px-3 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedProject(proj.id);
+                                  setActiveTab('My Projects');
+                                }}
+                                className="text-xs sm:text-sm font-semibold text-slate-300 hover:text-white inline-flex items-center gap-1 cursor-pointer transition-colors"
+                              >
+                                <span>Open Project</span>
+                                <span>→</span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
 
               {/* Bottom Two Cards: Recent Activity & Pending Work matching screenshot */}
@@ -775,47 +867,55 @@ export default function AdvisorDashboardView({
                     </div>
 
                     <div className="space-y-3.5 text-xs sm:text-sm">
-                      <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-mono font-bold text-amber-400 uppercase">
-                              {currentExpertise.dueDate || 'DUE 24 SEP'}
-                            </span>
-                            <span className="text-xs text-slate-500">· ABC Shield</span>
-                          </div>
-                          <p className="font-bold text-white text-xs sm:text-sm mt-0.5">
-                            {currentExpertise.nextAction}
-                          </p>
+                      {assignedProjectsFullList.length === 0 ? (
+                        <div className="py-8 text-center text-xs text-slate-500 font-medium">
+                          No pending advisor reviews or actions at this time.
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('Requirements')}
-                          className="px-3 py-1 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 text-xs font-bold cursor-pointer transition-colors"
-                        >
-                          Review
-                        </button>
-                      </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-mono font-bold text-amber-400 uppercase">
+                                  {currentExpertise?.dueDate || 'DUE 24 SEP'}
+                                </span>
+                                <span className="text-xs text-slate-500">· {assignedProjectsFullList[0]?.name || 'Assigned Project'}</span>
+                              </div>
+                              <p className="font-bold text-white text-xs sm:text-sm mt-0.5">
+                                {currentExpertise?.nextAction || 'Review regulatory requirements'}
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('Requirements')}
+                              className="px-3 py-1 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 text-xs font-bold cursor-pointer transition-colors"
+                            >
+                              Review
+                            </button>
+                          </div>
 
-                      <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-mono font-bold text-amber-400 uppercase">
-                              DUE 27 SEP
-                            </span>
-                            <span className="text-xs text-slate-500">· ABC Shield</span>
+                          <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-mono font-bold text-amber-400 uppercase">
+                                  DUE 27 SEP
+                                </span>
+                                <span className="text-xs text-slate-500">· {assignedProjectsFullList[0]?.name || 'Assigned Project'}</span>
+                              </div>
+                              <p className="font-bold text-white text-xs sm:text-sm mt-0.5">
+                                Validate CDD requirement on ownership structures
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('Requirements')}
+                              className="px-3 py-1 rounded-md bg-slate-800 text-slate-300 hover:text-white text-xs font-bold cursor-pointer transition-colors"
+                            >
+                              Review
+                            </button>
                           </div>
-                          <p className="font-bold text-white text-xs sm:text-sm mt-0.5">
-                            Validate CDD requirement on ownership structures
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('Requirements')}
-                          className="px-3 py-1 rounded-md bg-slate-800 text-slate-300 hover:text-white text-xs font-bold cursor-pointer transition-colors"
-                        >
-                          Review
-                        </button>
-                      </div>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -995,61 +1095,71 @@ export default function AdvisorDashboardView({
                 </div>
 
                 <div className="rounded-2xl border border-slate-800 bg-[#16181d] shadow-lg overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[750px]">
-                      <thead>
-                        <tr className="border-b border-slate-800 bg-slate-900/60 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
-                          <th className="py-4 px-6">PROJECT</th>
-                          <th className="py-4 px-6">COMPANY</th>
-                          <th className="py-4 px-6">STATUS</th>
-                          <th className="py-4 px-6">OWNER</th>
-                          <th className="py-4 px-6">LAST UPDATED</th>
-                          <th className="py-4 px-6 text-right"></th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800/60 font-medium">
-                        {assignedProjectsFullList.map((proj) => (
-                          <tr key={proj.id} className="hover:bg-slate-800/30 transition-colors">
-                            <td className="py-4 px-6">
-                              <div className="font-bold text-slate-100 text-sm sm:text-base">
-                                {proj.name}
-                              </div>
-                              <div className="text-xs font-mono text-slate-500 mt-0.5">
-                                {proj.id}
-                              </div>
-                            </td>
-                            <td className="py-4 px-6 text-slate-300 font-medium text-xs sm:text-sm">
-                              {proj.company}
-                            </td>
-                            <td className="py-4 px-6">
-                              <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border ${proj.statusColor}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${proj.dotColor}`} />
-                                {proj.status}
-                              </span>
-                            </td>
-                            <td className="py-4 px-6 text-slate-300 text-xs sm:text-sm">
-                              {proj.owner}
-                            </td>
-                            <td className="py-4 px-6 text-slate-400 font-mono text-xs sm:text-sm">
-                              {proj.lastUpdated}
-                            </td>
-                            <td className="py-4 px-6 text-right">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setSelectedProject(proj.id);
-                                }}
-                                className="text-xs sm:text-sm font-semibold text-slate-300 hover:text-white inline-flex items-center gap-1 cursor-pointer transition-colors"
-                              >
-                                <span>Open Project</span>
-                                <span>→</span>
-                              </button>
-                            </td>
+                  {assignedProjectsFullList.length === 0 ? (
+                    <div className="py-16 px-6 text-center">
+                      <Folder className="w-12 h-12 text-slate-600 mx-auto mb-3 stroke-[1.5]" />
+                      <h3 className="text-lg font-bold text-slate-200">No Assigned Projects</h3>
+                      <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-md mx-auto">
+                        There are no active projects associated with your advisor identity. Project invitations received from builders will be displayed here.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[750px]">
+                        <thead>
+                          <tr className="border-b border-slate-800 bg-slate-900/60 text-[11px] font-extrabold uppercase tracking-wider text-slate-400">
+                            <th className="py-4 px-6">PROJECT</th>
+                            <th className="py-4 px-6">COMPANY</th>
+                            <th className="py-4 px-6">STATUS</th>
+                            <th className="py-4 px-6">OWNER</th>
+                            <th className="py-4 px-6">LAST UPDATED</th>
+                            <th className="py-4 px-6 text-right"></th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800/60 font-medium">
+                          {assignedProjectsFullList.map((proj) => (
+                            <tr key={proj.id} className="hover:bg-slate-800/30 transition-colors">
+                              <td className="py-4 px-6">
+                                <div className="font-bold text-slate-100 text-sm sm:text-base">
+                                  {proj.name}
+                                </div>
+                                <div className="text-xs font-mono text-slate-500 mt-0.5">
+                                  {proj.id}
+                                </div>
+                              </td>
+                              <td className="py-4 px-6 text-slate-300 font-medium text-xs sm:text-sm">
+                                {proj.company}
+                              </td>
+                              <td className="py-4 px-6">
+                                <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border ${proj.statusColor}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${proj.dotColor}`} />
+                                  {proj.status}
+                                </span>
+                              </td>
+                              <td className="py-4 px-6 text-slate-300 text-xs sm:text-sm">
+                                {proj.owner}
+                              </td>
+                              <td className="py-4 px-6 text-slate-400 font-mono text-xs sm:text-sm">
+                                {proj.lastUpdated}
+                              </td>
+                              <td className="py-4 px-6 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedProject(proj.id);
+                                  }}
+                                  className="text-xs sm:text-sm font-semibold text-slate-300 hover:text-white inline-flex items-center gap-1 cursor-pointer transition-colors"
+                                >
+                                  <span>Open Project</span>
+                                  <span>→</span>
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
               </div>
             )
@@ -1070,51 +1180,61 @@ export default function AdvisorDashboardView({
                 </p>
               </div>
 
-              {/* Requirements Table Card matching Image 3 */}
+              {/* Requirements Table Card matching Image 3 (DEF-01) */}
               <div className="rounded-2xl border border-slate-800/90 bg-[#131519] shadow-lg p-6 overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[780px]">
-                    <thead>
-                      <tr className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 pb-4">
-                        <th className="py-3 px-4">RELEVANT REQUIREMENT OR TOPIC</th>
-                        <th className="py-3 px-4">ASSIGNED PROJECT</th>
-                        <th className="py-3 px-4">DESCRIPTION</th>
-                        <th className="py-3 px-4">SUPPORTING SOURCE / REFERENCE</th>
-                        <th className="py-3 px-4 text-right"></th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800/60 font-medium">
-                      <tr className="hover:bg-slate-800/20 transition-colors">
-                        <td className="py-4 px-4">
-                          <div className="font-bold text-white text-sm">
-                            Contractual responsibilities and liability allocation
-                          </div>
-                          <div className="text-xs font-mono text-slate-500 mt-0.5">
-                            LEG-101
-                          </div>
-                        </td>
-                        <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                          ABC Shield
-                        </td>
-                        <td className="py-4 px-4 text-slate-300 font-normal text-xs sm:text-sm max-w-[240px]">
-                          Review contractual responsibilities, liab
-                        </td>
-                        <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                          Project Services Agreement · Section 8
-                        </td>
-                        <td className="py-4 px-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => setActiveTab('My Advice & Reviews')}
-                            className="px-4 py-1.5 rounded-md border border-slate-700/80 bg-[#1e222a] hover:bg-slate-700 text-slate-200 text-xs font-semibold cursor-pointer transition-colors"
-                          >
-                            Review
-                          </button>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
+                {assignedProjectsFullList.length === 0 ? (
+                  <div className="py-14 px-6 text-center">
+                    <Shield className="w-12 h-12 text-slate-600 mx-auto mb-3 stroke-[1.5]" />
+                    <h3 className="text-lg font-bold text-slate-200">No Requirements to Review</h3>
+                    <p className="text-xs sm:text-sm text-slate-400 mt-1 max-w-md mx-auto">
+                      You have not been assigned to any project requirements yet. Once assigned to a compliance project, relevant requirements and topics will appear here.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[780px]">
+                      <thead>
+                        <tr className="text-[10px] font-mono font-bold uppercase tracking-wider text-slate-500 pb-4">
+                          <th className="py-3 px-4">RELEVANT REQUIREMENT OR TOPIC</th>
+                          <th className="py-3 px-4">ASSIGNED PROJECT</th>
+                          <th className="py-3 px-4">DESCRIPTION</th>
+                          <th className="py-3 px-4">SUPPORTING SOURCE / REFERENCE</th>
+                          <th className="py-3 px-4 text-right"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60 font-medium">
+                        <tr className="hover:bg-slate-800/20 transition-colors">
+                          <td className="py-4 px-4">
+                            <div className="font-bold text-white text-sm">
+                              Contractual responsibilities and liability allocation
+                            </div>
+                            <div className="text-xs font-mono text-slate-500 mt-0.5">
+                              LEG-101
+                            </div>
+                          </td>
+                          <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
+                            {assignedProjectsFullList[0]?.name || 'Assigned Project'}
+                          </td>
+                          <td className="py-4 px-4 text-slate-300 font-normal text-xs sm:text-sm max-w-[240px]">
+                            Review contractual responsibilities, liability caps, and supervisory audit access provisions.
+                          </td>
+                          <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
+                            Project Services Agreement · Section 8
+                          </td>
+                          <td className="py-4 px-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('My Advice & Reviews')}
+                              className="px-4 py-1.5 rounded-md border border-slate-700/80 bg-[#1e222a] hover:bg-slate-700 text-slate-200 text-xs font-semibold cursor-pointer transition-colors"
+                            >
+                              Review
+                            </button>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           )}

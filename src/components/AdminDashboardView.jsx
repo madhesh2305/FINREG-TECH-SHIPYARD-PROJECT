@@ -30,7 +30,8 @@ import {
   Plus,
   X
 } from 'lucide-react';
-import { logoutUser } from '../services/authService';
+import { logoutUser, getRegisteredUsers } from '../services/authService';
+import { getLocalProjects } from '../services/projectService';
 
 export default function AdminDashboardView({
   isDarkMode = true,
@@ -59,85 +60,14 @@ export default function AdminDashboardView({
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-  // 6 Metric Cards matching Image 1 (media_1791981192338_dd3ce2b7.png)
-  const metricCards = [
-    {
-      title: 'Total Users',
-      val: '48',
-      subtitle: 'Prototype platform data',
-    },
-    {
-      title: 'Active Users',
-      val: '41',
-      subtitle: '85% of sample accounts',
-    },
-    {
-      title: 'Total Projects',
-      val: '12',
-      subtitle: '8 active · 4 draft',
-    },
-    {
-      title: 'Active Advisor Invitations',
-      val: '02',
-      subtitle: '1 accepted · 1 pending',
-    },
-    {
-      title: 'Pending Source Validation',
-      val: '01',
-      subtitle: 'Regulatory review required',
-    },
-    {
-      title: 'Recent Security Events',
-      val: '05',
-      subtitle: '2 require attention',
-    },
-  ];
-
-  // Middle Section 4 Cards data matching Image 2 (media_1791981200685_5461ca8a.png)
-  const recentPlatformActivity = [
-    { time: '15:14', text: 'Account status changed for Sofia Alvarez' },
-    { time: '14:42', text: 'Blocked Admin authentication attempt' },
-    { time: '13:06', text: 'Advisor role metadata reviewed' },
-  ];
-
-  const recentUserRegistrations = [
-    { date: '29 SEP', text: 'Leah Morgan · Builder' },
-    { date: '28 SEP', text: 'Omar Hassan · Advisor' },
-    { date: '27 SEP', text: 'Priya Shah · Builder' },
-  ];
-
-  const projectStatusOverview = [
-    { count: '08', label: 'Active projects' },
-    { count: '03', label: 'Under review' },
-    { count: '01', label: 'Blocked readiness item' },
-  ];
-
-  const recentAccessChanges = [
-    { tag: 'USER', text: 'Sofia Alvarez deactivated' },
-    { tag: 'ROLE', text: 'Daniel Okafor permissions reviewed' },
-    { tag: 'ACCESS', text: 'ABC Shield invitation pending' },
-  ];
-
-  // Bottom Section Security Alerts matching Image 3 (media_1791981206848_d73db92a.png)
-  const securityAlerts = [
-    {
-      tag: 'BLOCKED',
-      description: 'Repeated Admin authentication failures',
-    },
-    {
-      tag: 'SESSION',
-      description: 'Expired privileged session',
-    },
-  ];
-
-  // Users state initialized matching Images 1 & 2 (media_1791982823780_dc3deb23.png & media_1791982833596_f62fc301.png)
-  const [users, setUsers] = useState([
+  // Seed / Baseline Admin Users matching Images 1 & 2
+  const DEFAULT_ADMIN_USERS = [
     {
       id: 'USR-001',
       name: 'Jun Nakamura',
       email: 'jun@northbank.com',
       role: 'Builder',
-      status: 'Inactive',
+      status: 'Active',
       registered: '04 Aug 2026',
       lastLogin: '8 min ago',
     },
@@ -177,57 +107,51 @@ export default function AdminDashboardView({
       registered: '21 Aug 2026',
       lastLogin: '12 Sep 2026',
     },
-  ]);
+  ];
 
-  const [searchUserQuery, setSearchUserQuery] = useState('');
-  const [selectedRoleFilter, setSelectedRoleFilter] = useState('All roles');
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState('All statuses');
-  const [deactivatingUser, setDeactivatingUser] = useState(null);
-  const [showStatusRecordedBanner, setShowStatusRecordedBanner] = useState(true);
+  // Helper to load live registered users (DEF-03)
+  const loadInitialUsers = () => {
+    try {
+      const reg = getRegisteredUsers();
+      if (!Array.isArray(reg) || reg.length === 0) return DEFAULT_ADMIN_USERS;
 
-  const handleConfirmDeactivate = (userId) => {
-    setUsers((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, status: 'Inactive' } : u))
-    );
-    setShowStatusRecordedBanner(true);
-    showToast(`Account status updated for ${deactivatingUser.name} and recorded in audit log.`);
-    setDeactivatingUser(null);
-  };
+      const formattedReg = reg.map((u, idx) => {
+        let displayRole = 'Builder';
+        const rawRole = (u.role || u.platform_role || '').toUpperCase();
+        if (rawRole.includes('ADVISOR')) displayRole = 'Advisor';
+        else if (rawRole.includes('ADMIN')) displayRole = 'Admin';
+        else displayRole = 'Builder';
 
-  const handleToggleStatus = (userId) => {
-    setUsers((prev) =>
-      prev.map((u) => {
-        if (u.id === userId) {
-          const nextStatus = u.status === 'Active' ? 'Inactive' : 'Active';
-          return { ...u, status: nextStatus };
+        return {
+          id: u.id && u.id.startsWith('USR-') ? u.id : `USR-${String(idx + 1).padStart(3, '0')}`,
+          name: u.name || 'User',
+          email: u.email || '',
+          role: displayRole,
+          status: u.status || 'Active',
+          registered: u.created_at
+            ? new Date(u.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+            : '01 Aug 2026',
+          lastLogin: u.last_login_at || 'Recently',
+        };
+      });
+
+      const emailMap = new Map();
+      formattedReg.forEach((u) => emailMap.set(u.email.toLowerCase(), u));
+      DEFAULT_ADMIN_USERS.forEach((def) => {
+        if (!emailMap.has(def.email.toLowerCase())) {
+          emailMap.set(def.email.toLowerCase(), def);
         }
-        return u;
-      })
-    );
-    setShowStatusRecordedBanner(true);
+      });
+      return Array.from(emailMap.values());
+    } catch (e) {
+      return DEFAULT_ADMIN_USERS;
+    }
   };
 
-  const filteredUsers = users.filter((u) => {
-    const matchesSearch =
-      searchUserQuery.trim() === '' ||
-      u.name.toLowerCase().includes(searchUserQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchUserQuery.toLowerCase());
+  const [users, setUsers] = useState(loadInitialUsers);
 
-    const matchesRole =
-      selectedRoleFilter === 'All roles' || u.role.toLowerCase() === selectedRoleFilter.toLowerCase();
-
-    const matchesStatus =
-      selectedStatusFilter === 'All statuses' || u.status.toLowerCase() === selectedStatusFilter.toLowerCase();
-
-    return matchesSearch && matchesRole && matchesStatus;
-  });
-
-  // Project Oversight states matching Images 2 & 3
-  const [selectedProjectOverview, setSelectedProjectOverview] = useState(null);
-  const [projectSearchQuery, setProjectSearchQuery] = useState('');
-  const [projectStatusFilter, setProjectStatusFilter] = useState('All statuses');
-
-  const [projectsList] = useState([
+  // Projects Oversight list dynamic loader (DEF-03)
+  const DEFAULT_ADMIN_PROJECTS = [
     {
       id: 'PRJ-001',
       name: 'ABC Shield',
@@ -267,26 +191,35 @@ export default function AdminDashboardView({
       readiness: 'Review required',
       accessBoundary: 'Metadata visibility only; restricted content requires explicit authorization.',
     },
-  ]);
+  ];
 
-  const filteredProjects = projectsList.filter((proj) => {
-    const matchesSearch =
-      projectSearchQuery.trim() === '' ||
-      proj.name.toLowerCase().includes(projectSearchQuery.toLowerCase()) ||
-      proj.id.toLowerCase().includes(projectSearchQuery.toLowerCase()) ||
-      proj.owner.toLowerCase().includes(projectSearchQuery.toLowerCase());
+  const loadInitialProjects = () => {
+    try {
+      const local = getLocalProjects();
+      if (!Array.isArray(local) || local.length === 0) return DEFAULT_ADMIN_PROJECTS;
+      const formattedLocal = local.map((p) => ({
+        id: p.id,
+        name: p.name,
+        owner: p.owner || 'Project Owner',
+        status: p.status || 'In Progress',
+        statusColor: p.statusColor || 'bg-[#281d11] text-amber-400 border-amber-800/50',
+        dotColor: p.dotColor || 'bg-amber-400',
+        assignedAdvisors: '0 / 2',
+        creationDate: p.created || 'Recently',
+        lastActivity: p.lastUpdated || 'Recently',
+        readiness: 'Initial Review',
+        accessBoundary: 'Metadata visibility only; restricted content requires explicit authorization.',
+      }));
+      return [...formattedLocal, ...DEFAULT_ADMIN_PROJECTS];
+    } catch (e) {
+      return DEFAULT_ADMIN_PROJECTS;
+    }
+  };
 
-    const matchesStatus =
-      projectStatusFilter === 'All statuses' ||
-      proj.status.toLowerCase() === projectStatusFilter.toLowerCase();
+  const [projectsList, setProjectsList] = useState(loadInitialProjects);
 
-    return matchesSearch && matchesStatus;
-  });
-
-  // Advisor Invitations states matching media_1791998978622_11428009.png
-  const [advisorInvitationStatusFilter, setAdvisorInvitationStatusFilter] = useState('All statuses');
-
-  const [advisorInvitationsList] = useState([
+  // Advisor Invitations list dynamic loader (DEF-03)
+  const DEFAULT_ADMIN_INVITATIONS = [
     {
       id: 'INV-001',
       project: 'ABC Shield',
@@ -335,7 +268,182 @@ export default function AdminDashboardView({
       statusDotClass: 'bg-amber-500',
       accessStatus: 'Not granted',
     },
-  ]);
+  ];
+
+  const loadInitialInvitations = () => {
+    try {
+      const raw = localStorage.getItem('finreg_advisor_assignments');
+      const assignments = raw ? JSON.parse(raw) : [];
+      if (!Array.isArray(assignments) || assignments.length === 0) return DEFAULT_ADMIN_INVITATIONS;
+      const formatted = assignments.map((a, idx) => ({
+        id: a.id || `INV-${String(idx + 10).padStart(3, '0')}`,
+        project: a.projectName || 'Project',
+        invitingBuilder: 'Builder',
+        invitedAdvisor: a.advisorName || 'Advisor',
+        expertise: a.advisorRole || 'Advisor Expert',
+        invitationDate: a.assignedDate || 'Recently',
+        status: a.status === 'In Review' ? 'Active' : (a.status || 'Active'),
+        statusBadgeClass: 'bg-[#0e2316] text-emerald-400 border-emerald-800/50',
+        statusDotClass: 'bg-emerald-400',
+        accessStatus: 'Active',
+      }));
+      return [...formatted, ...DEFAULT_ADMIN_INVITATIONS];
+    } catch (e) {
+      return DEFAULT_ADMIN_INVITATIONS;
+    }
+  };
+
+  const [advisorInvitationsList, setAdvisorInvitationsList] = useState(loadInitialInvitations);
+
+  // 6 Metric Cards computed dynamically from live platform data (DEF-03)
+  const metricCards = [
+    {
+      title: 'Total Users',
+      val: String(users.length).padStart(2, '0'),
+      subtitle: `${users.filter((u) => u.status === 'Active').length} active platform accounts`,
+    },
+    {
+      title: 'Active Users',
+      val: String(users.filter((u) => u.status === 'Active').length).padStart(2, '0'),
+      subtitle: `${Math.round((users.filter((u) => u.status === 'Active').length / (users.length || 1)) * 100)}% of platform accounts`,
+    },
+    {
+      title: 'Total Projects',
+      val: String(projectsList.length).padStart(2, '0'),
+      subtitle: `${projectsList.filter((p) => p.status !== 'Draft').length} active · ${projectsList.filter((p) => p.status === 'Draft').length} draft`,
+    },
+    {
+      title: 'Active Advisor Invitations',
+      val: String(advisorInvitationsList.length).padStart(2, '0'),
+      subtitle: `${advisorInvitationsList.filter((i) => i.status === 'Accepted' || i.status === 'Active').length} accepted · ${advisorInvitationsList.filter((i) => i.status === 'Pending').length} pending`,
+    },
+    {
+      title: 'Pending Source Validation',
+      val: '01',
+      subtitle: 'Regulatory review required',
+    },
+    {
+      title: 'Recent Security Events',
+      val: '05',
+      subtitle: '2 require attention',
+    },
+  ];
+
+  // Middle Section 4 Cards data matching Image 2 (media_1791981200685_5461ca8a.png)
+  const recentPlatformActivity = [
+    { time: '15:14', text: 'Account status changed for Sofia Alvarez' },
+    { time: '14:42', text: 'Blocked Admin authentication attempt' },
+    { time: '13:06', text: 'Advisor role metadata reviewed' },
+  ];
+
+  const recentUserRegistrations = users.slice(0, 3).map((u) => ({
+    date: u.registered ? u.registered.slice(0, 6).toUpperCase() : 'TODAY',
+    text: `${u.name} · ${u.role}`,
+  }));
+
+  const projectStatusOverview = [
+    { count: String(projectsList.filter((p) => p.status === 'In Progress').length).padStart(2, '0'), label: 'Active projects' },
+    { count: String(projectsList.filter((p) => p.status === 'Under Review').length).padStart(2, '0'), label: 'Under review' },
+    { count: String(projectsList.filter((p) => p.status === 'Draft' || p.status === 'Completed').length).padStart(2, '0'), label: 'Draft / Completed' },
+  ];
+
+  const recentAccessChanges = [
+    { tag: 'USER', text: 'Sofia Alvarez deactivated' },
+    { tag: 'ROLE', text: 'Daniel Okafor permissions reviewed' },
+    { tag: 'ACCESS', text: 'ABC Shield invitation pending' },
+  ];
+
+  // Bottom Section Security Alerts matching Image 3 (media_1791981206848_d73db92a.png)
+  const securityAlerts = [
+    {
+      tag: 'BLOCKED',
+      description: 'Repeated Admin authentication failures',
+    },
+    {
+      tag: 'SESSION',
+      description: 'Expired privileged session',
+    },
+  ];
+
+  const [searchUserQuery, setSearchUserQuery] = useState('');
+  const [selectedRoleFilter, setSelectedRoleFilter] = useState('All roles');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState('All statuses');
+  const [deactivatingUser, setDeactivatingUser] = useState(null);
+  const [showStatusRecordedBanner, setShowStatusRecordedBanner] = useState(true);
+
+  const persistUserStatus = (userId, newStatus) => {
+    try {
+      const raw = localStorage.getItem('finreg_registered_users');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        const updated = parsed.map((u) => (u.id === userId || u.email === userId ? { ...u, status: newStatus } : u));
+        localStorage.setItem('finreg_registered_users', JSON.stringify(updated));
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const handleConfirmDeactivate = (userId) => {
+    setUsers((prev) =>
+      prev.map((u) => (u.id === userId ? { ...u, status: 'Inactive' } : u))
+    );
+    persistUserStatus(userId, 'Inactive');
+    setShowStatusRecordedBanner(true);
+    showToast(`Account status updated for ${deactivatingUser?.name || 'User'} and recorded in audit log.`);
+    setDeactivatingUser(null);
+  };
+
+  const handleToggleStatus = (userId) => {
+    setUsers((prev) =>
+      prev.map((u) => {
+        if (u.id === userId) {
+          const nextStatus = u.status === 'Active' ? 'Inactive' : 'Active';
+          persistUserStatus(userId, nextStatus);
+          return { ...u, status: nextStatus };
+        }
+        return u;
+      })
+    );
+    setShowStatusRecordedBanner(true);
+  };
+
+  const filteredUsers = users.filter((u) => {
+    const matchesSearch =
+      searchUserQuery.trim() === '' ||
+      u.name.toLowerCase().includes(searchUserQuery.toLowerCase()) ||
+      u.email.toLowerCase().includes(searchUserQuery.toLowerCase());
+
+    const matchesRole =
+      selectedRoleFilter === 'All roles' || u.role.toLowerCase() === selectedRoleFilter.toLowerCase();
+
+    const matchesStatus =
+      selectedStatusFilter === 'All statuses' || u.status.toLowerCase() === selectedStatusFilter.toLowerCase();
+
+    return matchesSearch && matchesRole && matchesStatus;
+  });
+
+  // Project Oversight states matching Images 2 & 3
+  const [selectedProjectOverview, setSelectedProjectOverview] = useState(null);
+  const [projectSearchQuery, setProjectSearchQuery] = useState('');
+  const [projectStatusFilter, setProjectStatusFilter] = useState('All statuses');
+
+  const filteredProjects = projectsList.filter((proj) => {
+    const matchesSearch =
+      projectSearchQuery.trim() === '' ||
+      proj.name.toLowerCase().includes(projectSearchQuery.toLowerCase()) ||
+      proj.id.toLowerCase().includes(projectSearchQuery.toLowerCase()) ||
+      proj.owner.toLowerCase().includes(projectSearchQuery.toLowerCase());
+
+    const matchesStatus =
+      projectStatusFilter === 'All statuses' ||
+      proj.status.toLowerCase() === projectStatusFilter.toLowerCase();
+
+    return matchesSearch && matchesStatus;
+  });
+
+  // Advisor Invitations states matching media_1791998978622_11428009.png
+  const [advisorInvitationStatusFilter, setAdvisorInvitationStatusFilter] = useState('All statuses');
 
   const filteredAdvisorInvitations = advisorInvitationsList.filter((inv) => {
     if (advisorInvitationStatusFilter === 'All statuses') return true;

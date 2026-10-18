@@ -69,17 +69,32 @@ const MOCK_PROJECTS = [
   },
 ];
 
+export const PROJECTS_STORAGE_KEY = 'finreg_projects';
+
+/**
+ * Retrieves persisted custom projects from local storage
+ */
+export function getLocalProjects() {
+  try {
+    const raw = localStorage.getItem(PROJECTS_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 /**
  * Fetches all user projects via GET /projects
  */
 export async function getProjects() {
   try {
     const data = await apiCall('/projects', 'GET');
-    return Array.isArray(data) && data.length > 0 ? data : MOCK_PROJECTS;
+    if (Array.isArray(data) && data.length > 0) return data;
   } catch (err) {
-    console.warn('[projectService] GET /projects failed. Returning mock projects.');
-    return MOCK_PROJECTS;
+    console.warn('[projectService] GET /projects failed. Reading persisted and fixture projects.');
   }
+  const local = getLocalProjects();
+  return local.length > 0 ? [...local, ...MOCK_PROJECTS] : MOCK_PROJECTS;
 }
 
 /**
@@ -90,11 +105,12 @@ export async function getProjectSummary() {
     return await apiCall('/projects/summary', 'GET');
   } catch (err) {
     console.warn('[projectService] GET /projects/summary failed. Computing fallback summary.');
+    const projects = await getProjects();
     return {
-      total: MOCK_PROJECTS.length,
-      inProgress: MOCK_PROJECTS.filter((p) => p.status === 'In Progress').length,
-      underReview: MOCK_PROJECTS.filter((p) => p.status === 'Under Review').length,
-      completed: MOCK_PROJECTS.filter((p) => p.status === 'Completed').length,
+      total: projects.length,
+      inProgress: projects.filter((p) => p.status === 'In Progress').length,
+      underReview: projects.filter((p) => p.status === 'Under Review').length,
+      completed: projects.filter((p) => p.status === 'Completed').length,
     };
   }
 }
@@ -105,35 +121,55 @@ export async function getProjectSummary() {
 export async function getProjectDetails(projectId) {
   try {
     const data = await apiCall(`/projects/${projectId}`, 'GET');
-    return data || MOCK_PROJECTS.find((p) => p.id === projectId) || MOCK_PROJECTS[0];
+    if (data) return data;
   } catch (err) {
-    console.warn(`[projectService] GET /projects/${projectId} failed. Returning mock project details.`);
-    return MOCK_PROJECTS.find((p) => p.id === projectId) || MOCK_PROJECTS[0];
+    console.warn(`[projectService] GET /projects/${projectId} failed. Checking local projects.`);
   }
+  const all = [...getLocalProjects(), ...MOCK_PROJECTS];
+  return all.find((p) => p.id === projectId) || all[0];
 }
 
 /**
  * Creates a new project via POST /projects
+ * DEF-08: Explicitly derive owner identity from payload / authenticated principal rather than defaulting to fixture names
  */
 export async function createProject(projectPayload) {
+  const newProjectObj = {
+    id: `PRJ-00${Math.floor(Math.random() * 900) + 100}`,
+    name: projectPayload.name,
+    type: projectPayload.type || 'AML/CTF',
+    status: 'Draft',
+    statusColor: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+    dotColor: 'bg-slate-400',
+    lastUpdated: 'Just now',
+    owner: projectPayload.owner || 'Project Owner',
+    ownerEmail: projectPayload.ownerEmail || '',
+    description: projectPayload.description || 'Newly created regulatory project.',
+    created: 'Today',
+    jurisdiction: projectPayload.jurisdiction || 'United Kingdom - FCA',
+    members: [],
+  };
+
   try {
-    return await apiCall('/projects', 'POST', projectPayload);
+    const res = await apiCall('/projects', 'POST', projectPayload);
+    if (res && res.id) {
+      newProjectObj.id = res.id;
+      if (res.owner) newProjectObj.owner = res.owner;
+    }
   } catch (err) {
-    console.warn('[projectService] POST /projects failed. Constructing local project object.');
-    return {
-      id: `PRJ-00${Math.floor(Math.random() * 900) + 100}`,
-      name: projectPayload.name,
-      type: projectPayload.type || 'AML/CTF',
-      status: 'Draft',
-      statusColor: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
-      dotColor: 'bg-slate-400',
-      lastUpdated: 'Just now',
-      owner: 'J. Nakamura',
-      description: projectPayload.description || 'Newly created regulatory project.',
-      created: 'Today',
-      jurisdiction: projectPayload.jurisdiction || 'United Kingdom - FCA',
-    };
+    console.warn('[projectService] POST /projects failed. Persisting project to local storage.');
   }
+
+  // Persist locally so new projects survive browser reloads and scoping checks
+  try {
+    const existing = getLocalProjects();
+    existing.unshift(newProjectObj);
+    localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(existing));
+  } catch (e) {
+    console.error('Failed to persist project locally:', e);
+  }
+
+  return newProjectObj;
 }
 
 /**

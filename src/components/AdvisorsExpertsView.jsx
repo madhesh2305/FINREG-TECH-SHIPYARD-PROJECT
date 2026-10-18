@@ -1,8 +1,60 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Check, ArrowLeft, UserX } from 'lucide-react';
 import { sendAdvisorInvitation } from '../services/advisorService';
+import { getRegisteredUsers } from '../services/authService';
 
-export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
+const DEFAULT_ADVISORS = [
+  {
+    id: 'ADV-001',
+    name: 'Dr. Maya Chen',
+    avatar: 'MC',
+    specialty: 'AML & Financial Crime',
+    firm: 'Regulatory Advisory Group',
+    jurisdiction: 'UK / EU',
+    status: 'Available',
+    statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
+    dotColor: 'bg-emerald-500',
+    isInvited: true,
+    bio: 'Former regulatory supervisor specializing in AML/CTF compliance frameworks, sanctions screening, and transaction monitoring architectures.',
+    organization: 'Regulatory Advisory Group',
+    areasOfSupport: ['AML/CTF Frameworks', 'Sanctions Audit', 'Transaction Monitoring', 'FCA Sign-off'],
+    email: 'advisor@gmail.com',
+  },
+  {
+    id: 'ADV-002',
+    name: 'Daniel Okafor',
+    avatar: 'DO',
+    specialty: 'Operational Resilience',
+    firm: 'Independent',
+    jurisdiction: 'UK',
+    status: 'Available',
+    statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
+    dotColor: 'bg-emerald-500',
+    isInvited: false,
+    bio: 'Senior regulatory specialist with experience designing proportionate controls for banks, payment firms, and regulated technology providers.',
+    organization: 'Independent',
+    areasOfSupport: ['Policy design', 'Control validation', 'Regulatory interpretation', 'Board assurance'],
+    email: 'daniel@independent.demo',
+  },
+  {
+    id: 'ADV-003',
+    name: 'Sofia Alvarez',
+    avatar: 'SA',
+    specialty: 'Data Privacy & AI',
+    firm: 'TrustWorks Legal',
+    jurisdiction: 'EU / US',
+    status: 'Limited',
+    statusColor: 'bg-amber-950/60 text-amber-400 border-amber-800/80',
+    dotColor: 'bg-amber-500',
+    isInvited: false,
+    bio: 'Data protection officer and legal counsel focusing on GDPR compliance, cross-border data transfer mechanisms, and AI risk governance.',
+    organization: 'TrustWorks Legal',
+    areasOfSupport: ['GDPR Audits', 'Data Protection Impact Assessment', 'AI Safety Controls', 'Cross-border Transfer'],
+    email: 'sofia@trustworks.demo',
+  },
+];
+
+export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, availableProjects = [] }) {
   const [activeSubTab, setActiveSubTab] = useState('Find Advisors'); // 'Find Advisors' | 'My Invited Advisors'
   const [searchQuery, setSearchQuery] = useState('');
   const [expertiseFilter, setExpertiseFilter] = useState('All expertise');
@@ -11,67 +63,83 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
   const [activeCardId, setActiveCardId] = useState(null);
   const [toastMsg, setToastMsg] = useState(null);
 
+  // Available projects for the invite dropdown (DEF-09)
+  const projectOptions = availableProjects.length > 0
+    ? availableProjects
+    : [
+        { id: 'PRJ-001', name: 'AML Compliance Framework' },
+        { id: 'PRJ-002', name: 'KYC Onboarding Workflow' },
+        { id: 'PRJ-003', name: 'Regulatory Reporting Q3' },
+        { id: 'PRJ-004', name: 'GDPR Data Audit Trail' },
+        { id: 'PRJ-005', name: 'Basel III Capital Adequacy' },
+      ];
+
   // Selected Profile State for Profile View (matching uploaded image media_1790742446620.png)
   const [profileAdvisor, setProfileAdvisor] = useState(null);
 
   // Modal State for "Invite Advisor"
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [modalAdvisor, setModalAdvisor] = useState(null);
-  const [modalProject, setModalProject] = useState('AML Compliance Framework');
+  const [modalProject, setModalProject] = useState(projectOptions[0]?.name || 'AML Compliance Framework');
   const [modalRole, setModalRole] = useState('Regulatory Reviewer');
   const [modalMessage, setModalMessage] = useState(
     'We would value your review of our control framework and source interpretation.'
   );
   const [isSubmittingInvite, setIsSubmittingInvite] = useState(false);
 
-  // Master Advisors List matching reference images
-  const [advisors, setAdvisors] = useState([
-    {
-      id: 'ADV-001',
-      name: 'Dr. Maya Chen',
-      avatar: 'MC',
-      specialty: 'AML & Financial Crime',
-      firm: 'Regulatory Advisory Group',
-      jurisdiction: 'UK / EU',
-      status: 'Available',
-      statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
-      dotColor: 'bg-emerald-500',
-      isInvited: true,
-      bio: 'Former regulatory supervisor specializing in AML/CTF compliance frameworks, sanctions screening, and transaction monitoring architectures.',
-      organization: 'Regulatory Advisory Group',
-      areasOfSupport: ['AML/CTF Frameworks', 'Sanctions Audit', 'Transaction Monitoring', 'FCA Sign-off'],
-    },
-    {
-      id: 'ADV-002',
-      name: 'Daniel Okafor',
-      avatar: 'DO',
-      specialty: 'Operational Resilience',
-      firm: 'Independent',
-      jurisdiction: 'UK',
-      status: 'Available',
-      statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
-      dotColor: 'bg-emerald-500',
-      isInvited: false,
-      bio: 'Senior regulatory specialist with experience designing proportionate controls for banks, payment firms, and regulated technology providers.',
-      organization: 'Independent',
-      areasOfSupport: ['Policy design', 'Control validation', 'Regulatory interpretation', 'Board assurance'],
-    },
-    {
-      id: 'ADV-003',
-      name: 'Sofia Alvarez',
-      avatar: 'SA',
-      specialty: 'Data Privacy & AI',
-      firm: 'TrustWorks Legal',
-      jurisdiction: 'EU / US',
-      status: 'Limited',
-      statusColor: 'bg-amber-950/60 text-amber-400 border-amber-800/80',
-      dotColor: 'bg-amber-500',
-      isInvited: false,
-      bio: 'Data protection officer and legal counsel focusing on GDPR compliance, cross-border data transfer mechanisms, and AI risk governance.',
-      organization: 'TrustWorks Legal',
-      areasOfSupport: ['GDPR Audits', 'Data Protection Impact Assessment', 'AI Safety Controls', 'Cross-border Transfer'],
-    },
-  ]);
+  // Helper to load registered advisors merged with defaults (DEF-07, DEF-09)
+  const loadMergedAdvisors = () => {
+    try {
+      const rawAssignments = localStorage.getItem('finreg_advisor_assignments');
+      const assignments = rawAssignments ? JSON.parse(rawAssignments) : [];
+      const invitedIds = new Set(assignments.map((a) => a.advisorId));
+
+      const registeredUsers = getRegisteredUsers();
+      const registeredAdvisors = registeredUsers
+        .filter((u) => {
+          const role = (u.platform_role || u.role || '').toUpperCase();
+          return role.includes('ADVISOR');
+        })
+        .map((u) => ({
+          id: u.id,
+          name: u.name,
+          avatar: u.name.split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'AD',
+          specialty: u.specialty || 'Regulatory Compliance & Advisory',
+          firm: u.organization || 'Independent Advisory',
+          jurisdiction: u.jurisdiction || 'UK / EU',
+          status: 'Available',
+          statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
+          dotColor: 'bg-emerald-500',
+          isInvited: invitedIds.has(u.id),
+          bio: u.bio || 'Registered compliance advisor specializing in regulatory risk, governance, and supervisory obligations.',
+          organization: u.organization || 'Independent Advisory',
+          areasOfSupport: ['Policy design', 'Control validation', 'Regulatory interpretation', 'Board assurance'],
+          email: u.email,
+        }));
+
+      // Combine registered advisors with defaults (ensuring no duplicate emails or IDs)
+      const existingEmails = new Set(registeredAdvisors.map((a) => a.email.toLowerCase()));
+      const merged = [...registeredAdvisors];
+      for (const def of DEFAULT_ADVISORS) {
+        if (!existingEmails.has(def.email.toLowerCase())) {
+          merged.push({
+            ...def,
+            isInvited: def.isInvited || invitedIds.has(def.id),
+          });
+        }
+      }
+      return merged;
+    } catch (e) {
+      return DEFAULT_ADVISORS;
+    }
+  };
+
+  // Master Advisors List with live registered advisor binding (DEF-07)
+  const [advisors, setAdvisors] = useState(loadMergedAdvisors);
+
+  useEffect(() => {
+    setAdvisors(loadMergedAdvisors());
+  }, []);
 
   const invitedCount = advisors.filter((a) => a.isInvited).length;
   const isLimitReached = invitedCount >= 2;
@@ -101,7 +169,7 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
   const handleOpenInviteModal = (adv) => {
     if (isLimitReached && !adv.isInvited) return;
     setModalAdvisor(adv);
-    setModalProject('AML Compliance Framework');
+    setModalProject(projectOptions[0]?.name || 'AML Compliance Framework');
     setModalRole('Regulatory Reviewer');
     setModalMessage(
       'We would value your review of our control framework and source interpretation.'
@@ -109,14 +177,17 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
     setIsInviteModalOpen(true);
   };
 
-  // Submit Modal Invitation Form -> Permanently adds advisor to "My Invited Advisors"
+  // Submit Modal Invitation Form -> Permanently adds advisor to "My Invited Advisors" and assigns project (DEF-09)
   const handleSendInvitation = async (e) => {
     e.preventDefault();
     if (!modalAdvisor) return;
 
     setIsSubmittingInvite(true);
+    const targetProjectObj = projectOptions.find((p) => p.name === modalProject) || projectOptions[0];
+    const targetProjectId = targetProjectObj?.id || 'PRJ-001';
+
     try {
-      await sendAdvisorInvitation('PRJ-001', {
+      await sendAdvisorInvitation(targetProjectId, {
         advisorId: modalAdvisor.id,
         advisorName: modalAdvisor.name,
         project: modalProject,
@@ -127,7 +198,29 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
       console.warn('sendAdvisorInvitation fallback executed:', err);
     }
 
-    // Update local state to mark advisor as invited (permanently available under "My Invited Advisors")
+    // Persist assignment locally so advisor dashboard picks it up immediately (DEF-01, DEF-09)
+    try {
+      const raw = localStorage.getItem('finreg_advisor_assignments');
+      const assignments = raw ? JSON.parse(raw) : [];
+      const newAssignment = {
+        projectId: targetProjectId,
+        project: modalProject,
+        projectName: modalProject,
+        advisorId: modalAdvisor.id,
+        advisorName: modalAdvisor.name,
+        advisorEmail: modalAdvisor.email || '',
+        role: modalRole,
+        message: modalMessage,
+        invitedBy: 'Builder / Project Owner',
+        date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      };
+      assignments.unshift(newAssignment);
+      localStorage.setItem('finreg_advisor_assignments', JSON.stringify(assignments));
+    } catch (e) {
+      console.error('Failed to persist advisor assignment:', e);
+    }
+
+    // Update local state to mark advisor as invited
     setAdvisors((prevAdvisors) =>
       prevAdvisors.map((a) => (a.id === modalAdvisor.id ? { ...a, isInvited: true } : a))
     );
@@ -142,6 +235,15 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
 
   // Cancel Invitation -> Removes advisor from "My Invited Advisors" and re-enables "Invite" button
   const handleCancelInvitation = (adv) => {
+    // Remove from localStorage
+    try {
+      const raw = localStorage.getItem('finreg_advisor_assignments');
+      if (raw) {
+        const assignments = JSON.parse(raw).filter((a) => a.advisorId !== adv.id);
+        localStorage.setItem('finreg_advisor_assignments', JSON.stringify(assignments));
+      }
+    } catch (e) {}
+
     setAdvisors((prevAdvisors) =>
       prevAdvisors.map((a) => (a.id === adv.id ? { ...a, isInvited: false } : a))
     );
@@ -338,11 +440,11 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
                     onChange={(e) => setModalProject(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl border border-slate-800 bg-[#111216] text-slate-200 text-sm font-semibold focus:outline-none focus:border-[#96562c] cursor-pointer transition-colors"
                   >
-                    <option value="AML Compliance Framework">AML Compliance Framework</option>
-                    <option value="KYC Onboarding Workflow">KYC Onboarding Workflow</option>
-                    <option value="Regulatory Reporting Q3">Regulatory Reporting Q3</option>
-                    <option value="GDPR Data Audit Trail">GDPR Data Audit Trail</option>
-                    <option value="Basel III Capital Adequacy">Basel III Capital Adequacy</option>
+                    {projectOptions.map((p) => (
+                      <option key={p.id || p.name} value={p.name}>
+                        {p.name}
+                      </option>
+                    ))}
                   </select>
                 </div>
 
@@ -536,6 +638,19 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
         </div>
       )}
 
+      {/* Empty State for Find Advisors if no matches (DEF-07) */}
+      {activeSubTab === 'Find Advisors' && filteredAdvisors.length === 0 && (
+        <div className="p-12 rounded-2xl border border-slate-800 bg-[#161619] text-center space-y-3">
+          <div className="w-12 h-12 rounded-2xl bg-slate-800 text-slate-400 flex items-center justify-center mx-auto">
+            <UserX className="w-6 h-6" />
+          </div>
+          <h3 className="text-lg font-bold text-slate-200">No advisors found</h3>
+          <p className="text-xs sm:text-sm text-slate-400 max-w-md mx-auto">
+            No compliance advisors match your search or filter criteria. Try adjusting your search query or filter options.
+          </p>
+        </div>
+      )}
+
       {/* Advisor Cards Grid */}
       {filteredAdvisors.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-2">
@@ -700,11 +815,11 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor }) {
                   onChange={(e) => setModalProject(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-slate-800 bg-[#111216] text-slate-200 text-sm font-semibold focus:outline-none focus:border-[#96562c] cursor-pointer transition-colors"
                 >
-                  <option value="AML Compliance Framework">AML Compliance Framework</option>
-                  <option value="KYC Onboarding Workflow">KYC Onboarding Workflow</option>
-                  <option value="Regulatory Reporting Q3">Regulatory Reporting Q3</option>
-                  <option value="GDPR Data Audit Trail">GDPR Data Audit Trail</option>
-                  <option value="Basel III Capital Adequacy">Basel III Capital Adequacy</option>
+                  {projectOptions.map((p) => (
+                    <option key={p.id || p.name} value={p.name}>
+                      {p.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 

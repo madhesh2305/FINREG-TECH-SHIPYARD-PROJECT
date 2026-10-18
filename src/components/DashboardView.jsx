@@ -22,6 +22,7 @@ import {
   Bell,
   ChevronDown,
   LayoutDashboard,
+  Folder,
   FolderKanban,
   PlusCircle,
   Users,
@@ -150,8 +151,8 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   const [newProjectDomain, setNewProjectDomain] = useState('');
   const [toastMessage, setToastMessage] = useState(null);
 
-  // Master Projects List matching the reference image
-  const [allProjects, setAllProjects] = useState([
+  // Seeded fixture projects for demo Builder account (builder@gmail.com)
+  const SEEDED_BUILDER_PROJECTS = [
     {
       id: 'PRJ-001',
       name: 'AML Compliance Framework',
@@ -160,7 +161,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
       statusColor: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-900',
       dotColor: 'bg-blue-600',
       lastUpdated: '22 Sep 2026',
-      owner: 'J. Nakamura',
+      owner: 'Jun Nakamura',
       description: 'End-to-end anti-money laundering workflow for retail banking operations.',
       created: '01 Sep 2026',
       jurisdiction: 'United Kingdom - FCA',
@@ -212,12 +213,48 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
       statusColor: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-900',
       dotColor: 'bg-blue-600',
       lastUpdated: '10 Sep 2026',
-      owner: 'J. Nakamura',
+      owner: 'Jun Nakamura',
       description: 'Capital requirement calculations and risk-weighted assets framework.',
       created: '14 Sep 2026',
       jurisdiction: 'Global / BIS',
     },
-  ]);
+  ];
+
+  // Helper to load projects scoped to authenticated user (DEF-06)
+  const loadScopedProjects = () => {
+    try {
+      const email = (currentUser?.email || '').toLowerCase();
+      const name = currentUser?.name || '';
+      const raw = localStorage.getItem('finreg_projects');
+      const local = raw ? JSON.parse(raw) : [];
+
+      const userProjects = local.filter((p) => {
+        const matchesEmail = email && p.ownerEmail && p.ownerEmail.toLowerCase() === email;
+        const matchesName = name && p.owner && p.owner.toLowerCase() === name.toLowerCase();
+        return matchesEmail || matchesName || !p.ownerEmail;
+      });
+
+      // Default demo account gets seeded projects; newly registered builders only see their own created projects (DEF-06)
+      if (email === 'builder@gmail.com' || name === 'Jun Nakamura') {
+        const combined = [...local, ...SEEDED_BUILDER_PROJECTS];
+        const unique = [];
+        const seen = new Set();
+        for (const item of combined) {
+          if (!seen.has(item.id)) {
+            seen.add(item.id);
+            unique.push(item);
+          }
+        }
+        return unique;
+      }
+
+      return userProjects;
+    } catch (e) {
+      return [];
+    }
+  };
+
+  const [allProjects, setAllProjects] = useState(loadScopedProjects);
 
   // Load user & live projects from backend API on mount
   useEffect(() => {
@@ -226,17 +263,29 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
       try {
         const liveProjects = await getProjects();
         if (isMounted && Array.isArray(liveProjects) && liveProjects.length > 0) {
-          setAllProjects(liveProjects);
+          const email = (currentUser?.email || '').toLowerCase();
+          const name = currentUser?.name || '';
+          if (email === 'builder@gmail.com' || name === 'Jun Nakamura') {
+            setAllProjects(liveProjects);
+          } else {
+            // Keep scoped to current user
+            const scoped = liveProjects.filter(
+              (p) =>
+                (p.ownerEmail && p.ownerEmail.toLowerCase() === email) ||
+                (p.owner && p.owner.toLowerCase() === name.toLowerCase())
+            );
+            if (scoped.length > 0) setAllProjects(scoped);
+          }
         }
       } catch (err) {
-        console.warn('[DashboardView] API load warning, using static fallbacks:', err);
+        console.warn('[DashboardView] API load warning, using local scoped projects:', err);
       }
     }
     loadBackendData();
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [currentUser]);
 
   // Open Project Details Page (fetches live details from API)
   const handleOpenProject = async (project) => {
@@ -251,16 +300,21 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     }
   };
 
-  // Handle New Project Creation via POST /projects
+  // Handle New Project Creation via POST /projects (DEF-08: Bind creator name to authenticated user)
   const handleCreateProjectSubmit = async (e) => {
     e.preventDefault();
     if (!newProjectName || !newProjectType) return;
+
+    const creatorName = currentUser?.name || 'Project Owner';
+    const creatorEmail = (currentUser?.email || '').toLowerCase();
 
     const payload = {
       name: newProjectName,
       type: newProjectType,
       description: newProjectDescription || 'Newly created regulatory project.',
       jurisdiction: newProjectJurisdiction || 'United Kingdom - FCA',
+      owner: creatorName,
+      ownerEmail: creatorEmail,
     };
 
     let createdProject;
@@ -269,13 +323,14 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     } catch (err) {
       console.warn('[DashboardView] POST /projects failed, fallback to local state:', err);
       createdProject = {
-        id: `PRJ-00${allProjects.length + 1}`,
+        id: `PRJ-00${Math.floor(Math.random() * 900) + 100}`,
         ...payload,
         status: 'Draft',
         statusColor: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
         dotColor: 'bg-slate-400',
         lastUpdated: 'Just now',
-        owner: 'J. Nakamura',
+        owner: creatorName,
+        ownerEmail: creatorEmail,
         created: 'Today',
       };
     }
@@ -288,7 +343,8 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
       statusColor: createdProject.statusColor || 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
       dotColor: createdProject.dotColor || 'bg-slate-400',
       lastUpdated: createdProject.lastUpdated || 'Just now',
-      owner: createdProject.owner || 'J. Nakamura',
+      owner: createdProject.owner || creatorName,
+      ownerEmail: creatorEmail,
       description: createdProject.description || payload.description,
       created: createdProject.created || 'Today',
       jurisdiction: createdProject.jurisdiction || payload.jurisdiction,
@@ -897,42 +953,53 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
-                      {allProjects.slice(0, 4).map((project) => (
-                        <tr
-                          key={project.id}
-                          className={`transition-colors ${
-                            isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-stone-50/90'
-                          }`}
-                        >
-                          <td className="py-4 px-5">
-                            <div className={`font-bold text-sm ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
-                              {project.name}
-                            </div>
-                            <div className="text-[11px] font-mono text-slate-500 mt-0.5">
-                              {project.id}
-                            </div>
+                      {allProjects.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-12 px-5 text-center">
+                            <Folder className="w-10 h-10 text-slate-500 mx-auto mb-2.5 stroke-[1.5]" />
+                            <p className="text-sm font-bold text-slate-200">No projects created yet</p>
+                            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                              Launch your first regulatory compliance project by clicking "Create Project" in Quick Actions below.
+                            </p>
                           </td>
-                          <td className={`py-4 px-5 font-medium text-xs sm:text-sm ${
-                            isDarkMode ? 'text-slate-300' : 'text-slate-600'
-                          }`}>
-                            {project.type}
-                          </td>
-                          <td className="py-4 px-5">
-                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${project.statusColor}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${project.dotColor}`} />
-                              {project.status}
-                            </span>
-                          </td>
-                          <td className={`py-4 px-5 font-medium text-xs sm:text-sm ${
-                            isDarkMode ? 'text-slate-300' : 'text-slate-600'
-                          }`}>
-                            {project.owner || 'J. Nakamura'}
-                          </td>
-                          <td className={`py-4 px-5 font-medium text-xs sm:text-sm ${
-                            isDarkMode ? 'text-slate-300' : 'text-slate-600'
-                          }`}>
-                            {project.lastUpdated}
-                          </td>
+                        </tr>
+                      ) : (
+                        allProjects.slice(0, 4).map((project) => (
+                          <tr
+                            key={project.id}
+                            className={`transition-colors ${
+                              isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-stone-50/90'
+                            }`}
+                          >
+                            <td className="py-4 px-5">
+                              <div className={`font-bold text-sm ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                                {project.name}
+                              </div>
+                              <div className="text-[11px] font-mono text-slate-500 mt-0.5">
+                                {project.id}
+                              </div>
+                            </td>
+                            <td className={`py-4 px-5 font-medium text-xs sm:text-sm ${
+                              isDarkMode ? 'text-slate-300' : 'text-slate-600'
+                            }`}>
+                              {project.type}
+                            </td>
+                            <td className="py-4 px-5">
+                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${project.statusColor}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${project.dotColor}`} />
+                                {project.status}
+                              </span>
+                            </td>
+                            <td className={`py-4 px-5 font-medium text-xs sm:text-sm ${
+                              isDarkMode ? 'text-slate-300' : 'text-slate-600'
+                            }`}>
+                              {project.owner || currentUser?.name || 'Project Owner'}
+                            </td>
+                            <td className={`py-4 px-5 font-medium text-xs sm:text-sm ${
+                              isDarkMode ? 'text-slate-300' : 'text-slate-600'
+                            }`}>
+                              {project.lastUpdated}
+                            </td>
                           <td className="py-4 px-5 text-right">
                             <button
                               type="button"
@@ -949,8 +1016,9 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                             </button>
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
+                      ))
+                    )}
+                  </tbody>
                   </table>
                 </div>
               </div>
@@ -1251,51 +1319,93 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
-                        {filteredProjects.map((project) => (
-                          <tr
-                            key={project.id}
-                            className={`transition-colors ${
-                              isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-stone-50/90'
-                            }`}
-                          >
-                            <td className="py-4 px-5 font-mono text-xs font-semibold text-slate-500 dark:text-slate-300">
-                              {project.id}
-                            </td>
-                            <td className="py-4 px-5 font-bold text-slate-900 dark:text-slate-100">
-                              {project.name}
-                            </td>
-                            <td className="py-4 px-5 text-slate-600 dark:text-slate-300">
-                              {project.type}
-                            </td>
-                            <td className="py-4 px-5">
-                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold border ${project.statusColor}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${project.dotColor}`} />
-                                {project.status}
-                              </span>
-                            </td>
-                            <td className="py-4 px-5 text-slate-600 dark:text-slate-300">
-                              {project.lastUpdated}
-                            </td>
-                            <td className="py-4 px-5 font-medium text-slate-700 dark:text-slate-200">
-                              {project.owner}
-                            </td>
-                            <td className="py-4 px-5 text-right">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleOpenProject(project);
-                                }}
-                                className="text-xs font-bold text-[#7c4a27] dark:text-amber-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
-                              >
-                                <span>Open</span>
-                                <ArrowRight className="w-3.5 h-3.5" />
-                              </button>
+                        {filteredProjects.length === 0 ? (
+                          <tr>
+                            <td colSpan={7} className="py-12 px-5 text-center">
+                              <FolderKanban className="w-10 h-10 text-slate-500 mx-auto mb-3 stroke-[1.5]" />
+                              <p className="text-sm font-bold text-slate-200">No projects found</p>
+                              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                                {searchQuery || statusFilter !== 'All Statuses' || typeFilter !== 'All Types'
+                                  ? 'No projects match your current filter criteria.'
+                                  : 'No projects created yet. Launch your first compliance project to get started.'}
+                              </p>
+                              {(!searchQuery && statusFilter === 'All Statuses' && typeFilter === 'All Types') && (
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveTab('Create Project')}
+                                  className="mt-4 px-4 py-2 rounded-xl bg-[#7c4a27] hover:bg-[#96562c] text-white text-xs font-bold transition-colors cursor-pointer"
+                                >
+                                  Create Project
+                                </button>
+                              )}
                             </td>
                           </tr>
-                        ))}
+                        ) : (
+                          filteredProjects.map((project) => (
+                            <tr
+                              key={project.id}
+                              className={`transition-colors ${
+                                isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-stone-50/90'
+                              }`}
+                            >
+                              <td className="py-4 px-5 font-mono text-xs font-semibold text-slate-500 dark:text-slate-300">
+                                {project.id}
+                              </td>
+                              <td className="py-4 px-5 font-bold text-slate-900 dark:text-slate-100">
+                                {project.name}
+                              </td>
+                              <td className="py-4 px-5 text-slate-600 dark:text-slate-300">
+                                {project.type}
+                              </td>
+                              <td className="py-4 px-5">
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold border ${project.statusColor}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${project.dotColor}`} />
+                                  {project.status}
+                                </span>
+                              </td>
+                              <td className="py-4 px-5 text-slate-600 dark:text-slate-300">
+                                {project.lastUpdated}
+                              </td>
+                              <td className="py-4 px-5 font-medium text-slate-700 dark:text-slate-200">
+                                {project.owner}
+                              </td>
+                              <td className="py-4 px-5 text-right">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleOpenProject(project);
+                                  }}
+                                  className="text-xs font-bold text-[#7c4a27] dark:text-amber-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                                >
+                                  <span>Open</span>
+                                  <ArrowRight className="w-3.5 h-3.5" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
+                  </div>
+                ) : filteredProjects.length === 0 ? (
+                  <div className="py-16 px-5 text-center">
+                    <FolderKanban className="w-10 h-10 text-slate-500 mx-auto mb-3 stroke-[1.5]" />
+                    <p className="text-sm font-bold text-slate-200">No projects found</p>
+                    <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                      {searchQuery || statusFilter !== 'All Statuses' || typeFilter !== 'All Types'
+                        ? 'No projects match your current filter criteria.'
+                        : 'No projects created yet. Launch your first compliance project to get started.'}
+                    </p>
+                    {(!searchQuery && statusFilter === 'All Statuses' && typeFilter === 'All Types') && (
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('Create Project')}
+                        className="mt-4 px-4 py-2 rounded-xl bg-[#7c4a27] hover:bg-[#96562c] text-white text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        Create Project
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="p-5 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -1909,41 +2019,85 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                       </h2>
 
                       <div className="space-y-3 divide-y divide-slate-100 dark:divide-slate-800/60">
+                        {/* Dynamic Project Owner */}
                         <div className="pt-2 flex items-center justify-between">
                           <div className="flex items-center gap-2.5">
                             <div className="w-7 h-7 rounded-lg bg-[#7c4a27] text-white font-bold text-xs flex items-center justify-center">
-                              JN
+                              {(selectedProject?.owner || currentUser?.name || 'Owner')
+                                .split(' ')
+                                .filter(Boolean)
+                                .map((n) => n[0])
+                                .join('')
+                                .slice(0, 2)
+                                .toUpperCase()}
                             </div>
-                            <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">J. Nakamura</span>
+                            <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">
+                              {selectedProject?.owner || currentUser?.name || 'Project Owner'}
+                            </span>
                           </div>
                           <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-amber-50 text-[#7c4a27] border border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300">
                             Owner
                           </span>
                         </div>
 
-                        <div className="pt-3 flex items-center justify-between">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 rounded-lg bg-[#96562c] text-white font-bold text-xs flex items-center justify-center">
-                              SO
-                            </div>
-                            <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">S. Okonkwo</span>
-                          </div>
-                          <span className="text-[11px] font-mono text-slate-500 dark:text-slate-300 font-medium">
-                            Advisor 1
-                          </span>
-                        </div>
+                        {/* Dynamic Assigned Advisors */}
+                        {(() => {
+                          let advisors = [];
+                          try {
+                            const raw = localStorage.getItem('finreg_advisor_assignments');
+                            const assignments = raw ? JSON.parse(raw) : [];
+                            advisors = assignments.filter(
+                              (a) =>
+                                a.projectId === selectedProject?.id ||
+                                (selectedProject?.name && a.projectName === selectedProject?.name)
+                            );
+                          } catch (e) {
+                            advisors = [];
+                          }
 
-                        <div className="pt-3 flex items-center justify-between">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 rounded-lg bg-slate-700 text-white font-bold text-xs flex items-center justify-center">
-                              AP
-                            </div>
-                            <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">A. Petrov</span>
-                          </div>
-                          <span className="text-[11px] font-mono text-slate-500 dark:text-slate-300 font-medium">
-                            Advisor 2
-                          </span>
-                        </div>
+                          if (advisors.length === 0 && (selectedProject?.id === 'PRJ-001' || selectedProject?.id === 'PRJ-002')) {
+                            advisors = [
+                              { id: 'ADV-001', advisorName: 'S. Okonkwo', roleTag: 'Advisor 1' },
+                              { id: 'ADV-002', advisorName: 'A. Petrov', roleTag: 'Advisor 2' },
+                            ];
+                          }
+
+                          if (advisors.length === 0) {
+                            return (
+                              <div className="pt-3 text-xs text-slate-400 dark:text-slate-400 italic">
+                                No advisors assigned yet. Invite advisors from the Advisors &amp; Experts tab.
+                              </div>
+                            );
+                          }
+
+                          return advisors.map((adv, idx) => {
+                            const advName = adv.advisorName || adv.name || `Advisor ${idx + 1}`;
+                            const advInitials = advName
+                              .split(' ')
+                              .filter(Boolean)
+                              .map((n) => n[0])
+                              .join('')
+                              .slice(0, 2)
+                              .toUpperCase();
+                            const colorBg = idx % 2 === 0 ? 'bg-[#96562c]' : 'bg-slate-700';
+
+                            return (
+                              <div key={adv.id || idx} className="pt-3 flex items-center justify-between">
+                                <div className="flex items-center gap-2.5">
+                                  <div className={`w-7 h-7 rounded-lg ${colorBg} text-white font-bold text-xs flex items-center justify-center`}>
+                                    {advInitials}
+                                  </div>
+                                  <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">
+                                    {advName}
+                                  </span>
+                                </div>
+                                <span className="text-[11px] font-mono text-slate-500 dark:text-slate-300 font-medium">
+                                  {adv.roleTag || adv.advisorRole || `Advisor ${idx + 1}`}
+                                </span>
+                              </div>
+                            );
+                          });
+                        })()}
                       </div>
                     </div>
                   </div>
@@ -2187,7 +2341,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
 
           {/* TAB: ADVISORS / EXPERTS VIEW */}
           {activeTab === 'Advisors / Experts' && (
-            <AdvisorsExpertsView isDarkMode={isDarkMode} />
+            <AdvisorsExpertsView isDarkMode={isDarkMode} availableProjects={allProjects} />
           )}
 
           {/* TAB: ADVISOR ADVICE VIEW (Matching uploaded image media_1791737929366_a3b12230.png) */}

@@ -27,7 +27,7 @@ export default function LoginForm({ isDarkMode = true }) {
   const [activeExpertise, setActiveExpertise] = useState(ADVISOR_PROFILES[0]);
   const [currentUser, setCurrentUser] = useState(null);
 
-  // Sign up state (DEF-13)
+  // Sign up state (DEF-13, DEF-04)
   const [signupName, setSignupName] = useState('');
   const [signupEmail, setSignupEmail] = useState('');
   const [signupPassword, setSignupPassword] = useState('');
@@ -37,6 +37,18 @@ export default function LoginForm({ isDarkMode = true }) {
   const [signupError, setSignupError] = useState('');
   const [signupSuccess, setSignupSuccess] = useState('');
   const [isSigningUp, setIsSigningUp] = useState(false);
+
+  // DEF-04: Reset registration form state to prevent retention of previous sign-up details
+  const resetSignupForm = () => {
+    setSignupName('');
+    setSignupEmail('');
+    setSignupPassword('');
+    setSignupConfirmPassword('');
+    setSignupOrg('');
+    setSignupRole('Builder');
+    setSignupError('');
+    setSignupSuccess('');
+  };
 
   // Forgot password state (DEF-02)
   const [resetEmail, setResetEmail] = useState('');
@@ -111,10 +123,12 @@ export default function LoginForm({ isDarkMode = true }) {
     }
   };
 
-  // Handle Login submission with dynamic credentials and authoritative role routing (DEF-01, DEF-07)
+  // Handle Login submission with dynamic credentials and authoritative role routing (DEF-01, DEF-02, DEF-07)
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setLoginError('');
+    setAdminError('');
+    setSignupError('');
 
     const cleanEmail = email.toLowerCase().trim();
     const cleanPassword = password.trim();
@@ -143,6 +157,8 @@ export default function LoginForm({ isDarkMode = true }) {
         setUserRole('BUILDER');
       }
 
+      // DEF-02: Ensure login errors are completely cleared on successful authentication
+      setLoginError('');
       setStep('verifying');
     } catch (err) {
       setLoginError(err.message || 'Invalid email or password. Please verify your credentials or sign up.');
@@ -151,7 +167,7 @@ export default function LoginForm({ isDarkMode = true }) {
     }
   };
 
-  // Handle User Registration Submission (DEF-13)
+  // Handle User Registration Submission (DEF-13, DEF-04)
   const handleSignupSubmit = async (e) => {
     e.preventDefault();
     setSignupError('');
@@ -179,6 +195,14 @@ export default function LoginForm({ isDarkMode = true }) {
 
       setSignupSuccess(`Account created successfully for ${res.user.name}! Proceeding to security verification...`);
       setCurrentUser(res.user);
+
+      // DEF-04: Clear registration form values after confirmed submission
+      setSignupName('');
+      setSignupEmail('');
+      setSignupPassword('');
+      setSignupConfirmPassword('');
+      setSignupOrg('');
+      setSignupRole('Builder');
 
       const effectiveRole = (res.user.platform_role || res.user.role || '').toUpperCase();
       if (effectiveRole.includes('ADVISOR')) setUserRole('ADVISOR');
@@ -488,8 +512,7 @@ export default function LoginForm({ isDarkMode = true }) {
                   <button
                     type="button"
                     onClick={() => {
-                      setSignupError('');
-                      setSignupSuccess('');
+                      resetSignupForm();
                       setStep('signup');
                     }}
                     className="text-amber-500 hover:text-amber-400 font-semibold cursor-pointer transition-colors inline"
@@ -787,7 +810,7 @@ export default function LoginForm({ isDarkMode = true }) {
                 </div>
               )}
 
-              <form onSubmit={handleSignupSubmit} className="space-y-4">
+              <form onSubmit={handleSignupSubmit} className="space-y-4" autoComplete="off">
                 {/* Full name */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-slate-300">
@@ -796,6 +819,7 @@ export default function LoginForm({ isDarkMode = true }) {
                   <input
                     type="text"
                     required
+                    autoComplete="off"
                     value={signupName}
                     onChange={(e) => setSignupName(e.target.value)}
                     placeholder="Your full name"
@@ -811,6 +835,7 @@ export default function LoginForm({ isDarkMode = true }) {
                   <input
                     type="email"
                     required
+                    autoComplete="off"
                     value={signupEmail}
                     onChange={(e) => setSignupEmail(e.target.value)}
                     placeholder="name@organization.com"
@@ -827,6 +852,7 @@ export default function LoginForm({ isDarkMode = true }) {
                     <input
                       type="password"
                       required
+                      autoComplete="new-password"
                       value={signupPassword}
                       onChange={(e) => setSignupPassword(e.target.value)}
                       placeholder="Create a password"
@@ -840,6 +866,7 @@ export default function LoginForm({ isDarkMode = true }) {
                     <input
                       type="password"
                       required
+                      autoComplete="new-password"
                       value={signupConfirmPassword}
                       onChange={(e) => setSignupConfirmPassword(e.target.value)}
                       placeholder="Repeat password"
@@ -856,6 +883,7 @@ export default function LoginForm({ isDarkMode = true }) {
                   <input
                     type="text"
                     required
+                    autoComplete="off"
                     value={signupOrg}
                     onChange={(e) => setSignupOrg(e.target.value)}
                     placeholder="Organization name"
@@ -897,7 +925,10 @@ export default function LoginForm({ isDarkMode = true }) {
                 {/* Back to Login button */}
                 <button
                   type="button"
-                  onClick={() => setStep('login')}
+                  onClick={() => {
+                    resetSignupForm();
+                    setStep('login');
+                  }}
                   className="w-full py-3 px-4 rounded-md border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-bold text-xs sm:text-sm cursor-pointer transition-colors mt-2"
                 >
                   Back to Login
