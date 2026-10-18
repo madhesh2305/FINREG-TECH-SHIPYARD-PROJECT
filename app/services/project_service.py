@@ -6,6 +6,7 @@ from app.core.exceptions import ConflictError, NotFoundError
 from app.models.identity import User
 from app.models.project import Project, ProjectProfile, ProjectMember
 from app.models.regulatory import RegulatoryRequirement
+from app.models.advice import Advice
 from app.schemas.project import ProjectCreate, ProjectUpdate, DashboardSummary
 from app.services.audit_service import log_audit_event
 
@@ -182,7 +183,9 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
             total_requirements=0,
             total_members=0,
             open_requirements=0,
-            completed_requirements=0
+            completed_requirements=0,
+            total_advice_reviews=0,
+            audit_readiness_percentage=0
         )
 
     total_projects = db.query(Project).filter(Project.project_id.in_(user_project_ids)).count()
@@ -204,6 +207,9 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
         ProjectMember.member_status == "ACTIVE"
     ).count()
 
+    total_advice = db.query(Advice).filter(Advice.project_id.in_(user_project_ids)).count()
+    readiness_pct = round((completed_reqs / total_reqs) * 100) if total_reqs > 0 else 0
+
     return DashboardSummary(
         total_projects=total_projects,
         active_projects=active_projects,
@@ -211,5 +217,7 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
         total_requirements=total_reqs,
         total_members=total_members,
         open_requirements=open_reqs,
-        completed_requirements=completed_reqs
+        completed_requirements=completed_reqs,
+        total_advice_reviews=total_advice,
+        audit_readiness_percentage=readiness_pct
     )

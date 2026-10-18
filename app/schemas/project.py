@@ -93,6 +93,11 @@ class ProjectResponse(BaseModel):
 
     @computed_field
     @property
+    def owner(self) -> Optional[str]:
+        return self.owner_name
+
+    @computed_field
+    @property
     def type(self) -> str:
         if self.profile and self.profile.regulatory_scope:
             return self.profile.regulatory_scope
@@ -106,3 +111,5 @@ class DashboardSummary(BaseModel):
     total_members: int
     open_requirements: int
     completed_requirements: int
+    total_advice_reviews: int = 0
+    audit_readiness_percentage: int = 0

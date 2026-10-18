@@ -6,8 +6,8 @@ class AuditEventResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     audit_event_id: int
-    project_id: int
-    actor_user_id: int
+    project_id: Optional[int] = None
+    actor_user_id: Optional[int] = None
     actor_name: Optional[str] = None
     event_type: str
     entity_type: str

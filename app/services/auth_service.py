@@ -102,24 +102,8 @@ def register_user(db: Session, request: RegisterRequest) -> TokenResponse:
         db.add(profile)
         db.flush()
 
-    # Automatically link newly registered advisors to initial demonstrator Project 1 (PRJ-ABC-001) for workspace access
-    if role_name == "ADVISOR":
-        demo_projects = db.query(Project).filter((Project.project_id == 1) | (Project.project_code == "PRJ-ABC-001")).all()
-        for dp in demo_projects:
-            existing_mem = db.query(ProjectMember).filter(
-                ProjectMember.project_id == dp.project_id,
-                ProjectMember.user_id == new_user.user_id
-            ).first()
-            if not existing_mem:
-                db.add(ProjectMember(
-                    project_id=dp.project_id,
-                    user_id=new_user.user_id,
-                    service_role="REGULATORY",
-                    service_scope="ADVISORY_REVIEW",
-                    member_status="ACTIVE",
-                    joined_at=now,
-                ))
-                db.flush()
+    # DEF-01: Newly created advisors begin with an empty assigned project list.
+    # Projects are assigned exclusively via explicit invitation or direct project owner assignment.
 
     # Audit log
     log_audit_event(

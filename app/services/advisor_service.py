@@ -5,7 +5,9 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
 from app.models.identity import User
 from app.models.advisor import AdvisorProfile, AdvisorInvitation
+from app.models.project import ProjectMember
 from app.schemas.advisor import AdvisorInvitationCreate
+from app.schemas.member import ROLE_TO_DEFAULT_SCOPE
 from app.services.audit_service import log_audit_event
 from app.security.authorization import verify_object_belongs_to_project
 
@@ -123,6 +125,58 @@ def revoke_advisor_invitation(db: Session, project_id: int, invitation_id: int, 
         event_description=f"Invitation for {invitation.advisor_email} revoked by {actor.full_name}",
         old_values={"invitation_status": old_status},
         new_values={"invitation_status": "REVOKED"}
+    )
+
+    db.commit()
+    db.refresh(invitation)
+    return invitation
+
+def accept_advisor_invitation(db: Session, project_id: int, invitation_id: int, actor: User) -> AdvisorInvitation:
+    invitation = db.query(AdvisorInvitation).filter(AdvisorInvitation.invitation_id == invitation_id).first()
+    if not invitation:
+        raise NotFoundError(f"Invitation with ID {invitation_id} not found")
+
+    verify_object_belongs_to_project(invitation.project_id, project_id, "Invitation")
+
+    if invitation.invitation_status != "PENDING":
+        raise ConflictError(f"Invitation is already {invitation.invitation_status}")
+
+    now = datetime.now(timezone.utc)
+    invitation.invitation_status = "ACCEPTED"
+    invitation.accepted_at = now
+
+    # Find the user matching advisor_email
+    target_user = db.query(User).filter(User.email.ilike(invitation.advisor_email)).first()
+    if target_user:
+        existing_mem = db.query(ProjectMember).filter(
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id == target_user.user_id
+        ).first()
+        if existing_mem:
+            existing_mem.member_status = "ACTIVE"
+            existing_mem.service_role = invitation.access_level
+            existing_mem.service_scope = ROLE_TO_DEFAULT_SCOPE.get(invitation.access_level, "REGULATORY_ADVICE_SUPPORT")
+            existing_mem.joined_at = now
+        else:
+            db.add(ProjectMember(
+                project_id=project_id,
+                user_id=target_user.user_id,
+                service_role=invitation.access_level,
+                service_scope=ROLE_TO_DEFAULT_SCOPE.get(invitation.access_level, "REGULATORY_ADVICE_SUPPORT"),
+                member_status="ACTIVE",
+                joined_at=now
+            ))
+        db.flush()
+
+    log_audit_event(
+        db=db,
+        project_id=project_id,
+        actor_user_id=actor.user_id,
+        event_type="ADVISOR_ACCEPTED",
+        entity_type="ADVISOR_INVITATION",
+        entity_id=invitation.invitation_id,
+        event_description=f"Advisor invitation accepted for {invitation.advisor_email}",
+        new_values={"invitation_status": "ACCEPTED", "accepted_at": str(now)}
     )
 
     db.commit()

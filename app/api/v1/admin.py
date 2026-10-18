@@ -8,6 +8,7 @@ from app.models.project import Project
 from app.models.regulatory import RegulatorySource
 from app.models.audit import AuditEvent
 from app.schemas.user import UserResponse
+from app.schemas.audit import AuditEventResponse
 from app.security.authentication import get_current_user
 from app.security.authorization import require_platform_role
 from app.core.exceptions import NotFoundError, ValidationError
@@ -122,3 +123,33 @@ def update_user_status(
         created_at=user.created_at,
         updated_at=user.updated_at
     )
+
+@router.get(
+    "/audit-events",
+    response_model=List[AuditEventResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List Platform Audit Events",
+    description="Returns platform-wide immutable audit trail for administrators. Restricted to ADMIN."
+)
+def list_admin_audit_events(
+    limit: int = 100,
+    current_user: User = Depends(require_platform_role("ADMIN")),
+    db: Session = Depends(get_db)
+):
+    events = db.query(AuditEvent).order_by(AuditEvent.created_at.desc()).limit(limit).all()
+    return [
+        AuditEventResponse(
+            audit_event_id=e.audit_event_id,
+            project_id=e.project_id,
+            actor_user_id=e.actor_user_id,
+            actor_name=e.actor.full_name if e.actor else "System",
+            event_type=e.event_type,
+            entity_type=e.entity_type,
+            entity_id=e.entity_id,
+            old_values=e.old_values or {},
+            new_values=e.new_values or {},
+            event_description=e.event_description,
+            created_at=e.created_at
+        )
+        for e in events
+    ]

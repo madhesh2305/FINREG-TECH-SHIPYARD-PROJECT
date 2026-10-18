@@ -18,7 +18,8 @@ from app.services.advisor_service import (
     create_advisor_invitation,
     list_advisor_invitations,
     resend_advisor_invitation,
-    revoke_advisor_invitation
+    revoke_advisor_invitation,
+    accept_advisor_invitation
 )
 
 router = APIRouter(tags=["Advisors & Invitations"])
@@ -137,3 +138,23 @@ def revoke_invitation(
     db: Session = Depends(get_db)
 ):
     return revoke_advisor_invitation(db=db, project_id=membership.project_id, invitation_id=invitationId, actor=current_user)
+
+@router.post(
+    "/projects/{projectId}/advisor-invitations/{invitationId}/accept",
+    response_model=AdvisorInvitationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Accept Advisor Invitation",
+    description="Marks invitation as ACCEPTED and creates active project membership."
+)
+def accept_invitation(
+    projectId: Union[int, str],
+    invitationId: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    p_id = int(projectId) if str(projectId).isdigit() else None
+    if not p_id:
+        from app.models.project import Project
+        p = db.query(Project).filter(Project.project_code == str(projectId)).first()
+        p_id = p.project_id if p else 1
+    return accept_advisor_invitation(db=db, project_id=p_id, invitation_id=invitationId, actor=current_user)
