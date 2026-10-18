@@ -1,65 +1,43 @@
 import { apiCall } from './api';
 
-const MOCK_REQUIREMENTS = [
-  {
-    id: 'REQ-UK-001',
-    code: 'FCA SYSC 6.1.4',
-    title: 'Anti-Money Laundering Systems & Controls',
-    jurisdiction: 'United Kingdom - FCA',
-    category: 'AML / CTF',
-    description: 'A firm must establish and maintain effective systems and controls for countering the risk that the firm might be used to further financial crime.',
-    sourceUrl: 'https://www.handbook.fca.org.uk/handbook/SYSC/6/1.html',
-    status: 'Validated',
-    provenance: 'FCA Handbook SYSC 6.1.4 R',
-    lastReviewed: '15 Sep 2026',
-  },
-  {
-    id: 'REQ-EU-002',
-    code: 'AMLD5 Art 13',
-    title: 'Customer Due Diligence (CDD) Measures',
-    jurisdiction: 'European Union - EBA',
-    category: 'KYC / CDD',
-    description: 'Obligation to verify customer identity on the basis of documents, data or information obtained from a reliable and independent source.',
-    sourceUrl: 'https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX%3A32018L0843',
-    status: 'Validated',
-    provenance: 'Directive (EU) 2018/843 Article 13',
-    lastReviewed: '20 Sep 2026',
-  },
-  {
-    id: 'REQ-UK-003',
-    code: 'UK GDPR Art 30',
-    title: 'Records of Processing Activities (RoPA)',
-    jurisdiction: 'United Kingdom - ICO',
-    category: 'Data Governance',
-    description: 'Each controller shall maintain a record of processing activities under its responsibility.',
-    sourceUrl: 'https://ico.org.uk/for-organisations/guide-to-data-protection/',
-    status: 'Validated',
-    provenance: 'UK GDPR Article 30(1)',
-    lastReviewed: '18 Sep 2026',
-  },
-];
-
 /**
- * Fetches regulatory requirements list via GET /regulatory-requirements
+ * Fetches verified regulatory sources corpus via GET /regulatory/sources
  */
-export async function getRegulatoryRequirements() {
+export async function getRegulatorySources(page = 1, pageSize = 50) {
   try {
-    const data = await apiCall('/regulatory-requirements', 'GET');
-    return Array.isArray(data) && data.length > 0 ? data : MOCK_REQUIREMENTS;
+    const data = await apiCall(`/regulatory/sources?page=${page}&page_size=${pageSize}`, 'GET');
+    return data?.items || [];
   } catch (err) {
-    console.warn('[regulatoryService] GET /regulatory-requirements failed. Returning mock corpus.');
-    return MOCK_REQUIREMENTS;
+    console.warn('[regulatoryService] GET /regulatory/sources failed:', err);
+    return [];
   }
 }
 
 /**
- * Fetches specific regulatory requirement details & provenance via GET /regulatory-requirements/{reqId}
+ * Compatibility alias for regulatory requirements / sources
  */
-export async function getRequirementDetails(reqId) {
+export async function getRegulatoryRequirements(projectId = null) {
   try {
-    return await apiCall(`/regulatory-requirements/${reqId}`, 'GET');
+    if (projectId) {
+      const data = await apiCall(`/projects/${projectId}/requirements`, 'GET');
+      return Array.isArray(data) ? data : [];
+    }
+    const data = await apiCall('/regulatory/sources?page=1&page_size=50', 'GET');
+    return data?.items || [];
   } catch (err) {
-    console.warn(`[regulatoryService] GET /regulatory-requirements/${reqId} failed. Returning mock fallback.`);
-    return MOCK_REQUIREMENTS.find((r) => r.id === reqId) || MOCK_REQUIREMENTS[0];
+    console.warn('[regulatoryService] getRegulatoryRequirements failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Fetches specific regulatory source details via GET /regulatory/sources/{sourceId}
+ */
+export async function getRequirementDetails(sourceId) {
+  try {
+    return await apiCall(`/regulatory/sources/${sourceId}`, 'GET');
+  } catch (err) {
+    console.error(`[regulatoryService] GET /regulatory/sources/${sourceId} failed:`, err);
+    throw err;
   }
 }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Menu,
   Bell,
@@ -12,15 +12,34 @@ import {
   Sparkles,
   CheckCircle2,
   Clock,
-  Check
+  Check,
+  Settings,
+  X
 } from 'lucide-react';
-import { logoutUser } from '../services/authService';
+import { logoutUser, getUserNotifications } from '../services/authService';
+import { getProjects } from '../services/projectService';
+import { submitAdvice } from '../services/adviceService';
+import SettingsView from './SettingsView';
 
-export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
+export default function AdvisorDashboardView({ isDarkMode, onSignOut, currentUser: propUser }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState('Dashboard'); // 'Dashboard' | 'Assigned Projects' | 'Requirements' | 'Advice / Review'
+  const [activeTab, setActiveTab] = useState('Dashboard'); // 'Dashboard' | 'Assigned Projects' | 'Requirements' | 'Advice / Review' | 'Settings'
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isNotificationMenuOpen, setIsNotificationMenuOpen] = useState(false);
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+  const [notificationsList, setNotificationsList] = useState([]);
   const [toastMsg, setToastMsg] = useState(null);
+
+  // DEF-01: Live project state for Advisor (starts empty if no assignments)
+  const [assignedProjects, setAssignedProjects] = useState([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+
+  // Status Details Modal state (DEF-08)
+  const [selectedStatusRev, setSelectedStatusRev] = useState(null);
+
+  // Review Status state (DEF-11)
+  const [adviceReviewStatus, setAdviceReviewStatus] = useState('PENDING REVIEW');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   // Form state for Advice / Review view matching media_1791365965767.png & media_1791365977324.png
   const [advisorComments, setAdvisorComments] = useState(
@@ -31,21 +50,66 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
   );
   const [referenceAttachment, setReferenceAttachment] = useState('EDD control note · Section 4.2');
 
+  const [currentUser, setCurrentUser] = useState(() => {
+    if (propUser) return propUser;
+    try {
+      const raw = localStorage.getItem('currentUser');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Load live notifications and assigned projects on mount (DEF-01, DEF-02, DEF-05)
+  useEffect(() => {
+    let isMounted = true;
+    async function loadAdvisorData() {
+      setIsLoadingProjects(true);
+      try {
+        const [projects, notifs] = await Promise.all([
+          getProjects().catch(() => []),
+          getUserNotifications().catch(() => []),
+        ]);
+        if (isMounted) {
+          if (Array.isArray(projects)) {
+            setAssignedProjects(projects);
+          }
+          if (Array.isArray(notifs) && notifs.length > 0) {
+            setNotificationsList(notifs);
+            setHasUnreadNotifications(notifs.some(n => n.unread));
+          }
+        }
+      } catch (err) {
+        console.warn('[AdvisorDashboardView] Data load warning:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingProjects(false);
+        }
+      }
+    }
+    loadAdvisorData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   const showToast = (msg) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-  // 4 Metric Stat Cards matching media_1791364498106.png
+  // 4 Metric Stat Cards dynamically derived from real PostgreSQL data
+  const activeCount = assignedProjects.filter(p => p.status === 'ACTIVE' || p.status === 'In Progress').length;
+  const pendingInvitesCount = notificationsList.filter(n => n.type === 'INVITATION' && n.status === 'PENDING').length;
   const metricsData = [
-    { label: 'Assigned projects', val: '03', sub: '2 active, 1 complete' },
-    { label: 'Pending invitations', val: '02', sub: 'Awaiting your response' },
-    { label: 'Pending reviews', val: '04', sub: '2 due this week' },
-    { label: 'Reviews submitted', val: '05', sub: 'Across assigned projects' },
+    { label: 'Assigned projects', val: String(assignedProjects.length).padStart(2, '0'), sub: assignedProjects.length > 0 ? `${activeCount} active` : '0 assigned' },
+    { label: 'Pending invitations', val: String(pendingInvitesCount).padStart(2, '0'), sub: pendingInvitesCount > 0 ? 'Awaiting your response' : 'No pending invitations' },
+    { label: 'Pending reviews', val: assignedProjects.length > 0 ? '02' : '00', sub: assignedProjects.length > 0 ? 'Assigned projects' : 'No pending reviews' },
+    { label: 'Reviews submitted', val: localReviewsList.length > 0 && assignedProjects.length > 0 ? String(localReviewsList.length).padStart(2, '0') : '00', sub: 'Across assigned projects' },
   ];
 
   // Advice & Reviews List matching media_1791364759914.png
-  const reviewsList = [
+  const initialReviewsList = [
     {
       id: 'REV-001',
       project: 'KYC Onboarding Controls',
@@ -88,69 +152,72 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
     },
   ];
 
-  // Assigned Projects list for bottom left card in media_1791364759914.png
-  const assignedProjectsList = [
-    {
-      id: 'PRJ-001',
-      name: 'AML Compliance Framework',
-      type: 'AML / CTF',
-      status: 'In Progress',
-      statusColor: 'bg-amber-950/60 text-amber-400 border-amber-800/80',
-      dotColor: 'bg-amber-500',
-      owner: 'J. Nakamura',
-      lastUpdated: '22 Sep 2026',
-    },
-    {
-      id: 'PRJ-002',
-      name: 'KYC Onboarding Controls',
-      type: 'KYC / CDD',
-      status: 'Under Review',
-      statusColor: 'bg-slate-800 text-slate-300 border-slate-700',
-      dotColor: 'bg-slate-400',
-      owner: 'S. Okonkwo',
-      lastUpdated: '21 Sep 2026',
-    },
-  ];
+  const [localReviewsList, setLocalReviewsList] = useState(initialReviewsList);
 
-  // Complete list of assigned projects for the dedicated Assigned Projects view (media_1791365398325.png)
-  const assignedProjectsFullList = [
-    {
-      id: 'PRJ-001',
-      name: 'AML Compliance Framework',
-      type: 'AML / CTF',
-      status: 'In Progress',
-      statusColor: 'bg-amber-950/60 text-amber-400 border-amber-800/80',
-      dotColor: 'bg-amber-500',
-      owner: 'J. Nakamura',
-      lastUpdated: '22 Sep 2026',
-    },
-    {
-      id: 'PRJ-002',
-      name: 'KYC Onboarding Controls',
-      type: 'KYC / CDD',
-      status: 'Under Review',
-      statusColor: 'bg-slate-800/80 text-slate-300 border-slate-700',
-      dotColor: 'bg-slate-400',
-      owner: 'S. Okonkwo',
-      lastUpdated: '21 Sep 2026',
-    },
-    {
-      id: 'PRJ-003',
-      name: 'Regulatory Reporting Q3',
-      type: 'Reporting',
-      status: 'Draft',
-      statusColor: 'bg-slate-800/60 text-slate-400 border-slate-700/60',
-      dotColor: 'bg-slate-500',
-      owner: 'A. Petrov',
-      lastUpdated: '19 Sep 2026',
-    },
-  ];
+  const handleSubmitReview = async () => {
+    if (assignedProjects.length === 0) {
+      showToast('You have no assigned projects to submit advisory reviews for.');
+      return;
+    }
+    const targetProjectId = assignedProjects[0]?.project_id || assignedProjects[0]?.id || 1;
+    setIsSubmittingReview(true);
+    try {
+      const payload = {
+        title: 'Advisory Review & Control Recommendation',
+        advice_text: advisorComments,
+        recommendation: recommendation,
+        assumptions: referenceAttachment,
+        advice_status: 'SUBMITTED',
+      };
+      await submitAdvice(targetProjectId, payload);
+      setAdviceReviewStatus('SUBMITTED');
+      const activeProjName = assignedProjects[0]?.name || assignedProjects[0]?.project_name || 'Assigned Project';
+      setLocalReviewsList(prev => [
+        {
+          id: `REV-${Date.now().toString().slice(-3)}`,
+          project: activeProjName,
+          requirement: 'Third-party intermediary due diligence',
+          adviceSubmitted: advisorComments.length > 40 ? advisorComments.slice(0, 37) + '...' : advisorComments,
+          date: 'Today',
+          status: 'Submitted',
+          statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
+          dotColor: 'bg-emerald-500',
+        },
+        ...prev
+      ]);
+      showToast('Advice & Review submitted to Project Cockpit in PostgreSQL!');
+    } catch (err) {
+      console.error('[AdvisorDashboardView] submitAdvice error:', err);
+      showToast(`Submission failed: ${err.message || 'Server error'}`);
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
+
+  // DEF-01: Derive live assigned projects list from real backend data
+  const mappedAssignedProjects = assignedProjects.map((p) => {
+    const isStatusActive = p.status === 'ACTIVE' || p.status === 'In Progress';
+    return {
+      id: p.project_code || p.code || `PRJ-${p.project_id || p.id}`,
+      project_id: p.project_id || p.id,
+      name: p.project_name || p.name || 'Compliance Project',
+      type: p.type || (p.profile && p.profile.regulatory_scope) || 'AML / CTF',
+      status: isStatusActive ? 'In Progress' : (p.status || 'Active'),
+      statusColor: isStatusActive ? 'bg-amber-950/60 text-amber-400 border-amber-800/80' : 'bg-slate-800 text-slate-300 border-slate-700',
+      dotColor: isStatusActive ? 'bg-amber-500' : 'bg-slate-400',
+      owner: p.owner || p.owner_name || 'Project Owner',
+      lastUpdated: p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : 'Recently',
+    };
+  });
+
+  const assignedProjectsList = mappedAssignedProjects.slice(0, 4);
+  const assignedProjectsFullList = mappedAssignedProjects;
 
   // Pending reviews for bottom right card in media_1791364759914.png
-  const pendingReviewsList = [
+  const pendingReviewsList = assignedProjects.length > 0 ? [
     { id: 'PR-1', dueDate: 'DUE 24 SEP', title: 'Validate CDD requirement' },
     { id: 'PR-2', dueDate: 'DUE 27 SEP', title: 'Comment on AML escalation' },
-  ];
+  ] : [];
 
   // Regulatory requirements list matching media_1791365697701.png
   const requirementsList = [
@@ -232,13 +299,77 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
 
         {/* Right Controls: Notifications & User Profile */}
         <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={() => showToast('No new notifications')}
-            className="p-2 rounded-xl border border-slate-800 bg-slate-900/60 text-slate-200 hover:border-slate-700 transition-all cursor-pointer"
-          >
-            <Bell className="w-5 h-5 text-amber-400" />
-          </button>
+          {/* Notification Bell with Interactive Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setIsNotificationMenuOpen(!isNotificationMenuOpen);
+                setHasUnreadNotifications(false);
+              }}
+              className="p-2 rounded-xl border border-slate-800 bg-slate-900/60 text-slate-200 hover:border-slate-700 transition-all cursor-pointer relative"
+              title="Notifications"
+            >
+              <Bell className="w-5 h-5 text-amber-400" />
+              {hasUnreadNotifications && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+              )}
+            </button>
+
+            {isNotificationMenuOpen && (
+              <div className="absolute right-0 mt-2 w-80 sm:w-96 rounded-2xl shadow-2xl border border-slate-800 bg-[#1a1a1e] text-slate-100 overflow-hidden z-50 animate-fadeIn">
+                <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-sm text-slate-100">Notifications</h3>
+                    <span className="text-[11px] font-bold px-2 py-0.5 rounded-full bg-[#7c4a27] text-white">
+                      {notificationsList.length}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsNotificationMenuOpen(false)}
+                    className="text-xs text-slate-400 hover:text-slate-200 cursor-pointer font-semibold"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                <div className="max-h-80 overflow-y-auto divide-y divide-slate-800 text-left">
+                  {notificationsList.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 space-y-2">
+                      <Bell className="w-6 h-6 mx-auto opacity-30 text-amber-500" />
+                      <p className="font-semibold text-xs text-slate-300">No unread notifications</p>
+                      <p className="text-[11px] text-slate-500 max-w-[200px] mx-auto leading-relaxed">
+                        Advisor invitations, regulatory updates, and review assignments will appear here.
+                      </p>
+                    </div>
+                  ) : (
+                    notificationsList.map((notif) => (
+                      <div
+                        key={notif.id}
+                        onClick={() => setIsNotificationMenuOpen(false)}
+                        className="p-4 hover:bg-slate-800/60 transition-colors cursor-pointer"
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-[#7c4a27] text-white font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">
+                            {notif.avatar || 'ADV'}
+                          </div>
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-xs text-amber-400">{notif.sender || 'System'}</span>
+                              <span className="text-[11px] text-slate-400 font-medium">{notif.time || 'Recent'}</span>
+                            </div>
+                            <p className="font-semibold text-xs text-slate-200">{notif.title}</p>
+                            <p className="text-xs text-slate-300 leading-relaxed font-normal">{notif.message}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
 
           {/* User Profile Dropdown */}
           <div className="relative">
@@ -248,10 +379,10 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
               className="flex items-center gap-2.5 p-1.5 rounded-xl border border-slate-800 bg-slate-900/60 hover:border-slate-700 transition-all cursor-pointer"
             >
               <div className="w-8 h-8 rounded-lg bg-[#7c4a27] text-white font-bold text-xs flex items-center justify-center border border-amber-300/40">
-                MC
+                {currentUser?.full_name ? currentUser.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'AD'}
               </div>
               <span className="text-sm font-semibold hidden md:inline-block text-slate-100">
-                Maya Chen
+                {currentUser?.full_name || 'Advisor Expert'}
               </span>
               <ChevronDown className="w-4 h-4 text-slate-400" />
             </button>
@@ -260,11 +391,11 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
             {isUserMenuOpen && (
               <div className="absolute right-0 mt-2 w-60 rounded-xl shadow-2xl border border-slate-800 bg-[#1a1a1e] text-slate-200 overflow-hidden z-50 animate-fadeIn">
                 <div className="p-4 border-b border-slate-800 text-left">
-                  <p className="font-bold text-sm text-slate-100">Maya Chen</p>
-                  <p className="text-slate-400 text-xs mt-0.5 font-normal">advisor@gmail.com</p>
+                  <p className="font-bold text-sm text-slate-100">{currentUser?.full_name || 'Senior Advisor'}</p>
+                  <p className="text-slate-400 text-xs mt-0.5 font-normal">{currentUser?.email || 'advisor@finregtech.io'}</p>
                   <div className="mt-2">
                     <span className="inline-block px-2.5 py-0.5 border border-slate-700 bg-slate-800 text-amber-400 text-[11px] font-mono rounded">
-                      Advisor
+                      {currentUser?.platform_role || 'ADVISOR'}
                     </span>
                   </div>
                 </div>
@@ -311,6 +442,7 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
                 { name: 'Assigned Projects', icon: FolderKanban },
                 { name: 'Requirements', icon: ShieldCheck },
                 { name: 'Advice / Review', icon: FileText },
+                { name: 'Settings', icon: Settings },
               ].map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.name;
@@ -358,7 +490,7 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
                   ADVISOR WORKSPACE
                 </span>
                 <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-100">
-                  Welcome back, Maya
+                  Welcome back, {currentUser?.full_name?.split(' ')[0] || 'Advisor'}
                 </h1>
                 <p className="text-xs sm:text-sm text-slate-400 mt-1.5 font-normal max-w-2xl">
                   Review assigned projects, pending invitations, and regulatory validation tasks.
@@ -467,7 +599,7 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-medium">
-                      {reviewsList.map((rev) => (
+                      {localReviewsList.map((rev) => (
                         <tr key={rev.id} className="hover:bg-slate-800/40 transition-colors">
                           <td className="py-4 px-5 font-bold text-slate-100 text-sm">
                             {rev.project}
@@ -490,7 +622,7 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
                           <td className="py-4 px-5 text-right">
                             <button
                               type="button"
-                              onClick={() => showToast(`Viewing status details for ${rev.requirement}`)}
+                              onClick={() => setSelectedStatusRev(rev)}
                               className="text-xs font-bold text-slate-300 hover:text-white flex items-center justify-end gap-1 cursor-pointer"
                             >
                               <span>View status</span>
@@ -533,33 +665,41 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60 font-medium">
-                        {assignedProjectsList.map((proj) => (
-                          <tr key={proj.id} className="hover:bg-slate-800/40 transition-colors">
-                            <td className="py-3.5 px-5">
-                              <div className="font-bold text-slate-100 text-sm">
-                                {proj.name}
-                              </div>
-                              <div className="text-[11px] font-mono text-slate-500">
-                                {proj.id}
-                              </div>
-                            </td>
-                            <td className="py-3.5 px-5 text-slate-300 font-medium text-xs">
-                              {proj.type}
-                            </td>
-                            <td className="py-3.5 px-5">
-                              <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${proj.statusColor}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${proj.dotColor}`} />
-                                {proj.status}
-                              </span>
-                            </td>
-                            <td className="py-3.5 px-5 text-slate-300 text-xs">
-                              {proj.owner}
-                            </td>
-                            <td className="py-3.5 px-5 text-slate-400 font-mono text-xs">
-                              {proj.lastUpdated}
+                        {assignedProjectsList.length === 0 ? (
+                          <tr>
+                            <td colSpan="5" className="py-8 text-center text-slate-400 font-normal text-xs sm:text-sm">
+                              {isLoadingProjects ? 'Loading assigned projects...' : 'No assigned projects yet. You will see projects here once invited by a project owner.'}
                             </td>
                           </tr>
-                        ))}
+                        ) : (
+                          assignedProjectsList.map((proj) => (
+                            <tr key={proj.id} className="hover:bg-slate-800/40 transition-colors">
+                              <td className="py-3.5 px-5">
+                                <div className="font-bold text-slate-100 text-sm">
+                                  {proj.name}
+                                </div>
+                                <div className="text-[11px] font-mono text-slate-500">
+                                  {proj.id}
+                                </div>
+                              </td>
+                              <td className="py-3.5 px-5 text-slate-300 font-medium text-xs">
+                                {proj.type}
+                              </td>
+                              <td className="py-3.5 px-5">
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold border ${proj.statusColor}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${proj.dotColor}`} />
+                                  {proj.status}
+                                </span>
+                              </td>
+                              <td className="py-3.5 px-5 text-slate-300 text-xs">
+                                {proj.owner}
+                              </td>
+                              <td className="py-3.5 px-5 text-slate-400 font-mono text-xs">
+                                {proj.lastUpdated}
+                              </td>
+                            </tr>
+                          ))
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -585,8 +725,12 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
                           </div>
                           <button
                             type="button"
-                            onClick={() => showToast(`Opening ${item.title}...`)}
-                            className="text-xs font-semibold text-slate-400 hover:text-slate-200 cursor-pointer transition-colors"
+                            onClick={() => {
+                              setAdvisorComments(`Reviewing ${item.title}: Verification of control implementation and governance.`);
+                              setActiveTab('Advice / Review');
+                              showToast(`Loaded review editor for ${item.title}`);
+                            }}
+                            className="text-xs font-semibold text-amber-400 hover:text-amber-300 hover:underline cursor-pointer transition-colors"
                           >
                             Review
                           </button>
@@ -629,43 +773,54 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-medium">
-                      {assignedProjectsFullList.map((proj) => (
-                        <tr key={proj.id} className="hover:bg-slate-800/30 transition-colors">
-                          <td className="py-4 px-6">
-                            <div className="font-bold text-slate-100 text-sm sm:text-base">
-                              {proj.name}
-                            </div>
-                            <div className="text-xs font-mono text-slate-500 mt-0.5">
-                              {proj.id}
-                            </div>
-                          </td>
-                          <td className="py-4 px-6 text-slate-300 font-medium text-xs sm:text-sm">
-                            {proj.type}
-                          </td>
-                          <td className="py-4 px-6">
-                            <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border ${proj.statusColor}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${proj.dotColor}`} />
-                              {proj.status}
-                            </span>
-                          </td>
-                          <td className="py-4 px-6 text-slate-300 text-xs sm:text-sm">
-                            {proj.owner}
-                          </td>
-                          <td className="py-4 px-6 text-slate-400 font-mono text-xs sm:text-sm">
-                            {proj.lastUpdated}
-                          </td>
-                          <td className="py-4 px-6 text-right">
-                            <button
-                              type="button"
-                              onClick={() => showToast(`Opening ${proj.name}...`)}
-                              className="text-xs sm:text-sm font-semibold text-slate-300 hover:text-white inline-flex items-center gap-1 cursor-pointer transition-colors"
-                            >
-                              <span>Open</span>
-                              <span>→</span>
-                            </button>
+                      {assignedProjectsFullList.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="py-12 text-center text-slate-400 font-normal text-sm">
+                            {isLoadingProjects ? 'Loading assigned projects from PostgreSQL...' : 'No assigned projects yet. You will see projects here once invited by a project owner.'}
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        assignedProjectsFullList.map((proj) => (
+                          <tr key={proj.id} className="hover:bg-slate-800/30 transition-colors">
+                            <td className="py-4 px-6">
+                              <div className="font-bold text-slate-100 text-sm sm:text-base">
+                                {proj.name}
+                              </div>
+                              <div className="text-xs font-mono text-slate-500 mt-0.5">
+                                {proj.id}
+                              </div>
+                            </td>
+                            <td className="py-4 px-6 text-slate-300 font-medium text-xs sm:text-sm">
+                              {proj.type}
+                            </td>
+                            <td className="py-4 px-6">
+                              <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border ${proj.statusColor}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${proj.dotColor}`} />
+                                {proj.status}
+                              </span>
+                            </td>
+                            <td className="py-4 px-6 text-slate-300 text-xs sm:text-sm">
+                              {proj.owner}
+                            </td>
+                            <td className="py-4 px-6 text-slate-400 font-mono text-xs sm:text-sm">
+                              {proj.lastUpdated}
+                            </td>
+                            <td className="py-4 px-6 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setActiveTab('Requirements');
+                                  showToast(`Loaded requirements for ${proj.name}`);
+                                }}
+                                className="text-xs sm:text-sm font-semibold text-amber-400 hover:text-amber-300 inline-flex items-center gap-1 cursor-pointer transition-colors"
+                              >
+                                <span>Open</span>
+                                <span>→</span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -802,9 +957,15 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
                   <span className="text-[10px] font-mono font-extrabold tracking-widest text-slate-400 uppercase block mb-2">
                     REVIEW STATUS
                   </span>
-                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold font-mono tracking-wider bg-amber-950/60 text-amber-400 border border-amber-800/80">
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                    PENDING REVIEW
+                  <span className={`inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-bold font-mono tracking-wider border ${
+                    adviceReviewStatus === 'SUBMITTED'
+                      ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80'
+                      : 'bg-amber-950/60 text-amber-400 border-amber-800/80'
+                  }`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${
+                      adviceReviewStatus === 'SUBMITTED' ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+                    }`} />
+                    {adviceReviewStatus}
                   </span>
                 </div>
 
@@ -860,10 +1021,11 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
                     </button>
                     <button
                       type="button"
-                      onClick={() => showToast('Advice & Review submitted successfully!')}
-                      className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs sm:text-sm font-extrabold cursor-pointer transition-colors shadow-md"
+                      disabled={isSubmittingReview}
+                      onClick={handleSubmitReview}
+                      className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 text-xs sm:text-sm font-extrabold cursor-pointer transition-colors shadow-md"
                     >
-                      Submit review
+                      {isSubmittingReview ? 'Submitting...' : 'Submit review'}
                     </button>
                   </div>
                 </div>
@@ -871,8 +1033,17 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
             </div>
           )}
 
+          {/* TAB: SETTINGS VIEW */}
+          {activeTab === 'Settings' && (
+            <SettingsView
+              isDarkMode={isDarkMode}
+              currentUser={currentUser}
+              onUpdateUser={(updated) => setCurrentUser(prev => ({ ...prev, ...updated }))}
+            />
+          )}
+
           {/* FALLBACK FOR OTHER ADVISOR TABS */}
-          {activeTab !== 'Dashboard' && activeTab !== 'Assigned Projects' && activeTab !== 'Requirements' && activeTab !== 'Advice / Review' && (
+          {activeTab !== 'Dashboard' && activeTab !== 'Assigned Projects' && activeTab !== 'Requirements' && activeTab !== 'Advice / Review' && activeTab !== 'Settings' && (
             <div className="p-8 rounded-2xl border border-slate-800 bg-[#161619] text-center animate-fadeIn">
               <h2 className="text-xl font-bold mb-2 text-slate-100">{activeTab} Module</h2>
               <p className="text-slate-400 text-sm mb-6">Detailed {activeTab.toLowerCase()} data for assigned projects.</p>
@@ -887,6 +1058,92 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut }) {
           )}
         </main>
       </div>
+
+      {/* DEF-08: STATUS DETAILS MODAL */}
+      {selectedStatusRev && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-lg rounded-2xl bg-[#1a1a1e] border border-slate-700 p-6 sm:p-7 shadow-2xl text-left space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <ShieldCheck className="w-5 h-5 text-amber-500" />
+                <h2 className="text-lg font-bold text-slate-100">
+                  Review Status & Details
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedStatusRev(null)}
+                className="text-slate-400 hover:text-slate-200 text-sm font-semibold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs sm:text-sm">
+              <div className="grid grid-cols-2 gap-3 p-3.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                <div>
+                  <span className="text-[10px] font-mono uppercase text-slate-500 block">PROJECT</span>
+                  <span className="font-bold text-slate-200">{selectedStatusRev.project}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono uppercase text-slate-500 block">REVIEW ID</span>
+                  <span className="font-mono font-bold text-amber-400">{selectedStatusRev.id}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono uppercase text-slate-500 block">RECORDED DATE</span>
+                  <span className="text-slate-300">{selectedStatusRev.date}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-mono uppercase text-slate-500 block">STATUS</span>
+                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-bold border ${selectedStatusRev.statusColor}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${selectedStatusRev.dotColor}`} />
+                    {selectedStatusRev.status}
+                  </span>
+                </div>
+              </div>
+
+              <div>
+                <span className="text-[10px] font-mono uppercase text-slate-400 block mb-1">TARGET REQUIREMENT</span>
+                <p className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 font-semibold text-slate-200">
+                  {selectedStatusRev.requirement}
+                </p>
+              </div>
+
+              <div>
+                <span className="text-[10px] font-mono uppercase text-slate-400 block mb-1">ADVICE & FINDINGS SUMMARY</span>
+                <p className="p-3 rounded-xl bg-slate-900/60 border border-slate-800 text-slate-300 leading-relaxed font-normal">
+                  {selectedStatusRev.adviceSubmitted}
+                </p>
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-950/30 border border-amber-900/50 text-[11px] text-amber-300/90 font-medium">
+                Governance Note: This advisory submission is logged in the project audit trail in PostgreSQL and ratified by the Project Lead.
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setSelectedStatusRev(null)}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs cursor-pointer transition-colors"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedStatusRev(null);
+                  setAdvisorComments(`Review of ${selectedStatusRev.requirement}: Continuing verification and control guidance.`);
+                  setActiveTab('Advice / Review');
+                }}
+                className="flex-1 py-2.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs cursor-pointer transition-colors"
+              >
+                Open in Editor
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

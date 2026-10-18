@@ -8,11 +8,12 @@ import TwoFactorAuth from './TwoFactorAuth';
 import VerificationSuccessful from './VerificationSuccessful';
 import DashboardView from './DashboardView';
 import AdvisorDashboardView from './AdvisorDashboardView';
+import AdminDashboardView from './AdminDashboardView';
 
-import { loginUser } from '../services/authService';
+import { loginUser, registerUser, requestPasswordReset, logoutUser } from '../services/authService';
 
 export default function LoginForm({ isDarkMode = true }) {
-  // Steps: 'flash' | 'landing' | 'login' | 'verifying' | 'dashboard'
+  // Steps: 'flash' | 'landing' | 'login' | 'signup' | 'verifying' | 'dashboard'
   const [step, setStep] = useState('flash');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,9 +21,51 @@ export default function LoginForm({ isDarkMode = true }) {
   const [rememberMe, setRememberMe] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState('');
-  const [userRole, setUserRole] = useState('BUILDER'); // 'BUILDER' | 'ADVISOR'
+  const [userRole, setUserRole] = useState('BUILDER'); // 'BUILDER' | 'ADVISOR' | 'ADMIN'
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      const raw = localStorage.getItem('currentUser');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
 
-  // Handle Login submission via POST /auth/login with strict credential validation
+  // Forgot password modal state
+  const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [forgotResult, setForgotResult] = useState(null);
+  const [isSendingReset, setIsSendingReset] = useState(false);
+
+  // Signup form states
+  const [signupFullName, setSignupFullName] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
+  const [signupOrganization, setSignupOrganization] = useState('');
+  const [signupRole, setSignupRole] = useState('Builder'); // 'Builder' | 'Advisor'
+  const [signupError, setSignupError] = useState('');
+  const [isRegistering, setIsRegistering] = useState(false);
+
+  // DEF-04: Explicit form state reset function to ensure fresh sign-ups never retain earlier details
+  const resetSignupForm = () => {
+    setSignupFullName('');
+    setSignupEmail('');
+    setSignupPassword('');
+    setSignupConfirmPassword('');
+    setSignupOrganization('');
+    setSignupRole('Builder');
+    setSignupError('');
+  };
+
+  const openSignup = (defaultRole = 'Builder') => {
+    resetSignupForm();
+    setSignupRole(defaultRole);
+    setLoginError('');
+    setStep('signup');
+  };
+
+  // Handle Login submission via POST /auth/login with real credentials
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setLoginError('');
@@ -32,27 +75,98 @@ export default function LoginForm({ isDarkMode = true }) {
 
     if (!cleanEmail || !cleanPassword) return;
 
-    if (
-      (cleanEmail === 'builder@gmail.com' && cleanPassword === 'builder') ||
-      (cleanEmail === 'advisor@gmail.com' && cleanPassword === 'advisor')
-    ) {
-      if (cleanEmail === 'advisor@gmail.com') {
+    setIsSubmitting(true);
+    try {
+      const data = await loginUser(cleanEmail, cleanPassword);
+      setCurrentUser(data);
+      const role = (data?.platform_role || '').toUpperCase();
+      if (role === 'ADVISOR') {
         setUserRole('ADVISOR');
+      } else if (role === 'ADMIN') {
+        setUserRole('ADMIN');
       } else {
         setUserRole('BUILDER');
       }
+      setLoginError('');
+      resetSignupForm();
+      setStep('verifying');
+    } catch (err) {
+      setLoginError(err.message || 'Invalid email or password');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-      setIsSubmitting(true);
-      try {
-        await loginUser(cleanEmail, cleanPassword);
-      } catch (err) {
-        console.warn('Login call processed:', err.message);
-      } finally {
-        setIsSubmitting(false);
-        setStep('verifying');
-      }
-    } else {
-      setLoginError('Invalid credentials. Use builder@gmail.com (pwd: builder) or advisor@gmail.com (pwd: advisor).');
+  const handleSignOut = () => {
+    logoutUser();
+    setCurrentUser(null);
+    resetSignupForm();
+    setLoginError('');
+    setStep('login');
+  };
+
+  const handleForgotSubmit = async (e) => {
+    e.preventDefault();
+    if (!forgotEmail.trim()) return;
+    setIsSendingReset(true);
+    try {
+      const res = await requestPasswordReset(forgotEmail);
+      setForgotResult({
+        success: true,
+        message: res.message || 'Password reset requested.',
+        channel: res.delivery_channel || 'Configured channel'
+      });
+    } catch (err) {
+      setForgotResult({
+        success: false,
+        message: err.message || 'Failed to request password reset.'
+      });
+    } finally {
+      setIsSendingReset(false);
+    }
+  };
+
+  // Handle Registration submission via POST /auth/register
+  const handleSignupSubmit = async (e) => {
+    e.preventDefault();
+    setSignupError('');
+
+    if (!signupFullName.trim() || !signupEmail.trim() || !signupPassword.trim()) {
+      setSignupError('Please fill in all required fields.');
+      return;
+    }
+
+    if (signupPassword !== signupConfirmPassword) {
+      setSignupError('Passwords do not match.');
+      return;
+    }
+
+    if (signupPassword.length < 6) {
+      setSignupError('Password must be at least 6 characters.');
+      return;
+    }
+
+    const normalizedRole = signupRole.toUpperCase() === 'ADVISOR' ? 'ADVISOR' : 'BUILDER';
+
+    setIsRegistering(true);
+    try {
+      const data = await registerUser({
+        email: signupEmail,
+        password: signupPassword,
+        full_name: signupFullName,
+        role: normalizedRole,
+        organization: signupOrganization,
+      });
+
+      setCurrentUser(data);
+      setUserRole(normalizedRole);
+      resetSignupForm();
+      setLoginError('');
+      setStep('verifying');
+    } catch (err) {
+      setSignupError(err.message || 'Registration failed. Please try again.');
+    } finally {
+      setIsRegistering(false);
     }
   };
 
@@ -91,11 +205,22 @@ export default function LoginForm({ isDarkMode = true }) {
 
   // STEP 5: FULL DASHBOARD VIEW (Renders Builder Workspace or Advisor Workspace dynamically)
   if (step === 'dashboard') {
+    if (userRole === 'ADMIN') {
+      return (
+        <AdminDashboardView
+          isDarkMode={isDarkMode}
+          currentUser={currentUser}
+          onSignOut={handleSignOut}
+        />
+      );
+    }
+
     if (userRole === 'ADVISOR') {
       return (
         <AdvisorDashboardView
           isDarkMode={isDarkMode}
-          onSignOut={() => setStep('login')}
+          currentUser={currentUser}
+          onSignOut={handleSignOut}
         />
       );
     }
@@ -103,7 +228,8 @@ export default function LoginForm({ isDarkMode = true }) {
     return (
       <DashboardView
         isDarkMode={isDarkMode}
-        onSignOut={() => setStep('login')}
+        currentUser={currentUser}
+        onSignOut={handleSignOut}
       />
     );
   }
@@ -240,13 +366,17 @@ export default function LoginForm({ isDarkMode = true }) {
                     <span className="font-normal">Remember me on this device</span>
                   </label>
 
-                  <a
-                    href="#forgot-password"
-                    onClick={(e) => e.preventDefault()}
-                    className="text-[#7c4a27] dark:text-amber-400 hover:underline font-semibold text-xs sm:text-sm transition-colors"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsForgotModalOpen(true);
+                      setForgotEmail(email);
+                      setForgotResult(null);
+                    }}
+                    className="text-[#7c4a27] dark:text-amber-400 hover:underline font-semibold text-xs sm:text-sm transition-colors cursor-pointer"
                   >
                     Forgot password?
-                  </a>
+                  </button>
                 </div>
 
                 {/* Login Button (Rich Brown) */}
@@ -285,7 +415,7 @@ export default function LoginForm({ isDarkMode = true }) {
                     href="#signup"
                     onClick={(e) => {
                       e.preventDefault();
-                      setStep('signup');
+                      openSignup('Builder');
                     }}
                     className="text-[#7c4a27] dark:text-amber-400 hover:underline font-semibold ml-1 transition-colors cursor-pointer"
                   >
@@ -299,7 +429,7 @@ export default function LoginForm({ isDarkMode = true }) {
                     href="#advisor"
                     onClick={(e) => {
                       e.preventDefault();
-                      setStep('signup');
+                      openSignup('Advisor');
                     }}
                     className="text-[#7c4a27] dark:text-amber-400 hover:underline font-semibold ml-1 transition-colors cursor-pointer"
                   >
@@ -322,13 +452,13 @@ export default function LoginForm({ isDarkMode = true }) {
                 </p>
               </div>
 
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  setStep('verifying');
-                }}
-                className="space-y-4"
-              >
+              {signupError && (
+                <div className="p-3 rounded-xl bg-rose-950/70 border border-rose-800 text-rose-300 text-xs font-semibold text-left animate-fadeIn">
+                  {signupError}
+                </div>
+              )}
+
+              <form onSubmit={handleSignupSubmit} className="space-y-4" autoComplete="off">
                 {/* Full name */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-slate-300">
@@ -337,6 +467,11 @@ export default function LoginForm({ isDarkMode = true }) {
                   <input
                     type="text"
                     required
+                    value={signupFullName}
+                    onChange={(e) => {
+                      setSignupFullName(e.target.value);
+                      if (signupError) setSignupError('');
+                    }}
                     placeholder="Your full name"
                     className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#96562c] focus:ring-2 focus:ring-[#96562c]/20 transition-all"
                   />
@@ -350,6 +485,11 @@ export default function LoginForm({ isDarkMode = true }) {
                   <input
                     type="email"
                     required
+                    value={signupEmail}
+                    onChange={(e) => {
+                      setSignupEmail(e.target.value);
+                      if (signupError) setSignupError('');
+                    }}
                     placeholder="name@organization.com"
                     className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#96562c] focus:ring-2 focus:ring-[#96562c]/20 transition-all"
                   />
@@ -364,6 +504,11 @@ export default function LoginForm({ isDarkMode = true }) {
                     <input
                       type="password"
                       required
+                      value={signupPassword}
+                      onChange={(e) => {
+                        setSignupPassword(e.target.value);
+                        if (signupError) setSignupError('');
+                      }}
                       placeholder="Create a password"
                       className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#96562c] focus:ring-2 focus:ring-[#96562c]/20 transition-all"
                     />
@@ -375,6 +520,11 @@ export default function LoginForm({ isDarkMode = true }) {
                     <input
                       type="password"
                       required
+                      value={signupConfirmPassword}
+                      onChange={(e) => {
+                        setSignupConfirmPassword(e.target.value);
+                        if (signupError) setSignupError('');
+                      }}
                       placeholder="Repeat password"
                       className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#96562c] focus:ring-2 focus:ring-[#96562c]/20 transition-all"
                     />
@@ -388,8 +538,9 @@ export default function LoginForm({ isDarkMode = true }) {
                   </label>
                   <input
                     type="text"
-                    required
-                    placeholder="Organization name"
+                    value={signupOrganization}
+                    onChange={(e) => setSignupOrganization(e.target.value)}
+                    placeholder="Organization or Firm name"
                     className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#96562c] focus:ring-2 focus:ring-[#96562c]/20 transition-all"
                   />
                 </div>
@@ -400,32 +551,44 @@ export default function LoginForm({ isDarkMode = true }) {
                     Role
                   </label>
                   <select
-                    defaultValue="Builder"
+                    value={signupRole}
+                    onChange={(e) => setSignupRole(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 focus:outline-none focus:border-[#96562c] cursor-pointer transition-all"
                   >
-                    <option value="Builder">Builder</option>
-                    <option value="Advisor">Advisor</option>
-                    <option value="Administrator">Administrator</option>
+                    <option value="Builder">Builder (Project Founder / Operator)</option>
+                    <option value="Advisor">Advisor (Legal / Regulatory Expert)</option>
+                    <option value="Administrator" disabled>Administrator (Platform Invite Only)</option>
                   </select>
                 </div>
 
                 {/* Information hint box */}
                 <div className="p-3.5 rounded-xl border border-slate-800 bg-[#121214] text-xs text-slate-400 font-medium">
-                  Complete all required fields to create your account.
+                  {signupRole === 'Advisor'
+                    ? 'Advisors receive specialized FCC review workspaces, invitation management, and interpretative governance tools.'
+                    : 'Builders can create and operate compliance projects, map regulatory requirements, and invite advisors.'}
                 </div>
 
                 {/* Create account primary button */}
                 <button
                   type="submit"
-                  className="w-full py-3.5 px-4 rounded-xl bg-[#f59e0b] hover:bg-[#d97706] text-slate-950 font-extrabold text-sm shadow-md transition-all cursor-pointer border border-amber-300/60 active:scale-[0.99]"
+                  disabled={isRegistering}
+                  className={`w-full py-3.5 px-4 rounded-xl font-extrabold text-sm shadow-md transition-all cursor-pointer border border-amber-300/60 active:scale-[0.99] ${
+                    isRegistering
+                      ? 'bg-amber-600 text-slate-900 cursor-wait'
+                      : 'bg-[#f59e0b] hover:bg-[#d97706] text-slate-950'
+                  }`}
                 >
-                  Create account
+                  {isRegistering ? 'Creating account...' : 'Create account'}
                 </button>
 
                 {/* Back to Login button */}
                 <button
                   type="button"
-                  onClick={() => setStep('login')}
+                  onClick={() => {
+                    resetSignupForm();
+                    setLoginError('');
+                    setStep('login');
+                  }}
                   className="w-full py-3 px-4 rounded-xl border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 font-bold text-xs sm:text-sm cursor-pointer transition-colors mt-2"
                 >
                   Back to Login
@@ -435,9 +598,112 @@ export default function LoginForm({ isDarkMode = true }) {
           )}
 
           {/* STEP 2: CREDENTIALS VERIFIED LOADING SCREEN - LASTS 4 SECONDS THEN GOES DIRECTLY TO DASHBOARD */}
-          {step === 'verifying' && <CredentialsVerified isDarkMode={isDarkMode} />}
+          {step === 'verifying' && <CredentialsVerified isDarkMode={isDarkMode} role={userRole} />}
         </div>
       </main>
+
+      {/* DEF-02: FORGOT PASSWORD MODAL WITH TRUTHFUL BACKEND STATUS */}
+      {isForgotModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-md rounded-2xl bg-[#1a1a1e] border border-slate-700 p-6 sm:p-7 shadow-2xl text-left space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
+                <Lock className="w-5 h-5 text-amber-500" />
+                Password Recovery
+              </h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsForgotModalOpen(false);
+                  setForgotResult(null);
+                }}
+                className="text-slate-400 hover:text-slate-200 text-sm font-semibold p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400 leading-relaxed">
+              Enter your registered ShipYard email address. A recovery audit request will be verified against platform security policies.
+            </p>
+
+            {forgotResult && (
+              <div
+                className={`p-3.5 rounded-xl text-xs font-medium space-y-1 ${
+                  forgotResult.success
+                    ? 'bg-amber-950/60 border border-amber-800 text-amber-200'
+                    : 'bg-rose-950/60 border border-rose-800 text-rose-300'
+                }`}
+              >
+                <div className="font-semibold">{forgotResult.message}</div>
+                {forgotResult.channel && (
+                  <div className="text-[11px] opacity-80 pt-1 border-t border-amber-800/50">
+                    Channel Status: <span className="font-mono">{forgotResult.channel}</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!forgotResult?.success && (
+              <form onSubmit={handleForgotSubmit} className="space-y-4 pt-1">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Registered Email Address
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                      <Mail className="w-4 h-4" />
+                    </div>
+                    <input
+                      type="email"
+                      required
+                      value={forgotEmail}
+                      onChange={(e) => setForgotEmail(e.target.value)}
+                      placeholder="you@organization.com"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsForgotModalOpen(false);
+                      setForgotResult(null);
+                    }}
+                    className="flex-1 py-2.5 px-4 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs cursor-pointer transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSendingReset || !forgotEmail.trim()}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-slate-950 font-bold text-xs cursor-pointer transition-colors"
+                  >
+                    {isSendingReset ? 'Verifying...' : 'Request Recovery'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {forgotResult?.success && (
+              <div className="pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsForgotModalOpen(false);
+                    setForgotResult(null);
+                  }}
+                  className="w-full py-2.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs cursor-pointer transition-colors"
+                >
+                  Return to Sign In
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

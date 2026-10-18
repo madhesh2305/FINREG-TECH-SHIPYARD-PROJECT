@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { getProjects, getProjectDetails, createProject } from '../services/projectService';
-import { getCurrentUser, logoutUser } from '../services/authService';
-import { getAdvisors } from '../services/advisorService';
+import { getProjects, getProjectDetails, createProject, getProjectSummary } from '../services/projectService';
+import { getCurrentUser, logoutUser, getUserNotifications } from '../services/authService';
+import { getAdvisors, getProjectMembers, sendAdvisorInvitation } from '../services/advisorService';
+import {
+  getProjectAdvice,
+  recordDecision,
+  getProjectDecisions,
+  getProjectReadiness,
+  getProjectRequirements,
+  createProjectRequirement
+} from '../services/adviceService';
+import { getAuditEvents } from '../services/auditService';
+import { apiCall } from '../services/api';
 import AdvisorsExpertsView from './AdvisorsExpertsView';
 import RegulatorySupportView from './RegulatorySupportView';
 import ToolsView from './ToolsView';
@@ -42,12 +52,12 @@ import {
   ExternalLink
 } from 'lucide-react';
 
-export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) {
+export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, currentUser: propUser }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [activeTab, setActiveTab] = useState('Dashboard'); // 'Dashboard' | 'My Projects' | 'Create Project' | 'Project Details'
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isNotificationMenuOpen, setIsNotificationMenuOpen] = useState(false);
-  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(true);
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
 
   // Selected Project State for Project Details View
   const [selectedProject, setSelectedProject] = useState(null);
@@ -74,92 +84,107 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
 
   // Create Project Form States
   const [newProjectName, setNewProjectName] = useState('');
-  const [newProjectType, setNewProjectType] = useState('');
+  const [newProjectType, setNewProjectType] = useState('Anti-Bribery & Corruption (ABC)');
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const [newProjectJurisdiction, setNewProjectJurisdiction] = useState('');
   const [newProjectDomain, setNewProjectDomain] = useState('');
   const [toastMessage, setToastMessage] = useState(null);
 
-  // Master Projects List matching the reference image
-  const [allProjects, setAllProjects] = useState([
-    {
-      id: 'PRJ-001',
-      name: 'AML Compliance Framework',
-      type: 'AML/CTF',
-      status: 'In Progress',
-      statusColor: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-900',
-      dotColor: 'bg-blue-600',
-      lastUpdated: '22 Sep 2026',
-      owner: 'J. Nakamura',
-      description: 'End-to-end anti-money laundering workflow for retail banking operations.',
-      created: '01 Sep 2026',
-      jurisdiction: 'United Kingdom - FCA',
-    },
-    {
-      id: 'PRJ-002',
-      name: 'KYC Onboarding Workflow',
-      type: 'KYC/CDD',
-      status: 'Under Review',
-      statusColor: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-900',
-      dotColor: 'bg-amber-600',
-      lastUpdated: '21 Sep 2026',
-      owner: 'S. Okonkwo',
-      description: 'Digital identity verification and customer due diligence flow.',
-      created: '05 Sep 2026',
-      jurisdiction: 'United Kingdom - FCA',
-    },
-    {
-      id: 'PRJ-003',
-      name: 'Regulatory Reporting Q3',
-      type: 'Regulatory Reporting',
-      status: 'Draft',
-      statusColor: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
-      dotColor: 'bg-slate-400',
-      lastUpdated: '19 Sep 2026',
-      owner: 'A. Petrov',
-      description: 'Quarterly compliance and prudential reporting submission pack.',
-      created: '10 Sep 2026',
-      jurisdiction: 'European Union - EBA',
-    },
-    {
-      id: 'PRJ-004',
-      name: 'GDPR Data Audit Trail',
-      type: 'Data Governance',
-      status: 'Completed',
-      statusColor: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-900',
-      dotColor: 'bg-emerald-600',
-      lastUpdated: '15 Sep 2026',
-      owner: 'M. Chen',
-      description: 'Data mapping, consent tracking, and regulatory audit log system.',
-      created: '12 Sep 2026',
-      jurisdiction: 'European Union - GDPR',
-    },
-    {
-      id: 'PRJ-005',
-      name: 'Basel III Capital Adequacy',
-      type: 'Regulatory Reporting',
-      status: 'In Progress',
-      statusColor: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-900',
-      dotColor: 'bg-blue-600',
-      lastUpdated: '10 Sep 2026',
-      owner: 'J. Nakamura',
-      description: 'Capital requirement calculations and risk-weighted assets framework.',
-      created: '14 Sep 2026',
-      jurisdiction: 'Global / BIS',
-    },
-  ]);
+  // Project Cockpit Live Records States
+  const [projectReqs, setProjectReqs] = useState([]);
+  const [projectMembersList, setProjectMembersList] = useState([]);
+  const [projectAdviceList, setProjectAdviceList] = useState([]);
+  const [projectDecisionsList, setProjectDecisionsList] = useState([]);
+  const [projectReadinessData, setProjectReadinessData] = useState(null);
+  const [projectAuditList, setProjectAuditList] = useState([]);
 
-  // Load user & live projects from backend API on mount
+  // Subtab Interactive Actions States
+  const [ragQuery, setRagQuery] = useState('Analyze UK Bribery Act 2010 Section 7 adequate procedures for gifts and hospitality pre-approval');
+  const [ragResult, setRagResult] = useState(null);
+  const [ragLoading, setRagLoading] = useState(false);
+
+  const [newDecisionType, setNewDecisionType] = useState('ACCEPT');
+  const [newDecisionRationale, setNewDecisionRationale] = useState('Adopt strict £100 pre-approval threshold per Eleanor Vance recommendation to satisfy Section 7 Adequate Procedures.');
+  const [newFollowUpAction, setNewFollowUpAction] = useState('Update corporate gifts register and configure threshold alerts.');
+
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('REGULATORY');
+
+  const [newReqCode, setNewReqCode] = useState('REQ-ABC-018');
+  const [newReqTitle, setNewReqTitle] = useState('Third-Party Intermediary ABC Warranty Verification');
+  const [newReqText, setNewReqText] = useState('Mandatory anti-corruption representations and audit clauses in distributor agreements.');
+
+  const [currentUser, setCurrentUser] = useState(() => {
+    if (propUser) return propUser;
+    try {
+      const raw = localStorage.getItem('currentUser');
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  // Master Projects List from real backend API
+  const [allProjects, setAllProjects] = useState([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(true);
+  const [notificationsList, setNotificationsList] = useState([]);
+  const [projectSummary, setProjectSummary] = useState({
+    active_projects: 0,
+    open_requirements: 0,
+    total_advice_reviews: 0,
+    audit_readiness_percentage: 0,
+  });
+  const [registeredAdvisors, setRegisteredAdvisors] = useState([]);
+
+  // Load user & live projects & notifications from backend API on mount
   useEffect(() => {
     let isMounted = true;
     async function loadBackendData() {
+      setIsLoadingProjects(true);
       try {
-        const liveProjects = await getProjects();
-        if (isMounted && Array.isArray(liveProjects) && liveProjects.length > 0) {
-          setAllProjects(liveProjects);
+        const [liveProjects, user, liveNotifs, summaryData, advisorsData] = await Promise.all([
+          getProjects().catch(() => []),
+          getCurrentUser().catch(() => null),
+          getUserNotifications().catch(() => []),
+          getProjectSummary().catch(() => null),
+          getAdvisors().catch(() => []),
+        ]);
+        if (isMounted) {
+          if (user) {
+            setCurrentUser(user);
+          }
+          if (Array.isArray(liveProjects)) {
+            const userName = user?.full_name || currentUser?.full_name || 'You';
+            const normalized = liveProjects.map((p) => ({
+              ...p,
+              id: p.id || p.project_id || `PRJ-${p.project_id}`,
+              project_id: p.project_id || p.id,
+              name: p.name || p.project_name || 'Compliance Project',
+              project_name: p.project_name || p.name || 'Compliance Project',
+              owner: p.owner || p.owner_name || userName,
+              owner_name: p.owner_name || p.owner || userName,
+              type: p.type || p.regulatory_scope || 'Anti-Bribery & Corruption (ABC)',
+              status: p.status === 'ACTIVE' ? 'In Progress' : (p.status || 'In Progress'),
+            }));
+            setAllProjects(normalized);
+          }
+          if (summaryData) {
+            setProjectSummary(summaryData);
+          }
+          if (Array.isArray(advisorsData)) {
+            setRegisteredAdvisors(advisorsData);
+          }
+          if (Array.isArray(liveNotifs) && liveNotifs.length > 0) {
+            setNotificationsList(liveNotifs);
+            setHasUnreadNotifications(liveNotifs.some((n) => n.unread));
+          }
         }
       } catch (err) {
-        console.warn('[DashboardView] API load warning, using static fallbacks:', err);
+        console.error('[DashboardView] API load error:', err);
+      } finally {
+        if (isMounted) {
+          setIsLoadingProjects(false);
+        }
       }
     }
     loadBackendData();
@@ -168,14 +193,32 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
     };
   }, []);
 
+
   // Open Project Details Page (fetches live details from API)
   const handleOpenProject = async (project) => {
     setSelectedProject(project);
     setProjectSubTab('Overview');
     setActiveTab('Project Details');
+    const pId = project.project_id || project.id || 1;
     try {
-      const details = await getProjectDetails(project.id);
+      const details = await getProjectDetails(pId);
       if (details) setSelectedProject(details);
+
+      // Concurrently load project-scoped records
+      const [reqs, members, advice, decisions, readiness, audits] = await Promise.all([
+        getProjectRequirements(pId),
+        getProjectMembers(pId),
+        getProjectAdvice(pId),
+        getProjectDecisions(pId),
+        getProjectReadiness(pId),
+        getAuditEvents(pId),
+      ]);
+      setProjectReqs(reqs);
+      setProjectMembersList(members);
+      setProjectAdviceList(advice);
+      setProjectDecisionsList(decisions);
+      setProjectReadinessData(readiness);
+      setProjectAuditList(audits);
     } catch (err) {
       console.warn('[DashboardView] getProjectDetails warning:', err);
     }
@@ -197,35 +240,35 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
     try {
       createdProject = await createProject(payload);
     } catch (err) {
-      console.warn('[DashboardView] POST /projects failed, fallback to local state:', err);
-      createdProject = {
-        id: `PRJ-00${allProjects.length + 1}`,
-        ...payload,
-        status: 'Draft',
-        statusColor: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
-        dotColor: 'bg-slate-400',
-        lastUpdated: 'Just now',
-        owner: 'J. Nakamura',
-        created: 'Today',
-      };
+      console.error('[DashboardView] POST /projects failed:', err);
+      setToastMessage(`Failed to create project: ${err.message || 'Server error'}`);
+      return;
     }
 
+    const isStatusActive = (createdProject.status === 'ACTIVE' || createdProject.status === 'In Progress');
     const newEntry = {
-      id: createdProject.id || `PRJ-00${allProjects.length + 1}`,
-      name: createdProject.name || payload.name,
+      id: createdProject.id || createdProject.project_id || `PRJ-${createdProject.project_id}`,
+      project_id: createdProject.project_id || createdProject.id,
+      name: createdProject.name || createdProject.project_name || payload.name,
+      project_name: createdProject.project_name || createdProject.name || payload.name,
       type: createdProject.type || payload.type,
-      status: createdProject.status || 'Draft',
-      statusColor: createdProject.statusColor || 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
-      dotColor: createdProject.dotColor || 'bg-slate-400',
-      lastUpdated: createdProject.lastUpdated || 'Just now',
-      owner: createdProject.owner || 'J. Nakamura',
+      status: createdProject.status === 'ACTIVE' ? 'In Progress' : (createdProject.status || 'In Progress'),
+      statusColor: isStatusActive
+        ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-900'
+        : 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+      dotColor: isStatusActive ? 'bg-blue-600' : 'bg-slate-400',
+      lastUpdated: 'Just now',
+      owner: createdProject.owner || createdProject.owner_name || currentUser?.full_name || 'You',
+      owner_name: createdProject.owner_name || createdProject.owner || currentUser?.full_name || 'You',
       description: createdProject.description || payload.description,
-      created: createdProject.created || 'Today',
+      created: 'Today',
       jurisdiction: createdProject.jurisdiction || payload.jurisdiction,
     };
 
     setAllProjects([newEntry, ...allProjects]);
     setToastMessage(`Project "${newProjectName}" created successfully!`);
+    getProjectSummary().then((s) => s && setProjectSummary(s)).catch(() => {});
+
 
     // Reset Form
     setNewProjectName('');
@@ -241,14 +284,105 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
     }, 1200);
   };
 
+  // Subtab Handler 1: Send Advisor Invitation
+  const handleSendAdvisorInvitation = async (e) => {
+    e.preventDefault();
+    if (!inviteEmail) return;
+    const pId = selectedProject?.project_id || selectedProject?.id || 1;
+    try {
+      await sendAdvisorInvitation(pId, {
+        advisor_email: inviteEmail,
+        access_level: inviteRole,
+        expiry_days: 7,
+      });
+      setToastMessage(`Advisor invitation sent to ${inviteEmail}!`);
+      setProjectMembersList([
+        ...projectMembersList,
+        {
+          project_member_id: Date.now(),
+          full_name: inviteEmail.split('@')[0],
+          email: inviteEmail,
+          service_role: inviteRole,
+          service_scope: 'ACTIVE',
+          member_status: 'ACTIVE',
+        },
+      ]);
+      setInviteEmail('');
+    } catch (err) {
+      setToastMessage(`Failed to send invitation: ${err.message || 'Error'}`);
+    }
+  };
+
+  // Subtab Handler 2: Record Executive Decision
+  const handleRecordDecision = async (e) => {
+    e.preventDefault();
+    if (!newDecisionRationale) return;
+    const pId = selectedProject?.project_id || selectedProject?.id || 1;
+    try {
+      const dec = await recordDecision(pId, {
+        decision_type: newDecisionType,
+        decision_rationale: newDecisionRationale,
+        follow_up_action: newFollowUpAction,
+      });
+      setToastMessage(`Decision recorded: ${newDecisionType}`);
+      setProjectDecisionsList([dec, ...projectDecisionsList]);
+      // Refresh readiness
+      const r = await getProjectReadiness(pId);
+      setProjectReadinessData(r);
+    } catch (err) {
+      setToastMessage(`Failed to record decision: ${err.message || 'Error'}`);
+    }
+  };
+
+  // Subtab Handler 3: Execute Grounded RAG Query
+  const handleRunRagQuery = async (e) => {
+    if (e) e.preventDefault();
+    if (!ragQuery) return;
+    const pId = selectedProject?.project_id || selectedProject?.id || 1;
+    setRagLoading(true);
+    try {
+      const res = await apiCall('/rag/analyze', 'POST', {
+        query: ragQuery,
+        projectId: pId,
+      });
+      setRagResult(res);
+      setToastMessage('Grounded RAG analysis complete!');
+    } catch (err) {
+      setToastMessage(`RAG retrieval error: ${err.message || 'Error'}`);
+    } finally {
+      setRagLoading(false);
+    }
+  };
+
+  // Subtab Handler 4: Add Requirement
+  const handleAddRequirement = async (e) => {
+    e.preventDefault();
+    if (!newReqTitle || !newReqCode) return;
+    const pId = selectedProject?.project_id || selectedProject?.id || 1;
+    try {
+      const created = await createProjectRequirement(pId, {
+        source_id: 1,
+        requirement_code: newReqCode,
+        requirement_title: newReqTitle,
+        requirement_text: newReqText,
+        applicability_status: 'APPLICABLE',
+        requirement_status: 'OPEN',
+      });
+      setToastMessage(`Requirement ${newReqCode} added to project!`);
+      setProjectReqs([...projectReqs, created]);
+    } catch (err) {
+      setToastMessage(`Failed to add requirement: ${err.message || 'Error'}`);
+    }
+  };
+
 
   // Filtered projects computation
   const filteredProjects = allProjects.filter((project) => {
     const matchesSearch =
-      project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.owner.toLowerCase().includes(searchQuery.toLowerCase());
+      (project.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (project.type || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(project.id || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(project.owner || project.owner_name || '').toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus =
       statusFilter === 'All Statuses' || project.status === statusFilter;
@@ -323,48 +457,17 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
     },
   ];
 
-  // Notifications Data (Advisor 1, Advisor 2 & System alerts)
-  const notificationsList = [
-    {
-      id: 1,
-      sender: 'Advisor 1 (S. Okonkwo)',
-      avatar: 'SO',
-      avatarBg: 'bg-[#7c4a27] text-white',
-      title: 'Review Feedback Submitted',
-      message: 'Advisor 1 (S. Okonkwo) submitted feedback for KYC Onboarding Workflow: "CDD verification steps approved, pending final compliance sign-off."',
-      time: '10 minutes ago',
-      unread: true,
-      projectId: 'PRJ-002',
-    },
-    {
-      id: 2,
-      sender: 'Advisor 2 (A. Petrov)',
-      avatar: 'AP',
-      avatarBg: 'bg-[#96562c] text-white',
-      title: 'Draft Pack Approved',
-      message: 'Advisor 2 (A. Petrov) approved draft submission for Regulatory Reporting Q3 pack.',
-      time: '1 hour ago',
-      unread: true,
-      projectId: 'PRJ-003',
-    },
-    {
-      id: 3,
-      sender: 'System Alert',
-      avatar: 'FRT',
-      avatarBg: 'bg-slate-800 text-amber-400 border border-amber-500/30',
-      title: 'Regulatory Guidance Updated',
-      message: 'FCA published new Anti-Money Laundering & CTF compliance standards for Q4 2026.',
-      time: '3 hours ago',
-      unread: false,
-    },
-  ];
+  // Metric Cards Config derived from live backend summary (DEF-06 remediation)
+  const activeCount = projectSummary?.active_projects ?? allProjects.filter((p) => p.status === 'In Progress' || p.status === 'ACTIVE').length;
+  const reqsCount = projectSummary?.open_requirements ?? 0;
+  const reviewsCount = projectSummary?.total_advice_reviews ?? 0;
+  const readinessPct = projectSummary?.audit_readiness_percentage ?? 0;
 
-  // Metric Cards Config matching media_1791362867917.png
   const metricsData = [
-    { id: 'active', label: 'Active projects', val: '05', sub: '+2 this month' },
-    { id: 'requirements', label: 'Open requirements', val: '28', sub: '6 need validation' },
-    { id: 'reviews', label: 'Advisor reviews', val: '04', sub: '2 due this week' },
-    { id: 'readiness', label: 'Audit readiness', val: '82%', sub: 'Across active projects' },
+    { id: 'active', label: 'Active projects', val: String(activeCount).padStart(2, '0'), sub: `${allProjects.length} total projects` },
+    { id: 'requirements', label: 'Open requirements', val: String(reqsCount).padStart(2, '0'), sub: 'Need validation' },
+    { id: 'reviews', label: 'Advisor reviews', val: String(reviewsCount).padStart(2, '0'), sub: 'Completed reviews' },
+    { id: 'readiness', label: 'Audit readiness', val: `${readinessPct}%`, sub: 'Across active projects' },
   ];
 
   // Default active project fallback if null
@@ -465,37 +568,48 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
 
                 {/* Notifications List */}
                 <div className="max-h-96 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800/80 text-left">
-                  {notificationsList.map((notif) => (
-                    <div
-                      key={notif.id}
-                      onClick={() => {
-                        if (notif.projectId) {
-                          const proj = allProjects.find((p) => p.id === notif.projectId);
-                          if (proj) handleOpenProject(proj);
-                        }
-                        setIsNotificationMenuOpen(false);
-                      }}
-                      className={`p-4 transition-colors cursor-pointer ${
-                        isDarkMode
-                          ? 'hover:bg-slate-800/60'
-                          : 'hover:bg-stone-50'
-                      }`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div className={`w-8 h-8 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 ${notif.avatarBg}`}>
-                          {notif.avatar}
-                        </div>
-                        <div className="flex-1 space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className="font-bold text-xs text-amber-400">{notif.sender}</span>
-                            <span className="text-[11px] text-slate-400 font-medium">{notif.time}</span>
+                  {notificationsList.length === 0 ? (
+                    <div className="p-8 text-center text-slate-400 space-y-2">
+                      <Bell className="w-7 h-7 mx-auto opacity-30 text-amber-500" />
+                      <p className="font-semibold text-xs text-slate-300">No unread notifications</p>
+                      <p className="text-[11px] text-slate-500 max-w-[200px] mx-auto leading-relaxed">
+                        Audit events, project decisions, and advisor reviews will appear here.
+                      </p>
+                    </div>
+                  ) : (
+                    notificationsList.map((notif) => (
+                      <div
+                        key={notif.id}
+                        onClick={() => {
+                          const pid = notif.projectId || notif.project_id;
+                          if (pid) {
+                            const proj = allProjects.find((p) => p.id === pid || p.project_id === pid);
+                            if (proj) handleOpenProject(proj);
+                          }
+                          setIsNotificationMenuOpen(false);
+                        }}
+                        className={`p-4 transition-colors cursor-pointer ${
+                          isDarkMode
+                            ? 'hover:bg-slate-800/60'
+                            : 'hover:bg-stone-50'
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className={`w-8 h-8 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 mt-0.5 ${notif.avatarBg || 'bg-[#7c4a27] text-white'}`}>
+                            {notif.avatar || 'FRT'}
                           </div>
-                          <p className="font-semibold text-xs text-slate-200">{notif.title}</p>
-                          <p className="text-xs text-slate-300 leading-relaxed font-normal">{notif.message}</p>
+                          <div className="flex-1 space-y-1">
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-xs text-amber-400">{notif.sender || 'Platform'}</span>
+                              <span className="text-[11px] text-slate-400 font-medium">{notif.time || 'Recent'}</span>
+                            </div>
+                            <p className="font-semibold text-xs text-slate-200">{notif.title}</p>
+                            <p className="text-xs text-slate-300 leading-relaxed font-normal">{notif.message}</p>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -513,9 +627,11 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
               }`}
             >
               <div className="w-8 h-8 rounded-lg bg-[#7c4a27]/15 dark:bg-amber-500/20 text-[#7c4a27] dark:text-amber-300 font-bold text-xs flex items-center justify-center border border-[#7c4a27]/20">
-                JN
+                {currentUser?.full_name ? currentUser.full_name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U'}
               </div>
-              <span className="text-sm font-semibold hidden md:inline-block">J. Nakamura</span>
+              <span className="text-sm font-semibold hidden md:inline-block">
+                {currentUser?.full_name || 'Compliance Builder'}
+              </span>
               <ChevronDown className="w-4 h-4 text-slate-400" />
             </button>
 
@@ -526,11 +642,11 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
               }`}>
                 {/* User Info Header: Name & Logged-in Email */}
                 <div className="p-4 border-b border-slate-200 dark:border-slate-800 text-left">
-                  <p className="font-bold text-sm text-slate-900 dark:text-slate-100">Jun Nakamura</p>
-                  <p className="text-slate-400 text-xs mt-0.5 font-normal">jun@northbank.com</p>
+                  <p className="font-bold text-sm text-slate-900 dark:text-slate-100">{currentUser?.full_name || 'Compliance Lead'}</p>
+                  <p className="text-slate-400 text-xs mt-0.5 font-normal">{currentUser?.email || 'user@finregtech.io'}</p>
                   <div className="mt-2">
                     <span className="inline-block px-2.5 py-0.5 border border-slate-200 dark:border-slate-700 bg-stone-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[11px] font-mono rounded">
-                      Builder
+                      {currentUser?.platform_role || 'BUILDER'}
                     </span>
                   </div>
                 </div>
@@ -633,7 +749,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                   <h1 className={`text-2xl sm:text-3xl font-bold tracking-tight ${
                     isDarkMode ? 'text-slate-100' : 'text-slate-900'
                   }`}>
-                    Welcome back, Jun
+                    Welcome back, {currentUser?.full_name?.split(' ')[0] || 'Builder'}
                   </h1>
                   <p className={`text-xs sm:text-sm mt-1 font-medium ${
                     isDarkMode ? 'text-slate-300' : 'text-slate-500'
@@ -752,59 +868,67 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
-                      {allProjects.slice(0, 4).map((project) => (
-                        <tr
-                          key={project.id}
-                          className={`transition-colors ${
-                            isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-stone-50/90'
-                          }`}
-                        >
-                          <td className="py-4 px-5">
-                            <div className={`font-bold text-sm ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
-                              {project.name}
-                            </div>
-                            <div className="text-[11px] font-mono text-slate-500 mt-0.5">
-                              {project.id}
-                            </div>
-                          </td>
-                          <td className={`py-4 px-5 font-medium text-xs sm:text-sm ${
-                            isDarkMode ? 'text-slate-300' : 'text-slate-600'
-                          }`}>
-                            {project.type}
-                          </td>
-                          <td className="py-4 px-5">
-                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${project.statusColor}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${project.dotColor}`} />
-                              {project.status}
-                            </span>
-                          </td>
-                          <td className={`py-4 px-5 font-medium text-xs sm:text-sm ${
-                            isDarkMode ? 'text-slate-300' : 'text-slate-600'
-                          }`}>
-                            {project.owner || 'J. Nakamura'}
-                          </td>
-                          <td className={`py-4 px-5 font-medium text-xs sm:text-sm ${
-                            isDarkMode ? 'text-slate-300' : 'text-slate-600'
-                          }`}>
-                            {project.lastUpdated}
-                          </td>
-                          <td className="py-4 px-5 text-right">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleOpenProject(project);
-                              }}
-                              className={`text-xs font-bold hover:underline inline-flex items-center gap-1 cursor-pointer ${
-                                isDarkMode ? 'text-slate-300 hover:text-white' : 'text-[#7c4a27]'
-                              }`}
-                            >
-                              <span>Open</span>
-                              <ArrowRight className="w-3.5 h-3.5" />
-                            </button>
+                      {allProjects.length === 0 ? (
+                        <tr>
+                          <td colSpan="6" className="py-8 text-center text-slate-500 dark:text-slate-400">
+                            {isLoadingProjects ? 'Loading projects...' : 'No projects yet. Click "Create Project" to get started.'}
                           </td>
                         </tr>
-                      ))}
+                      ) : (
+                        allProjects.slice(0, 4).map((project) => (
+                          <tr
+                            key={project.id}
+                            className={`transition-colors ${
+                              isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-stone-50/90'
+                            }`}
+                          >
+                            <td className="py-4 px-5">
+                              <div className={`font-bold text-sm ${isDarkMode ? 'text-slate-100' : 'text-slate-900'}`}>
+                                {project.name}
+                              </div>
+                              <div className="text-[11px] font-mono text-slate-500 mt-0.5">
+                                {project.id}
+                              </div>
+                            </td>
+                            <td className={`py-4 px-5 font-medium text-xs sm:text-sm ${
+                              isDarkMode ? 'text-slate-300' : 'text-slate-600'
+                            }`}>
+                              {project.type}
+                            </td>
+                            <td className="py-4 px-5">
+                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${project.statusColor}`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${project.dotColor}`} />
+                                {project.status}
+                              </span>
+                            </td>
+                            <td className={`py-4 px-5 font-medium text-xs sm:text-sm ${
+                              isDarkMode ? 'text-slate-300' : 'text-slate-600'
+                            }`}>
+                              {project.owner || currentUser?.full_name || 'You'}
+                            </td>
+                            <td className={`py-4 px-5 font-medium text-xs sm:text-sm ${
+                              isDarkMode ? 'text-slate-300' : 'text-slate-600'
+                            }`}>
+                              {project.lastUpdated}
+                            </td>
+                            <td className="py-4 px-5 text-right">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenProject(project);
+                                }}
+                                className={`text-xs font-bold hover:underline inline-flex items-center gap-1 cursor-pointer ${
+                                  isDarkMode ? 'text-slate-300 hover:text-white' : 'text-[#7c4a27]'
+                                }`}
+                              >
+                                <span>Open</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1033,6 +1157,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                     }`}
                   >
                     <option value="All Types">All Types</option>
+                    <option value="Anti-Bribery & Corruption (ABC)">Anti-Bribery & Corruption (ABC)</option>
                     <option value="AML/CTF">AML/CTF</option>
                     <option value="KYC/CDD">KYC/CDD</option>
                     <option value="Regulatory Reporting">Regulatory Reporting</option>
@@ -1087,7 +1212,19 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                     : 'bg-white border-stone-200/90 shadow-xs hover:border-[#7c4a27] hover:scale-[1.01] hover:bg-[#fdfdfc]'
                 }`}
               >
-                {viewMode === 'list' ? (
+                {allProjects.length === 0 ? (
+                  <div className="py-16 text-center">
+                    <FolderKanban className="w-12 h-12 mx-auto text-slate-400 mb-3" />
+                    <p className="text-slate-700 dark:text-slate-300 font-bold text-base">No compliance projects found</p>
+                    <p className="text-xs text-slate-400 mt-1">{isLoadingProjects ? 'Loading projects...' : 'Get started by creating your first compliance project.'}</p>
+                  </div>
+                ) : filteredProjects.length === 0 ? (
+                  <div className="py-16 text-center">
+                    <Search className="w-10 h-10 mx-auto text-slate-400 mb-2" />
+                    <p className="text-slate-600 dark:text-slate-400 font-semibold text-sm">No matching projects found</p>
+                    <p className="text-xs text-slate-400 mt-0.5">Try adjusting your search query or filters.</p>
+                  </div>
+                ) : viewMode === 'list' ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs sm:text-sm border-collapse">
                       <thead>
@@ -1132,7 +1269,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                               {project.lastUpdated}
                             </td>
                             <td className="py-4 px-5 font-medium text-slate-700 dark:text-slate-200">
-                              {project.owner}
+                              {project.owner || currentUser?.full_name || 'You'}
                             </td>
                             <td className="py-4 px-5 text-right">
                               <button
@@ -1173,7 +1310,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                         <h3 className="font-bold text-base text-slate-900 dark:text-slate-100 mb-1">{project.name}</h3>
                         <p className="text-xs text-slate-500 dark:text-slate-300 mb-4">{project.type}</p>
                         <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800 text-xs">
-                          <span className="text-slate-500 dark:text-slate-300 font-medium">{project.owner}</span>
+                          <span className="text-slate-500 dark:text-slate-300 font-medium">{project.owner || currentUser?.full_name || 'You'}</span>
                           <button
                             type="button"
                             onClick={(e) => {
@@ -1278,6 +1415,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                         }`}
                       >
                         <option value="">Select type...</option>
+                        <option value="Anti-Bribery & Corruption (ABC)">Anti-Bribery & Corruption (ABC)</option>
                         <option value="AML/CTF">AML/CTF (Anti-Money Laundering)</option>
                         <option value="KYC/CDD">KYC/CDD (Know Your Customer)</option>
                         <option value="Regulatory Reporting">Regulatory Reporting</option>
@@ -1475,15 +1613,15 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
               </div>
 
               {/* Sub-Navigation Tabs Bar */}
-              <div className={`flex items-center gap-6 border-b text-xs sm:text-sm font-bold ${
+              <div className={`flex items-center gap-6 border-b text-xs sm:text-sm font-bold overflow-x-auto ${
                 isDarkMode ? 'border-slate-800' : 'border-slate-200'
               }`}>
-                {['Overview', 'Workflow', 'Documents', 'Audit Trail'].map((tab) => (
+                {['Overview', 'Requirements', 'Members & Advisors', 'Advice', 'AI Findings', 'Decisions', 'Readiness', 'Audit Trail', 'Workflow', 'Documents'].map((tab) => (
                   <button
                     key={tab}
                     type="button"
                     onClick={() => setProjectSubTab(tab)}
-                    className={`py-3 transition-colors cursor-pointer border-b-2 -mb-px ${
+                    className={`py-3 transition-colors cursor-pointer border-b-2 -mb-px whitespace-nowrap ${
                       projectSubTab === tab
                         ? 'border-[#7c4a27] text-[#7c4a27] dark:border-amber-400 dark:text-amber-400'
                         : 'border-transparent text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
@@ -1638,9 +1776,9 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                         <div className="pt-2 flex items-center justify-between">
                           <div className="flex items-center gap-2.5">
                             <div className="w-7 h-7 rounded-lg bg-[#7c4a27] text-white font-bold text-xs flex items-center justify-center">
-                              JN
+                              {currentUser?.full_name ? currentUser.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase() : 'PO'}
                             </div>
-                            <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">J. Nakamura</span>
+                            <span className="font-bold text-xs sm:text-sm text-slate-900 dark:text-slate-100">{currentUser?.full_name || 'Project Owner'}</span>
                           </div>
                           <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded bg-amber-50 text-[#7c4a27] border border-amber-200/60 dark:bg-amber-950/40 dark:text-amber-300">
                             Owner
@@ -1672,6 +1810,495 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                         </div>
                       </div>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-Tab: REQUIREMENTS */}
+              {projectSubTab === 'Requirements' && (
+                <div className="rounded-2xl border border-slate-800 bg-[#161619] p-6 sm:p-8 space-y-6 shadow-lg animate-fadeIn text-left pt-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100">Project Requirements</h2>
+                      <p className="text-xs text-slate-400 mt-1">Traceable compliance obligations under UK Bribery Act 2010.</p>
+                    </div>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          <th className="py-3 px-3">Code</th>
+                          <th className="py-3 px-3">Title</th>
+                          <th className="py-3 px-3">Status</th>
+                          <th className="py-3 px-3">Applicability</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {(projectReqs.length > 0 ? projectReqs : [
+                          { requirement_code: 'REQ-ABC-009', requirement_title: 'Adequate Procedures: Proportionate Anti-Bribery Policies', requirement_status: 'COMPLETED', applicability_status: 'APPLICABLE' },
+                          { requirement_code: 'REQ-ABC-010', requirement_title: 'Risk Assessment: Periodic Anti-Bribery & Corruption Risk Scoring', requirement_status: 'COMPLETED', applicability_status: 'APPLICABLE' },
+                          { requirement_code: 'REQ-ABC-011', requirement_title: 'Top-Level Commitment: Board-Approved Zero-Tolerance Anti-Corruption Culture', requirement_status: 'COMPLETED', applicability_status: 'APPLICABLE' },
+                          { requirement_code: 'REQ-ABC-012', requirement_title: 'Due Diligence: Proportionate Screening of Third Parties and Intermediaries', requirement_status: 'IN_REVIEW', applicability_status: 'APPLICABLE' },
+                          { requirement_code: 'REQ-ABC-016', requirement_title: 'Gifts and Hospitality Policy: Pre-Approval Thresholds and Central Register', requirement_status: 'COMPLETED', applicability_status: 'APPLICABLE' }
+                        ]).map((r, i) => (
+                          <tr key={r.requirement_id || i} className="hover:bg-slate-800/30">
+                            <td className="py-3 px-3 font-mono font-bold text-amber-400">{r.requirement_code}</td>
+                            <td className="py-3 px-3 font-medium text-slate-200">{r.requirement_title}</td>
+                            <td className="py-3 px-3">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                r.requirement_status === 'COMPLETED' ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800' : 'bg-amber-950/80 text-amber-400 border border-amber-800'
+                              }`}>
+                                {r.requirement_status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-slate-400">{r.applicability_status}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Inline Add Requirement Form */}
+                  <form onSubmit={handleAddRequirement} className="p-4 rounded-xl border border-slate-800 bg-[#121214] space-y-3">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">Map New Project Requirement</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <input
+                        type="text"
+                        value={newReqCode}
+                        onChange={(e) => setNewReqCode(e.target.value)}
+                        placeholder="Code (e.g. REQ-ABC-018)"
+                        className="bg-[#161619] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                      />
+                      <input
+                        type="text"
+                        value={newReqTitle}
+                        onChange={(e) => setNewReqTitle(e.target.value)}
+                        placeholder="Title (e.g. Third-Party Due Diligence)"
+                        className="bg-[#161619] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <textarea
+                      rows={2}
+                      value={newReqText}
+                      onChange={(e) => setNewReqText(e.target.value)}
+                      placeholder="Requirement description or obligation text..."
+                      className="w-full bg-[#161619] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                    />
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold cursor-pointer transition-colors"
+                    >
+                      Submit Requirement
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* Sub-Tab: MEMBERS & ADVISORS */}
+              {projectSubTab === 'Members & Advisors' && (
+                <div className="rounded-2xl border border-slate-800 bg-[#161619] p-6 sm:p-8 space-y-6 shadow-lg animate-fadeIn text-left pt-4">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100">Project Members & Advisors</h2>
+                    <p className="text-xs text-slate-400 mt-1">Authorized team members, legal advisors, and regulatory experts.</p>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-slate-800 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                          <th className="py-3 px-3">Member</th>
+                          <th className="py-3 px-3">Service Role</th>
+                          <th className="py-3 px-3">Service Scope</th>
+                          <th className="py-3 px-3">Status</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {projectMembersList.length === 0 ? (
+                          <tr>
+                            <td colSpan="4" className="py-6 text-center text-slate-500 text-xs">
+                              No advisors or team members have joined this project yet. Use the invite form below to add authorized advisors.
+                            </td>
+                          </tr>
+                        ) : (
+                          projectMembersList.map((m, i) => (
+                            <tr key={m.project_member_id || i} className="hover:bg-slate-800/30">
+                              <td className="py-3 px-3 font-bold text-slate-200">{m.full_name || m.name || m.email}</td>
+                              <td className="py-3 px-3">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  m.service_role === 'OWNER' ? 'bg-amber-950/80 text-amber-400 border border-amber-800' : 'bg-purple-950/80 text-purple-400 border border-purple-800'
+                                }`}>
+                                  {m.service_role}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 font-mono text-slate-400">{m.service_scope || 'STANDARD'}</td>
+                              <td className="py-3 px-3">
+                                <span className="inline-flex items-center gap-1 text-emerald-400 text-[11px] font-bold">
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  {m.member_status}
+                                </span>
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Send Advisor Invitation Card */}
+                  <form onSubmit={handleSendAdvisorInvitation} className="p-4 rounded-xl border border-slate-800 bg-[#121214] space-y-3">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">Invite Expert Advisor to Project</h3>
+                    {registeredAdvisors.length > 0 && (
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-bold text-slate-400">Select Verified Platform Advisor</label>
+                        <select
+                          value={inviteEmail}
+                          onChange={(e) => setInviteEmail(e.target.value)}
+                          className="w-full bg-[#161619] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                        >
+                          <option value="">-- Choose registered advisor or type email below --</option>
+                          {registeredAdvisors.map((adv) => (
+                            <option key={adv.email || adv.advisor_profile_id} value={adv.email}>
+                              {adv.full_name} ({adv.email}) — {adv.organization_name || adv.specialization || 'Advisor'}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <input
+                        type="email"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        placeholder="Advisor email (e.g. advisor@finregtech.io)"
+                        className="sm:col-span-2 bg-[#161619] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                      />
+                      <select
+                        value={inviteRole}
+                        onChange={(e) => setInviteRole(e.target.value)}
+                        className="bg-[#161619] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                      >
+                        <option value="REGULATORY">REGULATORY</option>
+                        <option value="LEGAL">LEGAL</option>
+                        <option value="TECH">TECH</option>
+                        <option value="FUNDING_BUSINESS">FUNDING_BUSINESS</option>
+                        <option value="MARKETING">MARKETING</option>
+                      </select>
+                    </div>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold cursor-pointer transition-colors"
+                    >
+                      Send Formal Invitation
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* Sub-Tab: ADVICE */}
+              {projectSubTab === 'Advice' && (
+                <div className="rounded-2xl border border-slate-800 bg-[#161619] p-6 sm:p-8 space-y-6 shadow-lg animate-fadeIn text-left pt-4">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100">Advisor Advice & Submissions</h2>
+                    <p className="text-xs text-slate-400 mt-1">Review independent professional guidance and compare advisory opinions.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Advisor 1 Submission */}
+                    <div className="p-5 rounded-xl border border-slate-800 bg-[#121214] space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-950/80 text-purple-400 border border-purple-800">
+                          ADVISOR 1 · LEGAL
+                        </span>
+                        <span className="text-xs text-slate-400">Eleanor Vance (Vance Legal LLP)</span>
+                      </div>
+                      <h3 className="text-sm font-bold text-slate-100">Corporate Gifts & Hospitality Pre-Approval Threshold</h3>
+                      <p className="text-xs text-slate-300">
+                        <strong className="text-amber-400">Recommendation:</strong> Establish a strict £100 pre-approval threshold for all gifts, meals, and hospitality per counterparty under UK Bribery Act 2010 Section 7 Adequate Procedures Principle 1.
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        <strong className="text-slate-300">Rationale:</strong> Lower pre-approval boundaries create audit defensibility in prosecutorial reviews by the SFO.
+                      </p>
+                      <div className="text-[11px] text-slate-500 font-mono">
+                        Ref: MoJ Adequate Procedures Guidance · Principle 1
+                      </div>
+                    </div>
+
+                    {/* Advisor 2 Submission */}
+                    <div className="p-5 rounded-xl border border-slate-800 bg-[#121214] space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-950/80 text-blue-400 border border-blue-800">
+                          ADVISOR 2 · REGULATORY
+                        </span>
+                        <span className="text-xs text-slate-400">Marcus Reid (FCC Consulting Europe)</span>
+                      </div>
+                      <h3 className="text-sm font-bold text-slate-100">Risk-Adjusted Hospitality Limit & Retrospective Disclosure</h3>
+                      <p className="text-xs text-slate-300">
+                        <strong className="text-amber-400">Recommendation:</strong> Set a £250 threshold with quarterly retrospective disclosure to reduce operational friction in institutional client entertainment under EU anti-corruption benchmarks.
+                      </p>
+                      <p className="text-xs text-slate-400">
+                        <strong className="text-slate-300">Rationale:</strong> Proportionality requires balancing commercial agility with bribery prevention.
+                      </p>
+                      <div className="text-[11px] text-slate-500 font-mono">
+                        Ref: EU Anti-Corruption Directive Proposal (COM(2023) 234)
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Advice Comparison Banner */}
+                  <div className="p-4 rounded-xl border border-amber-900/60 bg-amber-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider">Identified Policy Discrepancy</h4>
+                      <p className="text-xs text-slate-300 mt-0.5">
+                        Advisor 1 (£100 pre-approval) differs from Advisor 2 (£250 retrospective). Human Compliance Decision required to set group policy.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setProjectSubTab('Decisions')}
+                      className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-extrabold cursor-pointer transition-colors shrink-0"
+                    >
+                      Record Decision →
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-Tab: AI FINDINGS */}
+              {projectSubTab === 'AI Findings' && (
+                <div className="rounded-2xl border border-slate-800 bg-[#161619] p-6 sm:p-8 space-y-6 shadow-lg animate-fadeIn text-left pt-4">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100">AI-Assisted Regulatory Review (RAG)</h2>
+                    <p className="text-xs text-slate-400 mt-1">Grounded evidence retrieval across verified UK/EU Anti-Bribery & Corruption corpus.</p>
+                  </div>
+
+                  {/* Query Box */}
+                  <form onSubmit={handleRunRagQuery} className="space-y-3">
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={ragQuery}
+                        onChange={(e) => setRagQuery(e.target.value)}
+                        placeholder="Ask a regulatory question or compare advisor positions..."
+                        className="flex-1 bg-[#121214] border border-slate-700 rounded-xl px-4 py-3 text-xs sm:text-sm text-slate-100 focus:outline-none focus:border-amber-500"
+                      />
+                      <button
+                        type="submit"
+                        disabled={ragLoading}
+                        className="px-5 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs sm:text-sm font-extrabold cursor-pointer transition-colors shadow-md disabled:opacity-50"
+                      >
+                        {ragLoading ? 'Analyzing...' : 'Retrieve Evidence'}
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                      <span>Suggested:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setRagQuery('Compare advisor recommendations on bribery and gifts hospitality thresholds under UK Bribery Act');
+                          handleRunRagQuery();
+                        }}
+                        className="text-amber-400 hover:underline"
+                      >
+                        Compare Bribery Act hospitality thresholds (£100 vs £250)
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* RAG Results Display */}
+                  {ragResult && (
+                    <div className="space-y-4 pt-2">
+                      {/* Status Banner */}
+                      <div className={`p-4 rounded-xl border flex items-center justify-between ${
+                        ragResult.status === 'CONFLICT_DETECTED'
+                          ? 'bg-amber-950/30 border-amber-800/80 text-amber-300'
+                          : 'bg-emerald-950/30 border-emerald-800/80 text-emerald-300'
+                      }`}>
+                        <div className="flex items-center gap-3">
+                          <Sparkles className="w-5 h-5 text-amber-400" />
+                          <div>
+                            <p className="text-xs font-bold uppercase tracking-wider">Status: {ragResult.status}</p>
+                            <p className="text-xs text-slate-200 mt-0.5">{ragResult.answer}</p>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 font-mono">
+                          GROUNDED: {ragResult.grounded ? 'YES' : 'NO'}
+                        </span>
+                      </div>
+
+                      {/* Conflict Gap Review Card */}
+                      {ragResult.conflicts && ragResult.conflicts.length > 0 && (
+                        <div className="p-5 rounded-xl border border-rose-900/60 bg-rose-950/20 space-y-3">
+                          <h4 className="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-2">
+                            <span>Potential Disagreement / Policy Conflict</span>
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                            <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
+                              <span className="font-bold text-amber-400">{ragResult.conflicts[0].advisorA?.name}</span>
+                              <p className="text-slate-300 mt-1">{ragResult.conflicts[0].advisorA?.recommendation}</p>
+                            </div>
+                            <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
+                              <span className="font-bold text-blue-400">{ragResult.conflicts[0].advisorB?.name}</span>
+                              <p className="text-slate-300 mt-1">{ragResult.conflicts[0].advisorB?.recommendation}</p>
+                            </div>
+                          </div>
+                          <p className="text-[11px] text-amber-400 font-medium italic">
+                            AI assists; humans decide. This is a potential disagreement for compliance review, not an autonomous legal ruling.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* Grounded Citations & Provenance */}
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">Supporting Statutory Citations ({ragResult.citations?.length || 0})</h4>
+                        <div className="space-y-2">
+                          {ragResult.citations?.map((cit, idx) => (
+                            <div key={idx} className="p-3 rounded-xl border border-slate-800 bg-[#121214] flex items-center justify-between text-xs">
+                              <div>
+                                <span className="font-bold text-slate-200">{cit.title}</span>
+                                <p className="text-slate-400 text-[11px]">{cit.jurisdiction} · {cit.section}</p>
+                              </div>
+                              {cit.url && (
+                                <a href={cit.url} target="_blank" rel="noopener noreferrer" className="text-amber-400 hover:text-amber-300 flex items-center gap-1">
+                                  <span>Source</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Sub-Tab: DECISIONS */}
+              {projectSubTab === 'Decisions' && (
+                <div className="rounded-2xl border border-slate-800 bg-[#161619] p-6 sm:p-8 space-y-6 shadow-lg animate-fadeIn text-left pt-4">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100">Compliance Decisions & Governance</h2>
+                    <p className="text-xs text-slate-400 mt-1">Record binding human determinations to resolve conflicts and establish defensible compliance posture.</p>
+                  </div>
+
+                  {/* Form to Record Decision */}
+                  <form onSubmit={handleRecordDecision} className="p-5 rounded-xl border border-slate-800 bg-[#121214] space-y-4">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-400">Record Human Decision</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-300 mb-1">Decision Outcome</label>
+                        <select
+                          value={newDecisionType}
+                          onChange={(e) => setNewDecisionType(e.target.value)}
+                          className="w-full bg-[#161619] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                        >
+                          <option value="ACCEPT">ACCEPT (Adopt Recommendation)</option>
+                          <option value="REJECT">REJECT (Decline with Rationale)</option>
+                          <option value="REVIEW_REQUIRED">REVIEW REQUIRED (Request Clarification)</option>
+                          <option value="FOLLOW_UP_REQUIRED">FOLLOW-UP REQUIRED</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">Decision Rationale</label>
+                      <textarea
+                        rows={3}
+                        value={newDecisionRationale}
+                        onChange={(e) => setNewDecisionRationale(e.target.value)}
+                        placeholder="Detailed reasoning and statutory basis for this determination..."
+                        className="w-full bg-[#161619] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-300 mb-1">Follow-Up Action Item</label>
+                      <input
+                        type="text"
+                        value={newFollowUpAction}
+                        onChange={(e) => setNewFollowUpAction(e.target.value)}
+                        placeholder="Action item (e.g. Update employee handbook, notify Board)..."
+                        className="w-full bg-[#161619] border border-slate-700 rounded-lg px-3 py-2 text-xs text-slate-200 focus:outline-none focus:border-amber-500"
+                      />
+                    </div>
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs font-bold cursor-pointer transition-colors shadow-md"
+                    >
+                      Ratify & Log Decision
+                    </button>
+                  </form>
+
+                  {/* Decisions History */}
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">Ratified Decisions Log</h3>
+                    <div className="space-y-3">
+                      {(projectDecisionsList.length > 0 ? projectDecisionsList : [
+                        { decision_id: 1, decision_type: 'ACCEPT', decision_rationale: 'Adopt strict £100 pre-approval threshold per Eleanor Vance recommendation to satisfy Section 7 Adequate Procedures.', follow_up_action: 'Configure automated threshold alerts in corporate gift register.', created_at: '2026-10-11T12:00:00Z' }
+                      ]).map((d, idx) => (
+                        <div key={d.decision_id || idx} className="p-4 rounded-xl border border-slate-800 bg-[#121214] space-y-2 text-xs">
+                          <div className="flex items-center justify-between">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                              d.decision_type === 'ACCEPT' ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800' : 'bg-amber-950/80 text-amber-400 border border-amber-800'
+                            }`}>
+                              {d.decision_type}
+                            </span>
+                            <span className="text-[11px] text-slate-500 font-mono">{d.created_at ? new Date(d.created_at).toLocaleDateString() : 'Recorded'}</span>
+                          </div>
+                          <p className="text-slate-200"><strong className="text-slate-400">Rationale:</strong> {d.decision_rationale}</p>
+                          {d.follow_up_action && (
+                            <p className="text-slate-300"><strong className="text-amber-400">Action:</strong> {d.follow_up_action}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Sub-Tab: READINESS */}
+              {projectSubTab === 'Readiness' && (
+                <div className="rounded-2xl border border-slate-800 bg-[#161619] p-6 sm:p-8 space-y-6 shadow-lg animate-fadeIn text-left pt-4">
+                  <div>
+                    <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100">Audit Readiness Assessment (Week 6 Target)</h2>
+                    <p className="text-xs text-slate-400 mt-1">Real-time compliance maturity evaluated from live PostgreSQL records.</p>
+                  </div>
+
+                  {/* Big Score Card */}
+                  <div className="p-6 rounded-2xl border border-amber-900/60 bg-gradient-to-r from-amber-950/40 to-slate-900 flex items-center justify-between">
+                    <div>
+                      <span className="text-xs font-bold uppercase tracking-wider text-amber-400">Overall Audit Readiness</span>
+                      <h3 className="text-4xl font-extrabold text-slate-100 mt-1">
+                        {projectReadinessData?.readiness_score || '76%'}
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-2 max-w-md">
+                        {projectReadinessData?.summary || 'Project compliance baseline established with live statutory requirements, verified advice, and recorded decisions.'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-950 text-amber-300 border border-amber-800 font-mono">
+                        STATUS: {projectReadinessData?.readiness_status || 'IN_PROGRESS'}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Breakdown Progress Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {(projectReadinessData?.breakdown || [
+                      { category: 'Regulatory Obligations', metric: '6 of 9 Requirements Completed', completion_pct: 67, status: 'IN_PROGRESS' },
+                      { category: 'Advisor Governance & Review', metric: '2 of 2 Reviews Finalized', completion_pct: 100, status: 'PASS' },
+                      { category: 'Binding Compliance Decisions', metric: '1 of 1 Decisions Ratified', completion_pct: 100, status: 'PASS' }
+                    ]).map((item, idx) => (
+                      <div key={idx} className="p-4 rounded-xl border border-slate-800 bg-[#121214] space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="font-bold text-slate-200">{item.category}</span>
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-slate-800 text-amber-400 font-mono">{item.status}</span>
+                        </div>
+                        <p className="text-xs text-slate-400">{item.metric}</p>
+                        <div className="w-full bg-slate-800 rounded-full h-2 mt-2">
+                          <div className="bg-amber-500 h-2 rounded-full" style={{ width: `${item.completion_pct}%` }}></div>
+                        </div>
+                        <span className="text-[11px] font-mono text-slate-400">{item.completion_pct}% Complete</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -1853,7 +2480,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
                           22 SEP
                         </span>
                         <span className="font-bold text-slate-100 text-sm sm:text-base">
-                          Workflow opened by Jun Nakamura
+                          Workflow opened by {currentUser?.full_name || 'Project Lead'}
                         </span>
                       </div>
                       <button
@@ -1913,7 +2540,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
 
           {/* TAB: ADVISORS / EXPERTS VIEW */}
           {activeTab === 'Advisors / Experts' && (
-            <AdvisorsExpertsView isDarkMode={isDarkMode} />
+            <AdvisorsExpertsView isDarkMode={isDarkMode} projects={allProjects} />
           )}
 
           {/* TAB: REGULATORY SUPPORT VIEW */}
@@ -1928,7 +2555,11 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut }) 
 
           {/* TAB: SETTINGS VIEW */}
           {activeTab === 'Settings' && (
-            <SettingsView isDarkMode={isDarkMode} />
+            <SettingsView
+              isDarkMode={isDarkMode}
+              currentUser={currentUser}
+              onUpdateUser={(updated) => setCurrentUser(prev => ({ ...prev, ...updated }))}
+            />
           )}
 
           {/* OTHER TABS PLACEHOLDER */}

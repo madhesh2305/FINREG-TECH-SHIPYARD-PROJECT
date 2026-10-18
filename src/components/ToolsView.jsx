@@ -391,18 +391,11 @@ export default function ToolsView({ isDarkMode }) {
               <div className="pt-5 mt-5 border-t border-slate-100 dark:border-slate-800/80">
                 <button
                   type="button"
-                  disabled={isApproved}
                   onClick={(e) => {
                     e.stopPropagation();
-                    if (!isApproved) {
-                      setSelectedTool(tool);
-                    }
+                    setSelectedTool(tool);
                   }}
-                  className={`w-full py-2.5 rounded-xl text-xs font-bold border transition-colors ${
-                    isApproved
-                      ? 'border-slate-800/80 bg-slate-900/50 text-slate-500 cursor-not-allowed opacity-50'
-                      : 'border-slate-300 dark:border-slate-700 bg-stone-50 dark:bg-slate-800/80 hover:bg-stone-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 cursor-pointer'
-                  }`}
+                  className="w-full py-2.5 rounded-xl text-xs font-bold border transition-colors border-slate-300 dark:border-slate-700 bg-stone-50 dark:bg-slate-800/80 hover:bg-stone-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 cursor-pointer hover:border-[#96562c]"
                 >
                   View details
                 </button>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { BarChart3, Check } from 'lucide-react';
 
-export default function CredentialsVerified({ isDarkMode }) {
+export default function CredentialsVerified({ isDarkMode, role = 'BUILDER' }) {
   return (
     <div className="text-center py-2 animate-fadeIn">
       {/* Top Icon Box (Rich Brown Badge) */}
@@ -43,7 +43,11 @@ export default function CredentialsVerified({ isDarkMode }) {
         <p className={`text-sm mt-1 ${
           isDarkMode ? 'text-slate-400' : 'text-slate-500'
         }`}>
-          Proceeding to Builder Dashboard...
+          {role?.toUpperCase() === 'ADVISOR'
+            ? 'Proceeding to Advisor Workspace...'
+            : role?.toUpperCase() === 'ADMIN'
+            ? 'Proceeding to Platform Administrator Console...'
+            : 'Proceeding to Builder Dashboard...'}
         </p>
 
         {/* Animated 3 Loading Dots (Warm Brown) */}

@@ -1,6 +1,6 @@
 import { apiCall } from './api';
 
-const MOCK_TOOLS = [
+export const TRUSTED_TOOLS = [
   {
     id: 'TOOL-001',
     name: 'ControlMap',
@@ -49,26 +49,31 @@ const MOCK_TOOLS = [
 ];
 
 /**
- * Fetches directory of trusted ecosystem tools via GET /tools
+ * Fetches directory of trusted ecosystem tools from platform catalog
  */
 export async function getTools() {
   try {
-    const data = await apiCall('/tools', 'GET');
-    return Array.isArray(data) && data.length > 0 ? data : MOCK_TOOLS;
-  } catch (err) {
-    console.warn('[toolService] GET /tools failed. Returning mock tools list.');
-    return MOCK_TOOLS;
+    const stored = localStorage.getItem('ecosystem_tools');
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch (e) {
+    // Ignore storage parsing errors
   }
+  return TRUSTED_TOOLS;
 }
 
 /**
- * Toggles or updates tool usage status via POST /tools/{toolId}/use
+ * Toggles or updates tool usage status
  */
 export async function toggleToolUsage(toolId, isUsed = true) {
   try {
-    return await apiCall(`/tools/${toolId}/use`, 'POST', { isUsed });
-  } catch (err) {
-    console.warn(`[toolService] POST /tools/${toolId}/use failed. Processing locally.`);
+    const tools = await getTools();
+    const updated = tools.map((t) => (t.id === toolId ? { ...t, isUsed } : t));
+    localStorage.setItem('ecosystem_tools', JSON.stringify(updated));
     return { success: true, toolId, isUsed };
+  } catch (err) {
+    console.error(`[toolService] toggleToolUsage failed:`, err);
+    return { success: false, toolId, isUsed };
   }
 }

@@ -1,51 +1,72 @@
 import { apiCall, setToken, clearToken, getToken } from './api';
 
-// Fallback Mock User Profile if Backend is Offline
-const MOCK_USER = {
-  id: 'usr_001',
-  name: 'J. Nakamura',
-  email: 'jun@finregtech.io',
-  role: 'Builder',
-  platform_role: 'BUILDER',
-  memberships: [
-    { projectId: 'PRJ-001', role: 'OWNER' },
-    { projectId: 'PRJ-005', role: 'OWNER' },
-  ],
-};
+/**
+ * Registers a new user via POST /auth/register
+ * @param {object} param0 - { email, password, full_name, role, organization }
+ */
+export async function registerUser({ email, password, full_name, role = 'BUILDER', organization = '' }) {
+  const payload = {
+    email: email.trim().toLowerCase(),
+    password: password.trim(),
+    full_name: full_name.trim(),
+    role: role.toUpperCase(),
+    organization: organization.trim(),
+  };
+
+  const data = await apiCall('/auth/register', 'POST', payload);
+  if (data && data.access_token) {
+    setToken(data.access_token);
+    localStorage.setItem('currentUser', JSON.stringify({
+      user_id: data.user_id,
+      email: data.email,
+      full_name: data.full_name,
+      platform_role: data.platform_role,
+    }));
+  }
+  return data;
+}
 
 /**
  * Authenticates user credentials via POST /auth/login
  */
 export async function loginUser(email, password) {
-  try {
-    const data = await apiCall('/auth/login', 'POST', { email, password });
-    if (data && data.access_token) {
-      setToken(data.access_token);
-    } else if (data && data.token) {
-      setToken(data.token);
-    }
-    return data;
-  } catch (err) {
-    console.warn('[authService] Live backend login unreachable. Using dev fallback login token.');
-    // Demo fallback token for dev mode testing when backend is offline
-    const fakeToken = 'mock_jwt_token_jun_nakamura';
-    setToken(fakeToken);
-    return { access_token: fakeToken, token_type: 'bearer', user: MOCK_USER };
+  const payload = {
+    email: email.trim().toLowerCase(),
+    password: password.trim(),
+  };
+
+  const data = await apiCall('/auth/login', 'POST', payload);
+  if (data && data.access_token) {
+    setToken(data.access_token);
+    localStorage.setItem('currentUser', JSON.stringify({
+      user_id: data.user_id,
+      email: data.email,
+      full_name: data.full_name,
+      platform_role: data.platform_role,
+    }));
   }
+  return data;
 }
 
 /**
  * Fetches current authenticated user info via GET /users/me
  */
 export async function getCurrentUser() {
-  if (!getToken()) return MOCK_USER;
+  const token = getToken();
+  if (!token) return null;
 
   try {
     const data = await apiCall('/users/me', 'GET');
-    return data || MOCK_USER;
+    if (data) {
+      localStorage.setItem('currentUser', JSON.stringify(data));
+      return data;
+    }
+    return null;
   } catch (err) {
-    console.warn('[authService] GET /users/me unreachable. Returning mock user profile.');
-    return MOCK_USER;
+    console.warn('[authService] Token expired or invalid. Clearing session.');
+    clearToken();
+    localStorage.removeItem('currentUser');
+    return null;
   }
 }
 
@@ -54,4 +75,37 @@ export async function getCurrentUser() {
  */
 export function logoutUser() {
   clearToken();
+  localStorage.removeItem('currentUser');
+}
+
+/**
+ * Changes authenticated user password via POST /auth/change-password
+ */
+export async function changePassword(currentPassword, newPassword) {
+  return await apiCall('/auth/change-password', 'POST', {
+    current_password: currentPassword,
+    new_password: newPassword,
+  });
+}
+
+/**
+ * Requests password reset via POST /auth/password-reset-request
+ */
+export async function requestPasswordReset(email) {
+  return await apiCall('/auth/password-reset-request', 'POST', {
+    email: email.trim().toLowerCase(),
+  });
+}
+
+/**
+ * Fetches real activity and workflow notifications for current user via GET /users/me/notifications
+ */
+export async function getUserNotifications() {
+  try {
+    const data = await apiCall('/users/me/notifications', 'GET');
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn('[authService] getUserNotifications warning:', err);
+    return [];
+  }
 }

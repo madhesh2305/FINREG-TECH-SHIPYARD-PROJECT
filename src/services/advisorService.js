@@ -1,51 +1,15 @@
 import { apiCall } from './api';
 
-const MOCK_ADVISORS = [
-  {
-    id: 'adv_001',
-    name: 'S. Okonkwo',
-    title: 'Senior FCC & Anti-Money Laundering Expert',
-    organization: 'FinReg Solutions UK',
-    avatar: 'SO',
-    specialties: ['AML/CTF', 'KYC/CDD', 'FCA Regulations'],
-    rating: '4.9',
-  },
-  {
-    id: 'adv_002',
-    name: 'A. Petrov',
-    title: 'Prudential Reporting & Risk Specialist',
-    organization: 'EBA Compliance Partners',
-    avatar: 'AP',
-    specialties: ['Regulatory Reporting', 'Basel III', 'Capital Adequacy'],
-    rating: '4.8',
-  },
-  {
-    id: 'adv_003',
-    name: 'M. Chen',
-    title: 'Data Protection & GDPR Officer',
-    organization: 'Global Privacy Guild',
-    avatar: 'MC',
-    specialties: ['GDPR', 'Data Governance', 'Audit Trails'],
-    rating: '5.0',
-  },
-];
-
-const MOCK_TEAM_MEMBERS = [
-  { id: 'mem_1', name: 'J. Nakamura', role: 'Owner', avatar: 'JN', type: 'OWNER' },
-  { id: 'mem_2', name: 'S. Okonkwo', role: 'Advisor 1', avatar: 'SO', type: 'ADVISOR' },
-  { id: 'mem_3', name: 'A. Petrov', role: 'Advisor 2', avatar: 'AP', type: 'ADVISOR' },
-];
-
 /**
  * Fetches expert advisors via GET /advisors
  */
 export async function getAdvisors() {
   try {
     const data = await apiCall('/advisors', 'GET');
-    return Array.isArray(data) && data.length > 0 ? data : MOCK_ADVISORS;
+    return Array.isArray(data) ? data : [];
   } catch (err) {
-    console.warn('[advisorService] GET /advisors failed. Returning mock advisors.');
-    return MOCK_ADVISORS;
+    console.error('[advisorService] GET /advisors failed:', err);
+    throw err;
   }
 }
 
@@ -55,10 +19,10 @@ export async function getAdvisors() {
 export async function getProjectMembers(projectId) {
   try {
     const data = await apiCall(`/projects/${projectId}/members`, 'GET');
-    return Array.isArray(data) && data.length > 0 ? data : MOCK_TEAM_MEMBERS;
+    return Array.isArray(data) ? data : [];
   } catch (err) {
-    console.warn(`[advisorService] GET /projects/${projectId}/members failed. Returning mock team members.`);
-    return MOCK_TEAM_MEMBERS;
+    console.error(`[advisorService] GET /projects/${projectId}/members failed:`, err);
+    throw err;
   }
 }
 
@@ -69,7 +33,32 @@ export async function sendAdvisorInvitation(projectId, payload) {
   try {
     return await apiCall(`/projects/${projectId}/advisor-invitations`, 'POST', payload);
   } catch (err) {
-    console.warn(`[advisorService] POST /projects/${projectId}/advisor-invitations failed.`);
-    return { status: 'sent', invitationId: `inv_${Date.now()}` };
+    console.error(`[advisorService] POST /projects/${projectId}/advisor-invitations failed:`, err);
+    throw err;
+  }
+}
+
+/**
+ * Adds an existing user/advisor as a project member via POST /projects/{projectId}/members
+ */
+export async function addProjectMember(projectId, memberPayload) {
+  try {
+    return await apiCall(`/projects/${projectId}/members`, 'POST', memberPayload);
+  } catch (err) {
+    console.error(`[advisorService] POST /projects/${projectId}/members failed:`, err);
+    throw err;
+  }
+}
+
+/**
+ * Fetches advisor invitations for project via GET /projects/{projectId}/advisor-invitations
+ */
+export async function getProjectInvitations(projectId) {
+  try {
+    const data = await apiCall(`/projects/${projectId}/advisor-invitations`, 'GET');
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn(`[advisorService] GET /projects/${projectId}/advisor-invitations failed:`, err);
+    return [];
   }
 }

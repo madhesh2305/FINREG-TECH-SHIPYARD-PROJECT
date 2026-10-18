@@ -42,7 +42,17 @@ export async function apiCall(endpoint, method = 'GET', body = null) {
       throw new Error(errorMessage);
     }
 
-    return await response.json();
+    if (response.status === 204) {
+      return null;
+    }
+
+    const text = await response.text();
+    if (!text) return null;
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return text;
+    }
   } catch (err) {
     // Re-throw network or API errors for component error handling
     console.warn(`[API Client Warning] Call to ${endpoint} failed:`, err.message);
