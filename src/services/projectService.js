@@ -144,6 +144,7 @@ export async function createProject(projectPayload) {
     lastUpdated: 'Just now',
     owner: projectPayload.owner || 'Project Owner',
     ownerEmail: projectPayload.ownerEmail || '',
+    progress: 0,
     description: projectPayload.description || 'Newly created regulatory project.',
     created: 'Today',
     jurisdiction: projectPayload.jurisdiction || 'United Kingdom - FCA',

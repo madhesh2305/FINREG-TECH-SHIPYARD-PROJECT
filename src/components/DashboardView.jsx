@@ -220,23 +220,26 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     },
   ];
 
-  // Helper to load projects scoped to authenticated user (DEF-06)
+  // Helper to load projects scoped to authenticated user (DEF-06, DEF-13)
   const loadScopedProjects = () => {
     try {
-      const email = (currentUser?.email || '').toLowerCase();
-      const name = currentUser?.name || '';
+      const email = (currentUser?.email || '').toLowerCase().trim();
+      const name = (currentUser?.name || '').toLowerCase().trim();
       const raw = localStorage.getItem('finreg_projects');
       const local = raw ? JSON.parse(raw) : [];
 
+      // Strict user scoping: only match if project ownerEmail matches currentUser email OR owner name matches (DEF-13)
       const userProjects = local.filter((p) => {
-        const matchesEmail = email && p.ownerEmail && p.ownerEmail.toLowerCase() === email;
-        const matchesName = name && p.owner && p.owner.toLowerCase() === name.toLowerCase();
-        return matchesEmail || matchesName || !p.ownerEmail;
+        const pEmail = (p.ownerEmail || '').toLowerCase().trim();
+        const pOwner = (p.owner || '').toLowerCase().trim();
+        const matchesEmail = email && pEmail && pEmail === email;
+        const matchesName = name && pOwner && pOwner === name;
+        return matchesEmail || matchesName;
       });
 
-      // Default demo account gets seeded projects; newly registered builders only see their own created projects (DEF-06)
-      if (email === 'builder@gmail.com' || name === 'Jun Nakamura') {
-        const combined = [...local, ...SEEDED_BUILDER_PROJECTS];
+      // Default demo account gets seeded projects; newly registered builders only see their own created projects (DEF-06, DEF-13)
+      if (email === 'builder@gmail.com' || name === 'jun nakamura') {
+        const combined = [...userProjects, ...SEEDED_BUILDER_PROJECTS];
         const unique = [];
         const seen = new Set();
         for (const item of combined) {
@@ -263,16 +266,22 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
       try {
         const liveProjects = await getProjects();
         if (isMounted && Array.isArray(liveProjects) && liveProjects.length > 0) {
-          const email = (currentUser?.email || '').toLowerCase();
-          const name = currentUser?.name || '';
-          if (email === 'builder@gmail.com' || name === 'Jun Nakamura') {
-            setAllProjects(liveProjects);
+          const email = (currentUser?.email || '').toLowerCase().trim();
+          const name = (currentUser?.name || '').toLowerCase().trim();
+          if (email === 'builder@gmail.com' || name === 'jun nakamura') {
+            const scoped = liveProjects.filter(
+              (p) =>
+                !p.ownerEmail ||
+                p.ownerEmail.toLowerCase() === email ||
+                (p.owner && p.owner.toLowerCase() === name)
+            );
+            setAllProjects(scoped);
           } else {
-            // Keep scoped to current user
+            // Keep scoped strictly to current user (DEF-13)
             const scoped = liveProjects.filter(
               (p) =>
                 (p.ownerEmail && p.ownerEmail.toLowerCase() === email) ||
-                (p.owner && p.owner.toLowerCase() === name.toLowerCase())
+                (p.owner && p.owner.toLowerCase() === name)
             );
             if (scoped.length > 0) setAllProjects(scoped);
           }
@@ -345,6 +354,8 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
       lastUpdated: createdProject.lastUpdated || 'Just now',
       owner: createdProject.owner || creatorName,
       ownerEmail: creatorEmail,
+      progress: 0,
+      isNew: true,
       description: createdProject.description || payload.description,
       created: createdProject.created || 'Today',
       jurisdiction: createdProject.jurisdiction || payload.jurisdiction,
@@ -1962,40 +1973,92 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                         COMPLETION
                       </h2>
 
-                      {/* Progress bar */}
-                      <div className="space-y-2 mb-5">
-                        <div className="flex items-center justify-between text-xs font-bold">
-                          <span className="text-slate-600 dark:text-slate-300">Overall progress</span>
-                          <span className="text-[#7c4a27] dark:text-amber-400 text-sm">60%</span>
-                        </div>
-                        <div className="w-full h-2 bg-stone-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                          <div className="h-full bg-[#7c4a27] dark:bg-amber-500 rounded-full w-[60%]" />
-                        </div>
-                      </div>
+                      {(() => {
+                        // Dynamic progress calculation based on project state (DEF-10)
+                        const isDraft = !currentProject || currentProject.status === 'Draft' || currentProject.isNew;
+                        const isCompleted = currentProject?.status === 'Completed';
+                        const isReview = currentProject?.status === 'Under Review';
 
-                      {/* Checklist */}
-                      <div className="space-y-2.5 text-xs sm:text-sm font-medium">
-                        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 line-through">
-                          <CheckSquare className="w-4 h-4 shrink-0 text-emerald-600 stroke-[2.5]" />
-                          <span>Requirements defined</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 line-through">
-                          <CheckSquare className="w-4 h-4 shrink-0 text-emerald-600 stroke-[2.5]" />
-                          <span>Workflow configured</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 line-through">
-                          <CheckSquare className="w-4 h-4 shrink-0 text-emerald-600 stroke-[2.5]" />
-                          <span>Advisor review</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-300">
-                          <Square className="w-4 h-4 shrink-0 stroke-[2]" />
-                          <span>Compliance sign-off</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-300">
-                          <Square className="w-4 h-4 shrink-0 stroke-[2]" />
-                          <span>Final submission</span>
-                        </div>
-                      </div>
+                        let checklistItems = [];
+                        if (isCompleted) {
+                          checklistItems = [
+                            { label: 'Requirements defined', done: true },
+                            { label: 'Workflow configured', done: true },
+                            { label: 'Advisor review', done: true },
+                            { label: 'Compliance sign-off', done: true },
+                            { label: 'Final submission', done: true },
+                          ];
+                        } else if (isDraft) {
+                          checklistItems = [
+                            { label: 'Requirements defined', done: false },
+                            { label: 'Workflow configured', done: false },
+                            { label: 'Advisor review', done: false },
+                            { label: 'Compliance sign-off', done: false },
+                            { label: 'Final submission', done: false },
+                          ];
+                        } else if (isReview) {
+                          checklistItems = [
+                            { label: 'Requirements defined', done: true },
+                            { label: 'Workflow configured', done: true },
+                            { label: 'Advisor review', done: false },
+                            { label: 'Compliance sign-off', done: false },
+                            { label: 'Final submission', done: false },
+                          ];
+                        } else {
+                          // Default for PRJ-001 In Progress fixture
+                          checklistItems = [
+                            { label: 'Requirements defined', done: true },
+                            { label: 'Workflow configured', done: true },
+                            { label: 'Advisor review', done: true },
+                            { label: 'Compliance sign-off', done: false },
+                            { label: 'Final submission', done: false },
+                          ];
+                        }
+
+                        const doneCount = checklistItems.filter((item) => item.done).length;
+                        const progressPct = currentProject?.progress !== undefined
+                          ? currentProject.progress
+                          : Math.round((doneCount / checklistItems.length) * 100);
+
+                        return (
+                          <>
+                            {/* Progress bar */}
+                            <div className="space-y-2 mb-5">
+                              <div className="flex items-center justify-between text-xs font-bold">
+                                <span className="text-slate-600 dark:text-slate-300">Overall progress</span>
+                                <span className="text-[#7c4a27] dark:text-amber-400 text-sm">{progressPct}%</span>
+                              </div>
+                              <div className="w-full h-2 bg-stone-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-[#7c4a27] dark:bg-amber-500 rounded-full transition-all duration-500"
+                                  style={{ width: `${progressPct}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Checklist */}
+                            <div className="space-y-2.5 text-xs sm:text-sm font-medium">
+                              {checklistItems.map((item, idx) => (
+                                <div
+                                  key={idx}
+                                  className={`flex items-center gap-2 ${
+                                    item.done
+                                      ? 'text-emerald-600 dark:text-emerald-400 line-through'
+                                      : 'text-slate-500 dark:text-slate-300'
+                                  }`}
+                                >
+                                  {item.done ? (
+                                    <CheckSquare className="w-4 h-4 shrink-0 text-emerald-600 stroke-[2.5]" />
+                                  ) : (
+                                    <Square className="w-4 h-4 shrink-0 stroke-[2]" />
+                                  )}
+                                  <span>{item.label}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
 
                     {/* TEAM CARD */}

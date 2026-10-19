@@ -1,131 +1,175 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Check, CheckCircle2 } from 'lucide-react';
+
+const ADVISOR_REVIEWS_STORAGE_KEY = 'finreg_advisor_reviews';
+
+const DEFAULT_ADVICE = [
+  {
+    id: 'ADV-001',
+    advisor: 'Dr. Maya Chen',
+    expertise: 'AML & Financial Crime',
+    requirement: 'Risk-sensitive customer due diligence',
+    project: 'ABC Shield',
+    source: 'FCA Handbook · SYSC 6.3.8',
+    authority: 'Financial Conduct Authority',
+    adviceSummary: 'Apply additional verification to high-ris...',
+    recommendation:
+      'Apply additional verification to high-risk customers and record the rationale for every enhanced due diligence decision.',
+    comments:
+      'The control design covers standard customer due diligence, but the enhanced due diligence trigger should be made explicit for complex ownership structures.',
+    attachment: 'EDD control note · Section 4.2',
+    dateSubmitted: '22 Sep 2026',
+    status: 'Pending Review',
+    statusBadge: 'border-amber-800/80 bg-amber-950/60 text-amber-400',
+    dotColor: 'bg-amber-500',
+  },
+  {
+    id: 'ADV-002',
+    advisor: 'Daniel Okafor',
+    expertise: 'Operational Resilience',
+    requirement: 'Ongoing transaction monitoring',
+    project: 'ABC Shield',
+    source: 'JMLSG Guidance · Part I, 5.7',
+    authority: 'Joint Money Laundering Steering Group',
+    adviceSummary: 'Add a continuity procedure for priority...',
+    recommendation:
+      'Add a continuity procedure for priority transaction monitoring alerts to ensure continuous operational resilience.',
+    comments:
+      'Secondary alert screening queues should be maintained alongside automated thresholds during elevated transaction periods.',
+    attachment: 'Surveillance Continuity Note · Section 2.1',
+    dateSubmitted: '21 Sep 2026',
+    status: 'Accepted',
+    statusBadge: 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400',
+    dotColor: 'bg-emerald-500',
+  },
+  {
+    id: 'ADV-003',
+    advisor: 'Dr. Maya Chen',
+    expertise: 'AML & Financial Crime',
+    requirement: 'Suspicious activity escalation',
+    project: 'ABC Shield',
+    source: 'SAR Guidance · Chapter 3',
+    authority: 'National Crime Agency',
+    adviceSummary: 'Name an accountable out-of-hours de...',
+    recommendation:
+      'Name an accountable out-of-hours deputy MLRO for urgent escalation to avoid reporting delays.',
+    comments:
+      'Ensure that high-severity SAR referrals are submitted directly through secure NCA portals within the statutory escalation window.',
+    attachment: 'SAR Escalation Playbook · Appendix B',
+    dateSubmitted: '23 Sep 2026',
+    status: 'Pending Review',
+    statusBadge: 'border-amber-800/80 bg-amber-950/60 text-amber-400',
+    dotColor: 'bg-amber-500',
+  },
+  {
+    id: 'ADV-004',
+    advisor: 'Daniel Okafor',
+    expertise: 'Operational Resilience',
+    requirement: 'Alert investigation continuity',
+    project: 'ABC Shield',
+    source: 'PRA SS1/21 · Section 4',
+    authority: 'Prudential Regulation Authority',
+    adviceSummary: 'Retain quarterly recovery test evidence...',
+    recommendation:
+      'Retain quarterly recovery test evidence for regulatory inspection and operational audit readiness.',
+    comments:
+      'Disaster recovery testing logs must verify that alert audit logs remain tamper-evident and retrievable during infrastructure failovers.',
+    attachment: 'Recovery Test Evidence · Log 2026-Q3',
+    dateSubmitted: '19 Sep 2026',
+    status: 'Accepted',
+    statusBadge: 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400',
+    dotColor: 'bg-emerald-500',
+  },
+  {
+    id: 'ADV-005',
+    advisor: 'Dr. Maya Chen',
+    expertise: 'AML & Financial Crime',
+    requirement: 'High-risk customer approval',
+    project: 'ABC Shield',
+    source: 'FCA Handbook · SYSC 6.3.9',
+    authority: 'Financial Conduct Authority',
+    adviceSummary: 'Proceed with the proposed control and...',
+    recommendation:
+      'Proceed with the proposed control and sign-off thresholds for PEP onboarding.',
+    comments:
+      'Senior management sign-off is properly mandated for all Level 3 risk accounts. Recommend annual re-certification.',
+    attachment: 'PEP Approval Flowchart · Section 5',
+    dateSubmitted: '17 Sep 2026',
+    status: 'Accepted',
+    statusBadge: 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400',
+    dotColor: 'bg-emerald-500',
+  },
+  {
+    id: 'ADV-006',
+    advisor: 'Sarah Jenkins',
+    expertise: 'Governance & Compliance',
+    requirement: 'Consumer Duty Board Reporting',
+    project: 'ABC Shield',
+    source: 'FCA FG22/5 · PRIN 2A.8',
+    authority: 'Financial Conduct Authority',
+    adviceSummary: 'Ensure granular outcome metrics for retail products.',
+    recommendation:
+      'Ensure granular outcome metrics for retail products are reviewed quarterly at the Executive Risk Committee.',
+    comments:
+      'Reporting packs must clearly evidence customer vulnerability screening and communications testing.',
+    attachment: 'Consumer Duty MI Spec · v2.0',
+    dateSubmitted: '15 Sep 2026',
+    status: 'Accepted',
+    statusBadge: 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400',
+    dotColor: 'bg-emerald-500',
+  },
+];
 
 export default function AdvisorAdviceView({ isDarkMode }) {
   const [selectedAdvice, setSelectedAdvice] = useState(null);
   const [toastMsg, setToastMsg] = useState(null);
 
-  // Master Advisor Advice List matching uploaded images
-  const [adviceList, setAdviceList] = useState([
-    {
-      id: 'ADV-001',
-      advisor: 'Dr. Maya Chen',
-      expertise: 'AML & Financial Crime',
-      requirement: 'Risk-sensitive customer due diligence',
-      project: 'ABC Shield',
-      source: 'FCA Handbook · SYSC 6.3.8',
-      authority: 'Financial Conduct Authority',
-      adviceSummary: 'Apply additional verification to high-ris...',
-      recommendation:
-        'Apply additional verification to high-risk customers and record the rationale for every enhanced due diligence decision.',
-      comments:
-        'The control design covers standard customer due diligence, but the enhanced due diligence trigger should be made explicit for complex ownership structures.',
-      attachment: 'EDD control note · Section 4.2',
-      dateSubmitted: '22 Sep 2026',
-      status: 'Pending Review',
-      statusBadge: 'border-amber-800/80 bg-amber-950/60 text-amber-400',
-      dotColor: 'bg-amber-500',
-    },
-    {
-      id: 'ADV-002',
-      advisor: 'Daniel Okafor',
-      expertise: 'Operational Resilience',
-      requirement: 'Ongoing transaction monitoring',
-      project: 'ABC Shield',
-      source: 'JMLSG Guidance · Part I, 5.7',
-      authority: 'Joint Money Laundering Steering Group',
-      adviceSummary: 'Add a continuity procedure for priority...',
-      recommendation:
-        'Add a continuity procedure for priority transaction monitoring alerts to ensure continuous operational resilience.',
-      comments:
-        'Secondary alert screening queues should be maintained alongside automated thresholds during elevated transaction periods.',
-      attachment: 'Surveillance Continuity Note · Section 2.1',
-      dateSubmitted: '21 Sep 2026',
-      status: 'Accepted',
-      statusBadge: 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400',
-      dotColor: 'bg-emerald-500',
-    },
-    {
-      id: 'ADV-003',
-      advisor: 'Dr. Maya Chen',
-      expertise: 'AML & Financial Crime',
-      requirement: 'Suspicious activity escalation',
-      project: 'ABC Shield',
-      source: 'SAR Guidance · Chapter 3',
-      authority: 'National Crime Agency',
-      adviceSummary: 'Name an accountable out-of-hours de...',
-      recommendation:
-        'Name an accountable out-of-hours deputy MLRO for urgent escalation to avoid reporting delays.',
-      comments:
-        'Ensure that high-severity SAR referrals are submitted directly through secure NCA portals within the statutory escalation window.',
-      attachment: 'SAR Escalation Playbook · Appendix B',
-      dateSubmitted: '23 Sep 2026',
-      status: 'Pending Review',
-      statusBadge: 'border-amber-800/80 bg-amber-950/60 text-amber-400',
-      dotColor: 'bg-amber-500',
-    },
-    {
-      id: 'ADV-004',
-      advisor: 'Daniel Okafor',
-      expertise: 'Operational Resilience',
-      requirement: 'Alert investigation continuity',
-      project: 'ABC Shield',
-      source: 'PRA SS1/21 · Section 4',
-      authority: 'Prudential Regulation Authority',
-      adviceSummary: 'Retain quarterly recovery test evidence...',
-      recommendation:
-        'Retain quarterly recovery test evidence for regulatory inspection and operational audit readiness.',
-      comments:
-        'Disaster recovery testing logs must verify that alert audit logs remain tamper-evident and retrievable during infrastructure failovers.',
-      attachment: 'Recovery Test Evidence · Log 2026-Q3',
-      dateSubmitted: '19 Sep 2026',
-      status: 'Accepted',
-      statusBadge: 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400',
-      dotColor: 'bg-emerald-500',
-    },
-    {
-      id: 'ADV-005',
-      advisor: 'Dr. Maya Chen',
-      expertise: 'AML & Financial Crime',
-      requirement: 'High-risk customer approval',
-      project: 'ABC Shield',
-      source: 'FCA Handbook · SYSC 6.3.9',
-      authority: 'Financial Conduct Authority',
-      adviceSummary: 'Proceed with the proposed control and...',
-      recommendation:
-        'Proceed with the proposed control and sign-off thresholds for PEP onboarding.',
-      comments:
-        'Senior management sign-off is properly mandated for all Level 3 risk accounts. Recommend annual re-certification.',
-      attachment: 'PEP Approval Flowchart · Section 5',
-      dateSubmitted: '17 Sep 2026',
-      status: 'Accepted',
-      statusBadge: 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400',
-      dotColor: 'bg-emerald-500',
-    },
-    {
-      id: 'ADV-006',
-      advisor: 'Sarah Jenkins',
-      expertise: 'Governance & Compliance',
-      requirement: 'Consumer Duty Board Reporting',
-      project: 'ABC Shield',
-      source: 'FCA FG22/5 · PRIN 2A.8',
-      authority: 'Financial Conduct Authority',
-      adviceSummary: 'Ensure granular outcome metrics for retail products.',
-      recommendation:
-        'Ensure granular outcome metrics for retail products are reviewed quarterly at the Executive Risk Committee.',
-      comments:
-        'Reporting packs must clearly evidence customer vulnerability screening and communications testing.',
-      attachment: 'Consumer Duty MI Spec · v2.0',
-      dateSubmitted: '15 Sep 2026',
-      status: 'Accepted',
-      statusBadge: 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400',
-      dotColor: 'bg-emerald-500',
-    },
-  ]);
+  // Dynamic advice loading merged with defaults (DEF-12)
+  const loadDynamicAdvice = () => {
+    try {
+      const raw = localStorage.getItem(ADVISOR_REVIEWS_STORAGE_KEY);
+      const saved = raw ? JSON.parse(raw) : [];
+      if (Array.isArray(saved) && saved.length > 0) {
+        const formatted = saved.map((r, idx) => ({
+          id: r.id || `ADV-SUB-${idx + 1}`,
+          advisor: r.advisor || r.advisorName || 'Dr. Maya Chen',
+          expertise: r.expertise || r.advisorRole || 'AML & Financial Crime',
+          requirement: r.requirement || 'Risk-sensitive customer due diligence',
+          project: r.project || r.projectName || 'ABC Shield',
+          source: r.source || 'FCA Handbook · SYSC 6.3.8',
+          authority: r.authority || 'Financial Conduct Authority',
+          adviceSummary: (r.adviceSubmitted || r.recommendation || '').slice(0, 42) + '...',
+          recommendation: r.recommendation || r.adviceSubmitted || '',
+          comments: r.adviceSubmitted || r.comments || '',
+          attachment: r.referenceAttachment || r.attachment || 'Advisory-Notes.pdf',
+          dateSubmitted: r.date || r.dateSubmitted || 'Recently',
+          status: r.status === 'Submitted' ? 'Pending Review' : (r.status || 'Pending Review'),
+          statusBadge: r.status === 'Accepted'
+            ? 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400'
+            : 'border-amber-800/80 bg-amber-950/60 text-amber-400',
+          dotColor: r.status === 'Accepted' ? 'bg-emerald-500' : 'bg-amber-500',
+        }));
+
+        const existingIds = new Set(formatted.map((f) => f.id));
+        return [...formatted, ...DEFAULT_ADVICE.filter((d) => !existingIds.has(d.id))];
+      }
+    } catch (e) {}
+    return DEFAULT_ADVICE;
+  };
+
+  const [adviceList, setAdviceList] = useState(loadDynamicAdvice);
+
+  useEffect(() => {
+    const handleStorageChange = () => {
+      setAdviceList(loadDynamicAdvice());
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   const handleUpdateStatus = (id, newStatus) => {
-    setAdviceList((prev) =>
-      prev.map((item) =>
+    setAdviceList((prev) => {
+      const updated = prev.map((item) =>
         item.id === id
           ? {
               ...item,
@@ -137,8 +181,20 @@ export default function AdvisorAdviceView({ isDarkMode }) {
               dotColor: newStatus === 'Accepted' ? 'bg-emerald-500' : 'bg-amber-500',
             }
           : item
-      )
-    );
+      );
+
+      try {
+        const raw = localStorage.getItem(ADVISOR_REVIEWS_STORAGE_KEY);
+        if (raw) {
+          const list = JSON.parse(raw);
+          const next = list.map((r) => (r.id === id ? { ...r, status: newStatus } : r));
+          localStorage.setItem(ADVISOR_REVIEWS_STORAGE_KEY, JSON.stringify(next));
+        }
+      } catch (e) {}
+
+      return updated;
+    });
+
     if (selectedAdvice && selectedAdvice.id === id) {
       setSelectedAdvice((prev) => ({
         ...prev,
@@ -150,8 +206,8 @@ export default function AdvisorAdviceView({ isDarkMode }) {
         dotColor: newStatus === 'Accepted' ? 'bg-emerald-500' : 'bg-amber-500',
       }));
     }
-    setToastMsg(`Advice ${id} marked as "${newStatus}"`);
-    setTimeout(() => setToastMsg(null), 2500);
+
+    setToastMsg(`Status updated to "${newStatus}" for ${id}`);
   };
 
   // IF AN ADVICE IS SELECTED, RENDER FULL ADVICE DETAILS VIEW MATCHING media_1791738592058_78459760.png & media_1791738603315_95574266.png

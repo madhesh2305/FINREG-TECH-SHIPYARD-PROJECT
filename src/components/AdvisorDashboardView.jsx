@@ -104,14 +104,10 @@ export default function AdvisorDashboardView({
     activeExpertise ||
     ADVISOR_PROFILES[0]; // Legal Partner
 
-  // Form state for Advice / Review view
-  const [advisorComments, setAdvisorComments] = useState(
-    'The control design covers standard customer due diligence, but the enhanced due diligence trigger should be made explicit for complex ownership structures.'
-  );
-  const [recommendation, setRecommendation] = useState(
-    'Apply additional verification to high-risk customers and record the rationale for every enhanced due diligence decision.'
-  );
-  const [referenceAttachment, setReferenceAttachment] = useState('EDD control note · Section 4.2');
+  // Form state for Advice / Review view (DEF-11: start clean/empty for new submissions)
+  const [advisorComments, setAdvisorComments] = useState('');
+  const [recommendation, setRecommendation] = useState('');
+  const [referenceAttachment, setReferenceAttachment] = useState('');
 
   const showToast = (msg) => {
     setToastMsg(msg);
@@ -140,23 +136,46 @@ export default function AdvisorDashboardView({
       return;
     }
 
+    const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+    const targetProjName = activeProject?.name || 'ABC Shield';
+    const targetProjId = activeProject?.id || 'PRJ-001';
+
     const newReview = {
-      id: `REV-00${reviewsList.length + 1}`,
-      project: 'ABC Shield',
-      projectId: 'PRJ-001',
+      id: `ADV-REV-${Date.now()}`,
+      project: targetProjName,
+      projectId: targetProjId,
       requirement: 'Risk-sensitive customer due diligence',
       reqCode: 'ADV-001',
       source: 'FCA Handbook · SYSC 6.3.8',
+      authority: 'Financial Conduct Authority',
       adviceSubmitted: advisorComments.trim(),
       recommendation: recommendation.trim(),
+      comments: advisorComments.trim(),
       referenceAttachment: referenceAttachment.trim() || 'FCA-Advisory-Interpretations.pdf',
-      date: '14 Oct 2026',
+      attachment: referenceAttachment.trim() || 'FCA-Advisory-Interpretations.pdf',
+      date: todayStr,
+      dateSubmitted: todayStr,
       status: 'Submitted',
       statusColor: 'bg-blue-950/60 text-blue-400 border-blue-800/80',
       dotColor: 'bg-blue-400',
+      advisor: userName,
+      advisorName: userName,
+      expertise: currentExpertise.name,
+      advisorRole: currentExpertise.name,
+      advisorEmail: userEmail,
     };
 
-    setReviewsList((prev) => [newReview, ...prev]);
+    const updated = [newReview, ...reviewsList];
+    setReviewsList(updated);
+    try {
+      localStorage.setItem(ADVISOR_REVIEWS_STORAGE_KEY, JSON.stringify(updated));
+    } catch (e) {}
+
+    // Reset Form fields to empty (DEF-11)
+    setAdvisorComments('');
+    setRecommendation('');
+    setReferenceAttachment('');
+
     showToast('Advice submitted successfully and saved to audit trail!');
     setActiveTab('Dashboard');
   };
@@ -1305,7 +1324,8 @@ export default function AdvisorDashboardView({
                       rows={4}
                       value={advisorComments}
                       onChange={(e) => setAdvisorComments(e.target.value)}
-                      className="w-full bg-[#0c0e12] border border-slate-800 rounded-md p-4 text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-amber-500/60 transition-colors resize-y leading-relaxed"
+                      placeholder="Enter your independent advisory comments, control evaluation, and compliance rationale..."
+                      className="w-full bg-[#0c0e12] border border-slate-800 rounded-md p-4 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/60 transition-colors resize-y leading-relaxed"
                     />
                   </div>
 
@@ -1318,7 +1338,8 @@ export default function AdvisorDashboardView({
                       rows={4}
                       value={recommendation}
                       onChange={(e) => setRecommendation(e.target.value)}
-                      className="w-full bg-[#0c0e12] border border-slate-800 rounded-md p-4 text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-amber-500/60 transition-colors resize-y leading-relaxed"
+                      placeholder="Specify concrete remediation recommendations or sign-off conditions..."
+                      className="w-full bg-[#0c0e12] border border-slate-800 rounded-md p-4 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/60 transition-colors resize-y leading-relaxed"
                     />
                   </div>
 
@@ -1331,7 +1352,8 @@ export default function AdvisorDashboardView({
                       type="text"
                       value={referenceAttachment}
                       onChange={(e) => setReferenceAttachment(e.target.value)}
-                      className="w-full bg-[#0c0e12] border border-slate-800 rounded-md px-4 py-3 text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-amber-500/60 transition-colors"
+                      placeholder="Optional reference note / attachment name (e.g. EDD-Guidance-Notes.pdf)"
+                      className="w-full bg-[#0c0e12] border border-slate-800 rounded-md px-4 py-3 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/60 transition-colors"
                     />
                   </div>
 
