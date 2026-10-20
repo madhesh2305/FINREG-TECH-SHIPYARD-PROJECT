@@ -109,3 +109,13 @@ export async function getUserNotifications() {
     return [];
   }
 }
+
+/**
+ * Confirms password reset via POST /auth/password-reset-confirm (DEF-15)
+ */
+export async function confirmPasswordReset(token, newPassword) {
+  return await apiCall('/auth/password-reset-confirm', 'POST', {
+    token: token.trim(),
+    new_password: newPassword.trim(),
+  });
+}

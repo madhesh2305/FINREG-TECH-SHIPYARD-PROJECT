@@ -48,27 +48,43 @@ export default function AdminDashboardView({ isDarkMode = true, onSignOut }) {
     setTimeout(() => setToastMessage(null), 3000);
   };
 
+  const [loadError, setLoadError] = useState(null);
+
   const loadData = async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const [statsData, usersData, sourcesData, auditData] = await Promise.all([
-        getAdminStats(),
-        getAdminUsers(),
-        getRegulatorySources(),
-        getAdminAuditEvents(),
+        getAdminStats().catch((err) => {
+          console.warn('[AdminDashboardView] stats error:', err);
+          return null;
+        }),
+        getAdminUsers().catch((err) => {
+          console.warn('[AdminDashboardView] users error:', err);
+          return [];
+        }),
+        getRegulatorySources().catch((err) => {
+          console.warn('[AdminDashboardView] sources error:', err);
+          return [];
+        }),
+        getAdminAuditEvents().catch((err) => {
+          console.warn('[AdminDashboardView] audit error:', err);
+          return [];
+        }),
       ]);
       setStats(statsData || {
-        total_users: 0,
-        active_users: 0,
+        total_users: Array.isArray(usersData) ? usersData.length : 0,
+        active_users: Array.isArray(usersData) ? usersData.filter(u => u.is_active).length : 0,
         total_projects: 0,
-        regulatory_sources_count: 0,
-        total_audit_events: 0,
+        regulatory_sources_count: Array.isArray(sourcesData) ? sourcesData.length : 0,
+        total_audit_events: Array.isArray(auditData) ? auditData.length : 0,
       });
       setUsers(Array.isArray(usersData) ? usersData : []);
       setRegulatorySources(Array.isArray(sourcesData) ? sourcesData : []);
       setAuditEvents(Array.isArray(auditData) ? auditData : []);
     } catch (err) {
       console.error('[AdminDashboardView] Data load failed:', err);
+      setLoadError('Some administrative services could not be reached. Retrying will re-synchronize live metrics.');
     } finally {
       setLoading(false);
     }
@@ -143,6 +159,19 @@ export default function AdminDashboardView({ isDarkMode = true, onSignOut }) {
 
       {/* Main Content */}
       <main className="flex-1 max-w-7xl w-full mx-auto p-6 space-y-6">
+        {/* DEF-17: Recoverable Error Banner for Admin Cockpit */}
+        {loadError && (
+          <div className="p-4 rounded-xl border border-amber-800 bg-amber-950/40 text-amber-300 text-xs flex items-center justify-between">
+            <span>{loadError}</span>
+            <button
+              type="button"
+              onClick={loadData}
+              className="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs cursor-pointer"
+            >
+              Retry Sync
+            </button>
+          </div>
+        )}
         {/* KPI Stats Grid */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className={`p-4 rounded-2xl border ${isDarkMode ? 'bg-[#161619] border-slate-800' : 'bg-white border-slate-200'}`}>

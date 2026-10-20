@@ -14,11 +14,12 @@ import {
   Clock,
   Check,
   Settings,
-  X
+  X,
+  Paperclip
 } from 'lucide-react';
 import { logoutUser, getUserNotifications } from '../services/authService';
 import { getProjects } from '../services/projectService';
-import { submitAdvice } from '../services/adviceService';
+import { submitAdvice, uploadAttachment } from '../services/adviceService';
 import SettingsView from './SettingsView';
 
 export default function AdvisorDashboardView({ isDarkMode, onSignOut, currentUser: propUser }) {
@@ -41,14 +42,27 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut, currentUse
   const [adviceReviewStatus, setAdviceReviewStatus] = useState('PENDING REVIEW');
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
-  // Form state for Advice / Review view matching media_1791365965767.png & media_1791365977324.png
-  const [advisorComments, setAdvisorComments] = useState(
-    'The control design covers standard customer due diligence, but the enhanced due diligence trigger should be made explicit for complex ownership structures.'
-  );
-  const [recommendation, setRecommendation] = useState(
-    'Apply additional verification to high-risk customers and record the rationale for every enhanced due diligence decision.'
-  );
-  const [referenceAttachment, setReferenceAttachment] = useState('EDD control note · Section 4.2');
+  // Form state for Advice / Review view (DEF-11: clean form state; DEF-16: PDF upload attachment)
+  const [advisorComments, setAdvisorComments] = useState('');
+  const [recommendation, setRecommendation] = useState('');
+  const [referenceAttachment, setReferenceAttachment] = useState('');
+  const [selectedPdfFile, setSelectedPdfFile] = useState(null);
+
+  const handleFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      showToast('Only PDF documents (.pdf) are permitted.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('File exceeds 10MB limit.');
+      return;
+    }
+    setSelectedPdfFile(file);
+    setReferenceAttachment(file.name);
+    showToast(`PDF selected: ${file.name}`);
+  };
 
   const [currentUser, setCurrentUser] = useState(() => {
     if (propUser) return propUser;
@@ -166,10 +180,20 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut, currentUse
         title: 'Advisory Review & Control Recommendation',
         advice_text: advisorComments,
         recommendation: recommendation,
-        assumptions: referenceAttachment,
+        assumptions: referenceAttachment || (selectedPdfFile ? selectedPdfFile.name : ''),
         advice_status: 'SUBMITTED',
       };
       await submitAdvice(targetProjectId, payload);
+
+      // DEF-16: If a PDF attachment was selected, upload it to the project cockpit
+      if (selectedPdfFile) {
+        try {
+          await uploadAttachment(targetProjectId, selectedPdfFile, 'ADVISORY_REFERENCE');
+        } catch (uploadErr) {
+          console.warn('[AdvisorDashboardView] Attachment upload error:', uploadErr);
+        }
+      }
+
       setAdviceReviewStatus('SUBMITTED');
       const activeProjName = assignedProjects[0]?.name || assignedProjects[0]?.project_name || 'Assigned Project';
       setLocalReviewsList(prev => [
@@ -177,7 +201,7 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut, currentUse
           id: `REV-${Date.now().toString().slice(-3)}`,
           project: activeProjName,
           requirement: 'Third-party intermediary due diligence',
-          adviceSubmitted: advisorComments.length > 40 ? advisorComments.slice(0, 37) + '...' : advisorComments,
+          adviceSubmitted: advisorComments.length > 40 ? advisorComments.slice(0, 37) + '...' : (advisorComments || 'Advice submitted'),
           date: 'Today',
           status: 'Submitted',
           statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
@@ -186,6 +210,12 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut, currentUse
         ...prev
       ]);
       showToast('Advice & Review submitted to Project Cockpit in PostgreSQL!');
+
+      // DEF-11: Reset form state after successful submission
+      setAdvisorComments('');
+      setRecommendation('');
+      setReferenceAttachment('');
+      setSelectedPdfFile(null);
     } catch (err) {
       console.error('[AdvisorDashboardView] submitAdvice error:', err);
       showToast(`Submission failed: ${err.message || 'Server error'}`);
@@ -997,17 +1027,35 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut, currentUse
                     />
                   </div>
 
-                  {/* Reference / attachment */}
+                  {/* DEF-16: Reference / attachment with functional PDF file picker */}
                   <div>
                     <label className="block text-xs sm:text-sm font-bold text-slate-100 mb-2">
-                      Reference / attachment
+                      Reference / attachment (PDF)
                     </label>
-                    <input
-                      type="text"
-                      value={referenceAttachment}
-                      onChange={(e) => setReferenceAttachment(e.target.value)}
-                      className="w-full bg-[#121214] border border-slate-700/80 rounded-xl px-4 py-3 text-xs sm:text-sm text-slate-100 focus:outline-none focus:border-amber-500 transition-colors"
-                    />
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="text"
+                        value={referenceAttachment}
+                        onChange={(e) => setReferenceAttachment(e.target.value)}
+                        placeholder="Enter reference note or attach a PDF file"
+                        className="flex-1 bg-[#121214] border border-slate-700/80 rounded-xl px-4 py-3 text-xs sm:text-sm text-slate-100 focus:outline-none focus:border-amber-500 transition-colors"
+                      />
+                      <label className="px-4 py-3 rounded-xl border border-amber-600/80 bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 text-xs font-bold cursor-pointer transition-colors flex items-center justify-center gap-2 shrink-0">
+                        <Paperclip className="w-4 h-4" />
+                        <span>{selectedPdfFile ? 'Change PDF' : 'Attach PDF'}</span>
+                        <input
+                          type="file"
+                          accept=".pdf,application/pdf"
+                          onChange={handleFileSelect}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                    {selectedPdfFile && (
+                      <p className="text-[11px] text-emerald-400 mt-1.5 flex items-center gap-1 font-mono">
+                        ✓ Selected attachment: {selectedPdfFile.name} ({Math.round(selectedPdfFile.size / 1024)} KB)
+                      </p>
+                    )}
                   </div>
 
                   {/* Action Buttons */}

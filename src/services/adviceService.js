@@ -60,19 +60,19 @@ export async function getProjectReadiness(projectId) {
     console.warn(`[adviceService] GET /projects/${projectId}/readiness failed:`, err);
     return {
       project_id: projectId,
-      readiness_score: '75%',
-      readiness_percentage: 75,
-      readiness_status: 'IN_PROGRESS',
-      summary: 'Readiness evaluation in progress.',
+      readiness_score: '0%',
+      readiness_percentage: 0,
+      readiness_status: 'ACTION_REQUIRED',
+      summary: 'Readiness evaluation pending initial requirements and advice records.',
       breakdown: [
-        { category: 'Regulatory Obligations', metric: 'In Progress', completion_pct: 75, status: 'IN_PROGRESS' },
-        { category: 'Advisor Governance & Review', metric: 'In Progress', completion_pct: 75, status: 'IN_PROGRESS' },
-        { category: 'Binding Compliance Decisions', metric: 'In Progress', completion_pct: 75, status: 'IN_PROGRESS' },
+        { category: 'Regulatory Obligations', metric: '0 Requirements Defined', completion_pct: 0, status: 'ACTION_REQUIRED' },
+        { category: 'Advisor Governance & Review', metric: '0 Reviews Submitted', completion_pct: 0, status: 'ACTION_REQUIRED' },
+        { category: 'Binding Compliance Decisions', metric: '0 Decisions Recorded', completion_pct: 0, status: 'ACTION_REQUIRED' },
       ],
-      total_requirements: 9,
-      completed_requirements: 6,
-      total_advice_reviews: 2,
-      total_decisions: 1,
+      total_requirements: 0,
+      completed_requirements: 0,
+      total_advice_reviews: 0,
+      total_decisions: 0,
     };
   }
 }
@@ -100,4 +100,35 @@ export async function createProjectRequirement(projectId, reqPayload) {
     console.error(`[adviceService] POST /projects/${projectId}/requirements failed:`, err);
     throw err;
   }
+}
+
+
+/**
+ * Uploads a validated PDF attachment via POST /projects/{projectId}/attachments (DEF-16)
+ */
+export async function uploadAttachment(projectId, file, category = 'ADVISORY_REFERENCE') {
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('category', category);
+  return await apiCall('/projects/' + projectId + '/attachments', 'POST', formData);
+}
+
+/**
+ * Lists project attachments via GET /projects/{projectId}/attachments (DEF-16)
+ */
+export async function getProjectAttachments(projectId) {
+  try {
+    const data = await apiCall('/projects/' + projectId + '/attachments', 'GET');
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn('[adviceService] GET /projects/' + projectId + '/attachments failed:', err);
+    return [];
+  }
+}
+
+/**
+ * Downloads a project attachment blob via GET /projects/{projectId}/attachments/{attachmentId}
+ */
+export async function downloadAttachment(projectId, attachmentId) {
+  return await apiCall('/projects/' + projectId + '/attachments/' + attachmentId, 'GET');
 }

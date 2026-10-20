@@ -9,13 +9,14 @@ export const clearToken = () => localStorage.removeItem('authToken');
  * Universal API Request Handler
  * @param {string} endpoint - API path (e.g. '/auth/login', '/projects')
  * @param {string} method - HTTP Method (GET, POST, PATCH, DELETE)
- * @param {object|null} body - Request payload object
+ * @param {object|FormData|null} body - Request payload object or FormData
  * @returns {Promise<any>} Response JSON data
  */
 export async function apiCall(endpoint, method = 'GET', body = null) {
   const token = getToken();
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token && { Authorization: `Bearer ${token}` }),
   };
 
@@ -25,7 +26,7 @@ export async function apiCall(endpoint, method = 'GET', body = null) {
   };
 
   if (body) {
-    config.body = JSON.stringify(body);
+    config.body = isFormData ? body : JSON.stringify(body);
   }
 
   try {
@@ -44,6 +45,11 @@ export async function apiCall(endpoint, method = 'GET', body = null) {
 
     if (response.status === 204) {
       return null;
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (contentType.includes('application/pdf') || contentType.includes('application/octet-stream')) {
+      return await response.blob();
     }
 
     const text = await response.text();

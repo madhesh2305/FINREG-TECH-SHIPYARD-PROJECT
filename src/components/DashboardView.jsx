@@ -97,6 +97,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   const [projectDecisionsList, setProjectDecisionsList] = useState([]);
   const [projectReadinessData, setProjectReadinessData] = useState(null);
   const [projectAuditList, setProjectAuditList] = useState([]);
+  const [projectAttachmentsList, setProjectAttachmentsList] = useState([]);
 
   // Subtab Interactive Actions States
   const [ragQuery, setRagQuery] = useState('Analyze UK Bribery Act 2010 Section 7 adequate procedures for gifts and hospitality pre-approval');
@@ -199,19 +200,21 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     setSelectedProject(project);
     setProjectSubTab('Overview');
     setActiveTab('Project Details');
-    const pId = project.project_id || project.id || 1;
+    const pId = project.project_id || project.id;
+    if (!pId) return;
     try {
       const details = await getProjectDetails(pId);
       if (details) setSelectedProject(details);
 
       // Concurrently load project-scoped records
-      const [reqs, members, advice, decisions, readiness, audits] = await Promise.all([
-        getProjectRequirements(pId),
-        getProjectMembers(pId),
-        getProjectAdvice(pId),
-        getProjectDecisions(pId),
-        getProjectReadiness(pId),
-        getAuditEvents(pId),
+      const [reqs, members, advice, decisions, readiness, audits, attachments] = await Promise.all([
+        getProjectRequirements(pId).catch(() => []),
+        getProjectMembers(pId).catch(() => []),
+        getProjectAdvice(pId).catch(() => []),
+        getProjectDecisions(pId).catch(() => []),
+        getProjectReadiness(pId).catch(() => null),
+        getAuditEvents(pId).catch(() => []),
+        getProjectAttachments(pId).catch(() => []),
       ]);
       setProjectReqs(reqs);
       setProjectMembersList(members);
@@ -219,6 +222,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
       setProjectDecisionsList(decisions);
       setProjectReadinessData(readiness);
       setProjectAuditList(audits);
+      setProjectAttachmentsList(attachments);
     } catch (err) {
       console.warn('[DashboardView] getProjectDetails warning:', err);
     }
@@ -288,7 +292,8 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   const handleSendAdvisorInvitation = async (e) => {
     e.preventDefault();
     if (!inviteEmail) return;
-    const pId = selectedProject?.project_id || selectedProject?.id || 1;
+    const pId = selectedProject?.project_id || selectedProject?.id;
+    if (!pId) return;
     try {
       await sendAdvisorInvitation(pId, {
         advisor_email: inviteEmail,
@@ -317,7 +322,8 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   const handleRecordDecision = async (e) => {
     e.preventDefault();
     if (!newDecisionRationale) return;
-    const pId = selectedProject?.project_id || selectedProject?.id || 1;
+    const pId = selectedProject?.project_id || selectedProject?.id;
+    if (!pId) return;
     try {
       const dec = await recordDecision(pId, {
         decision_type: newDecisionType,
@@ -338,7 +344,8 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   const handleRunRagQuery = async (e) => {
     if (e) e.preventDefault();
     if (!ragQuery) return;
-    const pId = selectedProject?.project_id || selectedProject?.id || 1;
+    const pId = selectedProject?.project_id || selectedProject?.id;
+    if (!pId) return;
     setRagLoading(true);
     try {
       const res = await apiCall('/rag/analyze', 'POST', {
@@ -358,7 +365,8 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   const handleAddRequirement = async (e) => {
     e.preventDefault();
     if (!newReqTitle || !newReqCode) return;
-    const pId = selectedProject?.project_id || selectedProject?.id || 1;
+    const pId = selectedProject?.project_id || selectedProject?.id;
+    if (!pId) return;
     try {
       const created = await createProjectRequirement(pId, {
         source_id: 1,
@@ -1521,6 +1529,26 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
 
           {/* TAB 4: PROJECT DETAILS / OVERVIEW VIEW (Exact match with uploaded screenshot in Grey & Brown Theme!) */}
           {activeTab === 'Project Details' && (
+            !currentProject ? (
+              <div className="rounded-2xl border border-slate-800 bg-[#161619] p-12 text-center space-y-4 animate-fadeIn text-left">
+                <div className="w-12 h-12 rounded-xl bg-amber-950/60 border border-amber-800/80 text-amber-400 flex items-center justify-center mx-auto">
+                  <FolderKanban className="w-6 h-6" />
+                </div>
+                <h3 className="text-lg font-bold text-slate-100 text-center">No Project Selected</h3>
+                <p className="text-xs text-slate-400 max-w-md mx-auto text-center">
+                  You do not have a project selected or have not created an authorized project yet. Select an existing project from &quot;My Projects&quot; or create a new project.
+                </p>
+                <div className="flex justify-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('Create Project')}
+                    className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer transition-colors"
+                  >
+                    Create New Project
+                  </button>
+                </div>
+              </div>
+            ) : (
             <div className="space-y-6 animate-fadeIn text-left">
               {/* Breadcrumb Navigation */}
               <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
@@ -1716,40 +1744,55 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                         COMPLETION
                       </h2>
 
-                      {/* Progress bar */}
-                      <div className="space-y-2 mb-5">
-                        <div className="flex items-center justify-between text-xs font-bold">
-                          <span className="text-slate-600 dark:text-slate-300">Overall progress</span>
-                          <span className="text-[#7c4a27] dark:text-amber-400 text-sm">60%</span>
-                        </div>
-                        <div className="w-full h-2 bg-stone-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                          <div className="h-full bg-[#7c4a27] dark:bg-amber-500 rounded-full w-[60%]" />
-                        </div>
-                      </div>
+                      {/* DEF-10: Dynamic milestone progress bar derived from live records */}
+                      {(() => {
+                        const milestones = [
+                          { label: 'Requirements defined', done: Boolean(projectReqs?.length > 0) },
+                          { label: 'Workflow configured', done: Boolean(projectReqs?.length > 0 && projectMembersList?.length > 0) },
+                          { label: 'Advisor review', done: Boolean(projectAdviceList?.some(a => ['SUBMITTED', 'REVIEWED', 'ACCEPTED'].includes(a.advice_status))) },
+                          { label: 'Compliance sign-off', done: Boolean(projectDecisionsList?.length > 0) },
+                          { label: 'Final submission', done: Boolean(currentProject?.status === 'COMPLETED' || currentProject?.status === 'APPROVED') },
+                        ];
+                        const doneCount = milestones.filter(m => m.done).length;
+                        const pct = Math.round((doneCount / milestones.length) * 100);
 
-                      {/* Checklist */}
-                      <div className="space-y-2.5 text-xs sm:text-sm font-medium">
-                        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 line-through">
-                          <CheckSquare className="w-4 h-4 shrink-0 text-emerald-600 stroke-[2.5]" />
-                          <span>Requirements defined</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 line-through">
-                          <CheckSquare className="w-4 h-4 shrink-0 text-emerald-600 stroke-[2.5]" />
-                          <span>Workflow configured</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 line-through">
-                          <CheckSquare className="w-4 h-4 shrink-0 text-emerald-600 stroke-[2.5]" />
-                          <span>Advisor review</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-300">
-                          <Square className="w-4 h-4 shrink-0 stroke-[2]" />
-                          <span>Compliance sign-off</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-slate-500 dark:text-slate-300">
-                          <Square className="w-4 h-4 shrink-0 stroke-[2]" />
-                          <span>Final submission</span>
-                        </div>
-                      </div>
+                        return (
+                          <>
+                            <div className="space-y-2 mb-5">
+                              <div className="flex items-center justify-between text-xs font-bold">
+                                <span className="text-slate-600 dark:text-slate-300">Overall progress</span>
+                                <span className="text-[#7c4a27] dark:text-amber-400 text-sm">{pct}%</span>
+                              </div>
+                              <div className="w-full h-2 bg-stone-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-[#7c4a27] dark:bg-amber-500 rounded-full transition-all duration-300"
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            <div className="space-y-2.5 text-xs sm:text-sm font-medium">
+                              {milestones.map((m, mIdx) => (
+                                <div
+                                  key={mIdx}
+                                  className={`flex items-center gap-2 ${
+                                    m.done
+                                      ? 'text-emerald-600 dark:text-emerald-400 line-through'
+                                      : 'text-slate-500 dark:text-slate-300'
+                                  }`}
+                                >
+                                  {m.done ? (
+                                    <CheckSquare className="w-4 h-4 shrink-0 text-emerald-600 stroke-[2.5]" />
+                                  ) : (
+                                    <Square className="w-4 h-4 shrink-0 stroke-[2]" />
+                                  )}
+                                  <span>{m.label}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </div>
 
                     {/* TEAM CARD */}
@@ -2003,47 +2046,61 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                     <p className="text-xs text-slate-400 mt-1">Review independent professional guidance and compare advisory opinions.</p>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* Advisor 1 Submission */}
-                    <div className="p-5 rounded-xl border border-slate-800 bg-[#121214] space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-950/80 text-purple-400 border border-purple-800">
-                          ADVISOR 1 · LEGAL
-                        </span>
-                        <span className="text-xs text-slate-400">Eleanor Vance (Vance Legal LLP)</span>
-                      </div>
-                      <h3 className="text-sm font-bold text-slate-100">Corporate Gifts & Hospitality Pre-Approval Threshold</h3>
-                      <p className="text-xs text-slate-300">
-                        <strong className="text-amber-400">Recommendation:</strong> Establish a strict £100 pre-approval threshold for all gifts, meals, and hospitality per counterparty under UK Bribery Act 2010 Section 7 Adequate Procedures Principle 1.
+                  {/* DEF-12: Live PostgreSQL Advisor Advice Submissions List */}
+                  {projectAdviceList.length === 0 ? (
+                    <div className="p-8 rounded-xl border border-dashed border-slate-800 bg-[#121214] text-center space-y-2">
+                      <p className="text-sm font-bold text-slate-300">No Advisory Reviews Submitted Yet</p>
+                      <p className="text-xs text-slate-500 max-w-md mx-auto">
+                        Use the &quot;Members &amp; Advisors&quot; tab to invite regulatory and legal advisors to provide compliance guidance on this project.
                       </p>
-                      <p className="text-xs text-slate-400">
-                        <strong className="text-slate-300">Rationale:</strong> Lower pre-approval boundaries create audit defensibility in prosecutorial reviews by the SFO.
-                      </p>
-                      <div className="text-[11px] text-slate-500 font-mono">
-                        Ref: MoJ Adequate Procedures Guidance · Principle 1
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setProjectSubTab('Members & Advisors')}
+                        className="mt-2 px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs cursor-pointer transition-colors"
+                      >
+                        Invite Advisor →
+                      </button>
                     </div>
-
-                    {/* Advisor 2 Submission */}
-                    <div className="p-5 rounded-xl border border-slate-800 bg-[#121214] space-y-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-blue-950/80 text-blue-400 border border-blue-800">
-                          ADVISOR 2 · REGULATORY
-                        </span>
-                        <span className="text-xs text-slate-400">Marcus Reid (FCC Consulting Europe)</span>
-                      </div>
-                      <h3 className="text-sm font-bold text-slate-100">Risk-Adjusted Hospitality Limit & Retrospective Disclosure</h3>
-                      <p className="text-xs text-slate-300">
-                        <strong className="text-amber-400">Recommendation:</strong> Set a £250 threshold with quarterly retrospective disclosure to reduce operational friction in institutional client entertainment under EU anti-corruption benchmarks.
-                      </p>
-                      <p className="text-xs text-slate-400">
-                        <strong className="text-slate-300">Rationale:</strong> Proportionality requires balancing commercial agility with bribery prevention.
-                      </p>
-                      <div className="text-[11px] text-slate-500 font-mono">
-                        Ref: EU Anti-Corruption Directive Proposal (COM(2023) 234)
-                      </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                      {projectAdviceList.map((adv, aIdx) => (
+                        <div key={adv.advice_id || adv.id || aIdx} className="p-5 rounded-xl border border-slate-800 bg-[#121214] space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded border ${
+                              aIdx % 2 === 0
+                                ? 'bg-purple-950/80 text-purple-400 border-purple-800'
+                                : 'bg-blue-950/80 text-blue-400 border-blue-800'
+                            }`}>
+                              ADVISOR {aIdx + 1} · {adv.service_role || adv.advisor_role || 'FCC ADVISORY'}
+                            </span>
+                            <span className="text-xs text-slate-400">
+                              {adv.advisor_name || adv.advisor_profile?.organization_name || 'Independent Advisor'}
+                            </span>
+                          </div>
+                          <h3 className="text-sm font-bold text-slate-100">
+                            {adv.title || 'Advisory Review & Control Recommendation'}
+                          </h3>
+                          {adv.recommendation && (
+                            <p className="text-xs text-slate-300">
+                              <strong className="text-amber-400">Recommendation:</strong> {adv.recommendation}
+                            </p>
+                          )}
+                          <p className="text-xs text-slate-400">
+                            <strong className="text-slate-300">Analysis:</strong> {adv.advice_text}
+                          </p>
+                          {adv.assumptions && (
+                            <div className="text-[11px] text-slate-500 font-mono">
+                              Ref: {adv.assumptions}
+                            </div>
+                          )}
+                          <div className="flex items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-800/80 font-mono">
+                            <span>Status: <strong className="text-amber-400">{adv.advice_status || 'SUBMITTED'}</strong></span>
+                            <span>{adv.created_at ? new Date(adv.created_at).toLocaleDateString() : 'Active'}</span>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
+                  )}
 
                   {/* Advice Comparison Banner */}
                   <div className="p-4 rounded-xl border border-amber-900/60 bg-amber-950/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -2402,6 +2459,50 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                   </h2>
 
                   <div className="divide-y divide-slate-800/80">
+                    {/* DEF-16: Live Uploaded PDF Attachments */}
+                    {projectAttachmentsList.map((att) => (
+                      <div key={att.attachment_id} className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-4 sm:gap-6">
+                          <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
+                            {att.category || 'PDF ATTACHMENT'}
+                          </span>
+                          <div>
+                            <span className="font-bold text-slate-100 text-sm sm:text-base block">
+                              {att.original_filename}
+                            </span>
+                            <span className="text-[11px] text-slate-500 font-mono">
+                              {Math.round(att.file_size / 1024)} KB · Uploaded {new Date(att.created_at).toLocaleDateString()}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const pId = currentProject?.id || currentProject?.project_id;
+                            try {
+                              const blob = await downloadAttachment(pId, att.attachment_id);
+                              if (blob instanceof Blob) {
+                                const url = window.URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = att.original_filename;
+                                document.body.appendChild(a);
+                                a.click();
+                                a.remove();
+                              }
+                              setToastMessage(`Downloaded ${att.original_filename}`);
+                            } catch (e) {
+                              setToastMessage('Download failed: ' + (e.message || 'Error'));
+                            }
+                          }}
+                          className="text-amber-400 hover:text-amber-300 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                        >
+                          <span>Download</span>
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+
                     {/* Row 1: POLICY */}
                     <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
                       <div className="flex items-center gap-4 sm:gap-6">
@@ -2536,6 +2637,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                 </div>
               )}
             </div>
+            )
           )}
 
           {/* TAB: ADVISORS / EXPERTS VIEW */}

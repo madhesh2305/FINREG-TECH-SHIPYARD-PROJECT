@@ -13,15 +13,7 @@ import AdminDashboardView from './AdminDashboardView';
 import { loginUser, registerUser, requestPasswordReset, logoutUser } from '../services/authService';
 
 export default function LoginForm({ isDarkMode = true }) {
-  // Steps: 'flash' | 'landing' | 'login' | 'signup' | 'verifying' | 'dashboard'
-  const [step, setStep] = useState('flash');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loginError, setLoginError] = useState('');
-  const [userRole, setUserRole] = useState('BUILDER'); // 'BUILDER' | 'ADVISOR' | 'ADMIN'
+  // Persisted auth session detection (DEF-17: preserve Admin and role dashboard on refresh)
   const [currentUser, setCurrentUser] = useState(() => {
     try {
       const raw = localStorage.getItem('currentUser');
@@ -31,11 +23,48 @@ export default function LoginForm({ isDarkMode = true }) {
     }
   });
 
-  // Forgot password modal state
+  const [userRole, setUserRole] = useState(() => {
+    try {
+      const raw = localStorage.getItem('currentUser');
+      if (raw) {
+        const u = JSON.parse(raw);
+        const r = (u.platform_role || '').toUpperCase();
+        if (r === 'ADMIN') return 'ADMIN';
+        if (r === 'ADVISOR') return 'ADVISOR';
+      }
+    } catch {}
+    return 'BUILDER';
+  });
+
+  // Steps: 'flash' | 'landing' | 'login' | 'signup' | 'verifying' | 'dashboard'
+  const [step, setStep] = useState(() => {
+    try {
+      const token = localStorage.getItem('authToken');
+      const raw = localStorage.getItem('currentUser');
+      if (token && raw) {
+        return 'dashboard';
+      }
+    } catch {}
+    return 'flash';
+  });
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [loginError, setLoginError] = useState('');
+
+  // DEF-15: Forgot password and full reset lifecycle states
   const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotResult, setForgotResult] = useState(null);
   const [isSendingReset, setIsSendingReset] = useState(false);
+  const [resetStep, setResetStep] = useState('request'); // 'request' | 'confirm' | 'done'
+  const [resetToken, setResetToken] = useState('');
+  const [newResetPassword, setNewResetPassword] = useState('');
+  const [confirmResetPassword, setConfirmResetPassword] = useState('');
+  const [resetError, setResetError] = useState('');
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
 
   // Signup form states
   const [signupFullName, setSignupFullName] = useState('');
@@ -109,13 +138,24 @@ export default function LoginForm({ isDarkMode = true }) {
     e.preventDefault();
     if (!forgotEmail.trim()) return;
     setIsSendingReset(true);
+    setResetError('');
     try {
       const res = await requestPasswordReset(forgotEmail);
-      setForgotResult({
-        success: true,
-        message: res.message || 'Password reset requested.',
-        channel: res.delivery_channel || 'Configured channel'
-      });
+      if (res && res.reset_token) {
+        setResetToken(res.reset_token);
+        setResetStep('confirm');
+        setForgotResult({
+          success: true,
+          message: 'Password reset token issued. Enter your new password below to complete recovery.',
+          channel: res.delivery_channel || 'Direct Secure Reset Flow'
+        });
+      } else {
+        setForgotResult({
+          success: true,
+          message: res.message || 'Password reset requested.',
+          channel: res.delivery_channel || 'Configured channel'
+        });
+      }
     } catch (err) {
       setForgotResult({
         success: false,
@@ -123,6 +163,37 @@ export default function LoginForm({ isDarkMode = true }) {
       });
     } finally {
       setIsSendingReset(false);
+    }
+  };
+
+  const handleConfirmResetSubmit = async (e) => {
+    e.preventDefault();
+    setResetError('');
+    if (!resetToken.trim()) {
+      setResetError('Reset token is required.');
+      return;
+    }
+    if (newResetPassword.length < 6) {
+      setResetError('New password must be at least 6 characters.');
+      return;
+    }
+    if (newResetPassword !== confirmResetPassword) {
+      setResetError('Passwords do not match.');
+      return;
+    }
+    setIsResettingPassword(true);
+    try {
+      await confirmPasswordReset(resetToken, newResetPassword);
+      setResetStep('done');
+      setEmail(forgotEmail);
+      setForgotResult({
+        success: true,
+        message: 'Password updated successfully! You can now sign in with your new credentials.'
+      });
+    } catch (err) {
+      setResetError(err.message || 'Failed to reset password. Token may be invalid, expired, or already used.');
+    } finally {
+      setIsResettingPassword(false);
     }
   };
 
@@ -602,20 +673,25 @@ export default function LoginForm({ isDarkMode = true }) {
         </div>
       </main>
 
-      {/* DEF-02: FORGOT PASSWORD MODAL WITH TRUTHFUL BACKEND STATUS */}
+      {/* DEF-02 & DEF-15: PASSWORD RECOVERY & SECURE RESET LIFECYCLE MODAL */}
       {isForgotModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-fadeIn">
           <div className="w-full max-w-md rounded-2xl bg-[#1a1a1e] border border-slate-700 p-6 sm:p-7 shadow-2xl text-left space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2">
                 <Lock className="w-5 h-5 text-amber-500" />
-                Password Recovery
+                {resetStep === 'confirm' ? 'Set New Password' : 'Password Recovery'}
               </h2>
               <button
                 type="button"
                 onClick={() => {
                   setIsForgotModalOpen(false);
                   setForgotResult(null);
+                  setResetStep('request');
+                  setResetToken('');
+                  setNewResetPassword('');
+                  setConfirmResetPassword('');
+                  setResetError('');
                 }}
                 className="text-slate-400 hover:text-slate-200 text-sm font-semibold p-1 cursor-pointer"
               >
@@ -623,9 +699,11 @@ export default function LoginForm({ isDarkMode = true }) {
               </button>
             </div>
 
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Enter your registered ShipYard email address. A recovery audit request will be verified against platform security policies.
-            </p>
+            {resetStep === 'request' && (
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Enter your registered ShipYard email address to request a time-limited password recovery token.
+              </p>
+            )}
 
             {forgotResult && (
               <div
@@ -644,7 +722,14 @@ export default function LoginForm({ isDarkMode = true }) {
               </div>
             )}
 
-            {!forgotResult?.success && (
+            {resetError && (
+              <div className="p-3 rounded-xl bg-rose-950/60 border border-rose-800 text-rose-300 text-xs font-semibold">
+                {resetError}
+              </div>
+            )}
+
+            {/* STEP 1: REQUEST RESET TOKEN */}
+            {resetStep === 'request' && (
               <form onSubmit={handleForgotSubmit} className="space-y-4 pt-1">
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-slate-300">
@@ -684,20 +769,102 @@ export default function LoginForm({ isDarkMode = true }) {
                     {isSendingReset ? 'Verifying...' : 'Request Recovery'}
                   </button>
                 </div>
+
+                <div className="text-center pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setResetStep('confirm');
+                      setForgotResult(null);
+                    }}
+                    className="text-xs text-amber-400 hover:underline cursor-pointer"
+                  >
+                    Already have a reset token? Enter it here
+                  </button>
+                </div>
               </form>
             )}
 
-            {forgotResult?.success && (
+            {/* STEP 2: CONFIRM RESET WITH TOKEN & NEW PASSWORD */}
+            {resetStep === 'confirm' && (
+              <form onSubmit={handleConfirmResetSubmit} className="space-y-3 pt-1">
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Reset Token
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={resetToken}
+                    onChange={(e) => setResetToken(e.target.value)}
+                    placeholder="Paste your reset token"
+                    className="w-full px-3 py-2 rounded-xl text-xs bg-slate-800/80 border border-slate-700 text-slate-100 font-mono placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    New Password (min 6 characters)
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={newResetPassword}
+                    onChange={(e) => setNewResetPassword(e.target.value)}
+                    placeholder="Enter new password"
+                    className="w-full px-3 py-2 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="block text-xs font-semibold text-slate-300">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={confirmResetPassword}
+                    onChange={(e) => setConfirmResetPassword(e.target.value)}
+                    placeholder="Repeat new password"
+                    className="w-full px-3 py-2 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setResetStep('request')}
+                    className="flex-1 py-2 px-3 rounded-xl border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs cursor-pointer"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isResettingPassword || !resetToken.trim() || newResetPassword.length < 6}
+                    className="flex-1 py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-slate-950 font-bold text-xs cursor-pointer"
+                  >
+                    {isResettingPassword ? 'Updating...' : 'Set New Password'}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {/* STEP 3: DONE */}
+            {resetStep === 'done' && (
               <div className="pt-2">
                 <button
                   type="button"
                   onClick={() => {
                     setIsForgotModalOpen(false);
                     setForgotResult(null);
+                    setResetStep('request');
+                    setResetToken('');
+                    setNewResetPassword('');
+                    setConfirmResetPassword('');
                   }}
                   className="w-full py-2.5 px-4 rounded-xl bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold text-xs cursor-pointer transition-colors"
                 >
-                  Return to Sign In
+                  Return to Sign In with New Password
                 </button>
               </div>
             )}
