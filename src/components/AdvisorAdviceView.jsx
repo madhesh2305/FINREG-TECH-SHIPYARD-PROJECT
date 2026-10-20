@@ -16,7 +16,15 @@ export default function AdvisorAdviceView({ isDarkMode }) {
       const raw = localStorage.getItem(ADVISOR_REVIEWS_STORAGE_KEY);
       const saved = raw ? JSON.parse(raw) : [];
       if (Array.isArray(saved) && saved.length > 0) {
-        return saved.map((r, idx) => ({
+        const clean = saved.filter(
+          (r) =>
+            r &&
+            !r.id?.includes('MOCK') &&
+            r.project !== 'ABC Shield' &&
+            !r.advisor?.includes('Maya Chen') &&
+            !r.requirement?.includes('CDD evidence controls')
+        );
+        return clean.map((r, idx) => ({
           id: r.id || `ADV-SUB-${idx + 1}`,
           advisor: r.advisor || r.advisorName || 'Advisor Expert',
           expertise: r.expertise || r.advisorRole || 'Regulatory Compliance',

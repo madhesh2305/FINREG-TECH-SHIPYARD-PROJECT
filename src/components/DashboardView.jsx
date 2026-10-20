@@ -323,7 +323,17 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   const loadDynamicAdvice = () => {
     try {
       const raw = localStorage.getItem('finreg_advisor_reviews');
-      return raw ? JSON.parse(raw) : [];
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list)
+        ? list.filter(
+            (r) =>
+              r &&
+              !r.id?.includes('MOCK') &&
+              r.project !== 'ABC Shield' &&
+              !r.advisor?.includes('Maya Chen') &&
+              !r.requirement?.includes('CDD evidence controls')
+          )
+        : [];
     } catch (e) {
       return [];
     }
@@ -1993,13 +2003,6 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                             );
                           } catch (e) {
                             advisors = [];
-                          }
-
-                          if (advisors.length === 0 && (selectedProject?.id === 'PRJ-001' || selectedProject?.id === 'PRJ-002')) {
-                            advisors = [
-                              { id: 'ADV-001', advisorName: 'S. Okonkwo', roleTag: 'Advisor 1' },
-                              { id: 'ADV-002', advisorName: 'A. Petrov', roleTag: 'Advisor 2' },
-                            ];
                           }
 
                           if (advisors.length === 0) {
