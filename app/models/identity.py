@@ -40,3 +40,15 @@ class RevokedToken(Base):
     token_signature = Column(String(255), unique=True, index=True, nullable=False)
     revoked_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     expires_at = Column(DateTime(timezone=True), nullable=True)
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+    __table_args__ = {"schema": "identity"}
+
+    id = Column(PK_BIGINT, primary_key=True, autoincrement=True)
+    user_id = Column(BigInteger, ForeignKey("identity.users.user_id"), nullable=False, index=True)
+    token_hash = Column(String(128), unique=True, index=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    is_revoked = Column(Boolean, default=False, nullable=False)

@@ -1,3 +1,5 @@
+import hashlib
+from datetime import datetime, timedelta, timezone
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
@@ -45,5 +47,20 @@ def get_current_user(
 
     if not user.is_active:
         raise InactiveUserError("User account has been deactivated")
+
+    pwd_sig = payload.get("pwd_sig")
+    if pwd_sig and user.password_hash:
+        expected_sig = hashlib.sha256(user.password_hash.encode("utf-8")).hexdigest()[:16]
+        if pwd_sig != expected_sig:
+            raise AuthenticationError("Session expired due to credentials change. Please log in again.")
+
+    iat = payload.get("iat")
+    if iat and user.updated_at:
+        try:
+            iat_dt = datetime.fromtimestamp(float(iat), timezone.utc)
+            if iat_dt < (user.updated_at - timedelta(seconds=2)):
+                raise AuthenticationError("Session expired due to credentials change. Please log in again.")
+        except (ValueError, TypeError, OverflowError):
+            pass
 
     return user

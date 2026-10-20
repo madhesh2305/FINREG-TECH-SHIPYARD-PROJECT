@@ -1,4 +1,4 @@
-from app.models.identity import Role, User, RevokedToken
+from app.models.identity import Role, User, RevokedToken, PasswordResetToken
 from app.models.project import Project, ProjectProfile, ProjectMember
 from app.models.advisor import AdvisorProfile, AdvisorInvitation
 from app.models.regulatory import RegulatorySource, RegulatoryRequirement
@@ -13,6 +13,7 @@ __all__ = [
     "Role",
     "User",
     "RevokedToken",
+    "PasswordResetToken",
     "Project",
     "ProjectProfile",
     "ProjectMember",

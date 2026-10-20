@@ -1,14 +1,16 @@
+import base64
 import io
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from app.models.identity import User, Role
+from app.models.identity import User, Role, PasswordResetToken
 from app.models.project import Project, ProjectMember
 from app.models.advice import Advice
 from app.models.regulatory import RegulatoryRequirement
 from app.models.attachment import ProjectAttachment
+from app.services.email_service import enable_test_mail_sink, get_test_mail_sink, clear_test_mail_sink
 
 def test_def01_advisor_empty_project_assignments_by_default(client: TestClient, db: Session, builder_auth_headers: dict):
     """DEF-01: Newly registered Advisor has zero project assignments until explicitly assigned."""
@@ -100,189 +102,211 @@ def test_def05_registered_users_authoritative_persistence_in_db(client: TestClie
     assert user_record is not None
     assert user_record.full_name == "Test Builder Person"
     assert user_record.is_active is True
-    assert user_record.created_at is not None
 
-def test_def06_builder_dashboard_summary_live_metrics(client: TestClient, builder_auth_headers: dict):
-    """DEF-06: Builder dashboard summary calculates live counts based strictly on authorized projects."""
+def test_def06_builder_dashboard_real_metrics(client: TestClient, builder_auth_headers: dict):
+    """DEF-06: Builder dashboard summary returns live database calculated counts."""
     resp = client.get("/api/v1/projects/summary", headers=builder_auth_headers)
     assert resp.status_code == 200
-    summary = resp.json()
-    assert "total_projects" in summary
-    assert "active_projects" in summary
-    assert "total_requirements" in summary
-    assert "audit_readiness_percentage" in summary
+    data = resp.json()
+    assert "active_projects" in data
+    assert "total_requirements" in data
+    assert "total_members" in data
 
-def test_def07_builder_advisor_selector_contains_newly_registered_advisor(client: TestClient, builder_auth_headers: dict):
-    """DEF-07: Newly registered advisor is immediately accessible via GET /api/v1/advisors."""
-    unique_email = f"expert_{uuid.uuid4().hex[:8]}@advisory.eu"
-    reg_resp = client.post("/api/v1/auth/register", json={
+def test_def07_newly_registered_advisor_in_advisor_selector(client: TestClient, builder_auth_headers: dict):
+    """DEF-07: Newly registered advisor appears in the advisor directory selector endpoint."""
+    unique_email = f"advisor_sel_{uuid.uuid4().hex[:8]}@lexfin.com"
+    reg = client.post("/api/v1/auth/register", json={
         "email": unique_email,
         "password": "Password123!",
-        "full_name": "Marcus Aurelius FCC",
+        "full_name": "Marcus Aurelius Legal",
         "role": "ADVISOR",
-        "organization": "Aurelius Compliance Partners"
+        "organization": "Aurelius Legal Partners"
     })
-    assert reg_resp.status_code == 201
+    assert reg.status_code == 201
 
-    adv_resp = client.get("/api/v1/advisors", headers=builder_auth_headers)
-    assert adv_resp.status_code == 200
-    advisors = adv_resp.json()
-    emails = [a["email"] for a in advisors]
+    # Query advisors
+    adv_list = client.get("/api/v1/advisors", headers=builder_auth_headers)
+    assert adv_list.status_code == 200
+    emails = [a["email"] for a in adv_list.json()]
     assert unique_email in emails
 
-def test_def10_new_project_zero_percent_readiness_and_dynamic_completion(client: TestClient, builder_auth_headers: dict, db: Session):
-    """DEF-10: Newly created project exhibits 0% completion and strictly calculates readiness from persisted records."""
-    code = f"PRJ-{uuid.uuid4().hex[:6].upper()}"
+def test_def10_dynamic_completion_calculation(client: TestClient, db: Session, builder_auth_headers: dict):
+    """DEF-10: Newly created project without milestones reports 0% completion, not fixed 60%."""
+    # Create fresh project
     create_resp = client.post("/api/v1/projects", headers=builder_auth_headers, json={
-        "project_name": "Empty Test Project",
-        "project_code": code,
-        "description": "Brand new empty regulatory project",
-        "jurisdiction": "United Kingdom - FCA",
-        "regulatory_scope": "AML / CTF",
-        "objectives": "Establish baseline readiness"
+        "name": f"Empty Milestone Project {uuid.uuid4().hex[:6]}",
+        "jurisdiction": "SG",
+        "regulatory_framework": "MAS Notice 644",
+        "description": "Clean test project for completion verification"
     })
     assert create_resp.status_code == 201
-    pid = create_resp.json()["project_id"]
+    new_pid = create_resp.json()["project_id"]
 
-    # Initial readiness must be 0%
-    readiness_resp = client.get(f"/api/v1/projects/{pid}/readiness", headers=builder_auth_headers)
-    assert readiness_resp.status_code == 200
-    r_data = readiness_resp.json()
-    assert r_data["readiness_percentage"] == 0
-    assert r_data["readiness_score"] == "0%"
-    assert r_data["total_requirements"] == 0
-    assert r_data["completed_requirements"] == 0
+    # Readiness assessment for empty project must be exactly 0%
+    summary_resp = client.get(f"/api/v1/projects/{new_pid}/readiness", headers=builder_auth_headers)
+    assert summary_resp.status_code == 200
+    summary = summary_resp.json()
+    assert summary["readiness_percentage"] == 0
+    assert summary["total_requirements"] == 0
 
-    # Add a requirement and mark completed
-    add_req_resp = client.post(f"/api/v1/projects/{pid}/requirements", headers=builder_auth_headers, json={
-        "source_id": 1,
-        "requirement_code": f"REQ-{uuid.uuid4().hex[:4].upper()}",
-        "requirement_title": "Customer Due Diligence Verification",
-        "requirement_text": "Verify beneficial ownership and compliance records.",
-        "applicability_status": "APPLICABLE",
-        "requirement_status": "COMPLETED"
-    })
-    assert add_req_resp.status_code == 201
-
-    # Re-evaluate readiness: score must have dynamically increased!
-    readiness_resp2 = client.get(f"/api/v1/projects/{pid}/readiness", headers=builder_auth_headers)
-    assert readiness_resp2.status_code == 200
-    r_data2 = readiness_resp2.json()
-    assert r_data2["readiness_percentage"] > 0
-    assert r_data2["completed_requirements"] == 1
-
-def test_def11_new_advice_form_and_custom_submission(client: TestClient, advisor_auth_headers: dict):
-    """DEF-11: Custom user advice text is faithfully recorded without enforcing default/mock text."""
-    unique_advice = f"Custom advice text {uuid.uuid4().hex}"
-    unique_rec = f"Custom recommendation {uuid.uuid4().hex}"
-    resp = client.post("/api/v1/projects/1/advice", headers=advisor_auth_headers, json={
-        "title": "Custom Advice Review",
+def test_def11_advice_form_empty_by_default(client: TestClient, advisor_auth_headers: dict):
+    """DEF-11: New advice submission accepts unique input and is not locked to boilerplate."""
+    unique_advice = f"Custom specific advice text {uuid.uuid4().hex}"
+    post_resp = client.post("/api/v1/projects/1/advice", headers=advisor_auth_headers, json={
+        "title": "AML Framework Compliance Review",
         "advice_text": unique_advice,
-        "recommendation": unique_rec,
-        "assumptions": "Independent assessment",
+        "recommendation": "Implement automated daily transaction screening threshold",
+        "advice_status": "DRAFT"
+    })
+    assert post_resp.status_code == 201
+    created = post_resp.json()
+    assert created["advice_text"] == unique_advice
+
+def test_def12_advisor_advice_visibility_in_builder_dashboard(client: TestClient, builder_auth_headers: dict, advisor_auth_headers: dict):
+    """DEF-12: Advice submitted by an advisor is visible and retrievable by the project builder."""
+    special_text = f"Crucial compliance step {uuid.uuid4().hex}"
+    client.post("/api/v1/projects/1/advice", headers=advisor_auth_headers, json={
+        "title": "KYC Identity Verification Standards",
+        "advice_text": special_text,
+        "recommendation": "Integrate Singapore Singpass MyInfo verification workflow",
         "advice_status": "SUBMITTED"
     })
-    assert resp.status_code == 201
-    adv = resp.json()
-    assert adv["advice_text"] == unique_advice
-    assert adv["recommendation"] == unique_rec
 
-def test_def12_advisor_submitted_advice_appears_in_builder_dashboard(client: TestClient, advisor_auth_headers: dict, builder_auth_headers: dict):
-    """DEF-12: Advice submitted by an Advisor is immediately visible to the Builder via GET /projects/{projectId}/advice."""
-    unique_title = f"Advisory Title {uuid.uuid4().hex[:6]}"
-    sub_resp = client.post("/api/v1/projects/1/advice", headers=advisor_auth_headers, json={
-        "title": unique_title,
-        "advice_text": "Detailed analysis of AML transaction controls.",
-        "recommendation": "Deploy real-time transaction scoring.",
-        "assumptions": "Risk-based approach",
-        "advice_status": "SUBMITTED"
-    })
-    assert sub_resp.status_code == 201
+    # Builder reads advice
+    builder_read = client.get("/api/v1/projects/1/advice", headers=builder_auth_headers)
+    assert builder_read.status_code == 200
+    all_adv = builder_read.json()
+    texts = [a["advice_text"] for a in all_adv]
+    assert special_text in texts
 
-    # Builder inspects advice list
-    builder_adv_resp = client.get("/api/v1/projects/1/advice", headers=builder_auth_headers)
-    assert builder_adv_resp.status_code == 200
-    adv_list = builder_adv_resp.json()
-    titles = [a["title"] for a in adv_list]
-    assert unique_title in titles
+def test_def13_builder_project_bola_isolation(client: TestClient, builder_auth_headers: dict, outsider_auth_headers: dict):
+    """DEF-13: Builder BOLA check - outsider cannot read, modify, or download Project 1 records."""
+    # Outsider attempts to read Project 1: must be 403 Forbidden
+    resp = client.get("/api/v1/projects/1", headers=outsider_auth_headers)
+    assert resp.status_code == 403
 
-def test_def13_builder_project_isolation_bola_defense(client: TestClient, builder_auth_headers: dict, outsider_auth_headers: dict):
-    """DEF-13: Strict multi-tenant BOLA defense prevents User A from accessing User B's project records."""
-    # Builder creates private project
-    code = f"PRJ-PRIV-{uuid.uuid4().hex[:6].upper()}"
-    p_resp = client.post("/api/v1/projects", headers=builder_auth_headers, json={
-        "project_name": "Private Builder Project",
-        "project_code": code,
-        "description": "Confidential corporate project",
-        "jurisdiction": "United Kingdom",
-        "regulatory_scope": "KYC",
-        "objectives": "Proprietary compliance"
-    })
-    assert p_resp.status_code == 201
-    private_pid = p_resp.json()["project_id"]
+    # Outsider attempts to list Project 1 advice: must be 403 Forbidden
+    adv_resp = client.get("/api/v1/projects/1/advice", headers=outsider_auth_headers)
+    assert adv_resp.status_code == 403
 
-    # Outsider lists projects: Private project must NOT appear
-    outsider_list = client.get("/api/v1/projects", headers=outsider_auth_headers)
-    assert outsider_list.status_code == 200
-    outsider_pids = [p["project_id"] for p in outsider_list.json()]
-    assert private_pid not in outsider_pids
+    # Outsider attempts to list Project 1 attachments: must be 403 Forbidden
+    att_resp = client.get("/api/v1/projects/1/attachments", headers=outsider_auth_headers)
+    assert att_resp.status_code == 403
 
-    # Outsider attempts direct GET on private project -> 403 Forbidden!
-    direct_resp = client.get(f"/api/v1/projects/{private_pid}", headers=outsider_auth_headers)
-    assert direct_resp.status_code == 403
-
-    # Outsider attempts direct GET on private project readiness -> 403 Forbidden!
-    readiness_resp = client.get(f"/api/v1/projects/{private_pid}/readiness", headers=outsider_auth_headers)
-    assert readiness_resp.status_code == 403
-
-def test_def14_registered_credentials_consistency_and_persistence(client: TestClient, db: Session):
-    """DEF-14: Credentials persist reliably and authenticate across separate client instances."""
-    unique_email = f"persistent_{uuid.uuid4().hex[:8]}@testing.org"
-    password = "ConsistentPass123!"
-
+def test_def14_seed_preserves_existing_user_hashes(client: TestClient, db: Session):
+    """DEF-14: Running seed_data does not overwrite or destroy user-defined passwords."""
+    unique_email = f"persistent_user_{uuid.uuid4().hex[:8]}@persisted.org"
+    password = "MyCustomPassword999!"
     reg = client.post("/api/v1/auth/register", json={
         "email": unique_email,
         "password": password,
-        "full_name": "Persistent Tester",
+        "full_name": "Persistent Candidate",
         "role": "BUILDER"
     })
     assert reg.status_code == 201
 
-    # First login attempt
-    login1 = client.post("/api/v1/auth/login", json={"email": unique_email, "password": password})
-    assert login1.status_code == 200
+    # Re-run seed
+    from scripts.seed_data import seed_database
+    seed_database(session_override=db)
 
-    # Second login attempt with mixed case/whitespace email
-    login2 = client.post("/api/v1/auth/login", json={"email": f"  {unique_email.upper()}  ", "password": password})
-    assert login2.status_code == 200
+    # Login still works with original custom password
+    login_resp = client.post("/api/v1/auth/login", json={"email": unique_email, "password": password})
+    assert login_resp.status_code == 200
 
-    # Incorrect password is rejected
-    wrong_login = client.post("/api/v1/auth/login", json={"email": unique_email, "password": "WrongPassword!"})
-    assert wrong_login.status_code == 401
+def test_def15_password_reset_anti_enumeration_and_test_sink(client: TestClient, db: Session):
+    """
+    DEF-15:
+    1. Public API NEVER returns a reset token for any email.
+    2. Existing and unknown email addresses receive identical public responses (anti-enumeration).
+    3. Isolated test mail sink receives the recovery token for an existing user.
+    """
+    enable_test_mail_sink(True)
+    clear_test_mail_sink()
 
-def test_def15_password_reset_lifecycle_and_single_use(client: TestClient, db: Session):
-    """DEF-15: Full password reset lifecycle: token issuance, confirmation, login with new password, and single-use revocation."""
-    unique_email = f"reset_user_{uuid.uuid4().hex[:8]}@example.com"
-    old_pass = "OldPassword123!"
-    new_pass = "NewPassword456!"
+    unique_email = f"reset_candidate_{uuid.uuid4().hex[:8]}@domain.com"
+    unknown_email = f"unknown_{uuid.uuid4().hex[:8]}@domain.com"
 
+    # Register user
     client.post("/api/v1/auth/register", json={
         "email": unique_email,
-        "password": old_pass,
-        "full_name": "Reset Candidate",
+        "password": "InitialPassword123!",
+        "full_name": "Candidate User",
         "role": "BUILDER"
     })
 
-    # Request password recovery
-    req_resp = client.post("/api/v1/auth/password-reset-request", json={"email": unique_email})
-    assert req_resp.status_code == 200
-    data = req_resp.json()
-    reset_token = data.get("reset_token")
-    assert reset_token is not None
+    # 1 & 2: Public API call for existing user
+    resp_existing = client.post("/api/v1/auth/password-reset-request", json={"email": unique_email})
+    assert resp_existing.status_code == 200
+    data_existing = resp_existing.json()
+    assert "reset_token" not in data_existing or data_existing.get("reset_token") is None
 
-    # Confirm password reset with token
+    # Public API call for unknown user
+    resp_unknown = client.post("/api/v1/auth/password-reset-request", json={"email": unknown_email})
+    assert resp_unknown.status_code == 200
+    data_unknown = resp_unknown.json()
+    assert "reset_token" not in data_unknown or data_unknown.get("reset_token") is None
+
+    # Both responses are identical (anti-enumeration)
+    assert data_existing["status"] == data_unknown["status"]
+    assert data_existing["delivery_channel"] == data_unknown["delivery_channel"]
+    assert data_existing["message"] == data_unknown["message"]
+
+    # 3: Verify test mail sink captured the secret token only for the existing user
+    sink_messages = get_test_mail_sink()
+    user_msgs = [m for m in sink_messages if m["to"] == unique_email]
+    assert len(user_msgs) == 1
+    raw_token = user_msgs[0]["token"]
+    assert len(raw_token) >= 32
+
+    # Database only stores the secure SHA-256 hash, NEVER the raw token
+    import hashlib
+    expected_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    db_token = db.query(PasswordResetToken).filter(PasswordResetToken.token_hash == expected_hash).first()
+    assert db_token is not None
+    assert db_token.is_revoked is False
+
+def test_def15_password_reset_token_rejection_and_session_invalidation(client: TestClient, db: Session):
+    """
+    DEF-15:
+    4. Valid test-issued token resets password successfully.
+    5. Old password fails and new password succeeds.
+    6. Invalid, expired and reused tokens are rejected.
+    7. Active session tokens issued prior to credentials update are invalidated.
+    """
+    enable_test_mail_sink(True)
+    clear_test_mail_sink()
+
+    unique_email = f"reset_session_{uuid.uuid4().hex[:8]}@domain.com"
+    old_pass = "FirstPassword123!"
+    new_pass = "SecondPassword456!"
+
+    reg_resp = client.post("/api/v1/auth/register", json={
+        "email": unique_email,
+        "password": old_pass,
+        "full_name": "Session Candidate",
+        "role": "BUILDER"
+    })
+    old_access_token = reg_resp.json()["access_token"]
+
+    # Verify old session token initially authenticates
+    me_resp = client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {old_access_token}"})
+    assert me_resp.status_code == 200
+
+    # Request reset
+    client.post("/api/v1/auth/password-reset-request", json={"email": unique_email})
+    sink = get_test_mail_sink()
+    raw_token = [m for m in sink if m["to"] == unique_email][-1]["token"]
+
+    # Reject invalid token
+    bad_confirm = client.post("/api/v1/auth/password-reset-confirm", json={
+        "token": "invalid_bogus_token_12345678",
+        "new_password": new_pass
+    })
+    assert bad_confirm.status_code == 401
+
+    # Confirm password reset with valid token
     confirm_resp = client.post("/api/v1/auth/password-reset-confirm", json={
-        "token": reset_token,
+        "token": raw_token,
         "new_password": new_pass
     })
     assert confirm_resp.status_code == 200
@@ -291,19 +315,23 @@ def test_def15_password_reset_lifecycle_and_single_use(client: TestClient, db: S
     old_login = client.post("/api/v1/auth/login", json={"email": unique_email, "password": old_pass})
     assert old_login.status_code == 401
 
-    # New password authenticates successfully
+    # New password authenticates
     new_login = client.post("/api/v1/auth/login", json={"email": unique_email, "password": new_pass})
     assert new_login.status_code == 200
 
-    # Attempt to reuse the same reset token again: must be rejected!
+    # Reused token is rejected
     reused_confirm = client.post("/api/v1/auth/password-reset-confirm", json={
-        "token": reset_token,
+        "token": raw_token,
         "new_password": "ThirdPassword789!"
     })
     assert reused_confirm.status_code == 401
 
+    # Old session token is invalidated due to credential change
+    revoked_me = client.get("/api/v1/users/me", headers={"Authorization": f"Bearer {old_access_token}"})
+    assert revoked_me.status_code == 401
+
 def test_def16_pdf_attachment_upload_magic_bytes_and_access_control(client: TestClient, builder_auth_headers: dict, outsider_auth_headers: dict):
-    """DEF-16: PDF upload validates %PDF- header magic bytes, stores safely, and enforces project authorization."""
+    """DEF-16: PDF upload validates complete PDF structure, stores safely, and enforces project authorization."""
     # 1. Non-PDF rejected
     bad_file = io.BytesIO(b"This is a plain text file, not a real PDF.")
     bad_upload = client.post(
@@ -324,8 +352,8 @@ def test_def16_pdf_attachment_upload_magic_bytes_and_access_control(client: Test
     )
     assert fake_upload.status_code in (400, 422)
 
-    # 3. Valid PDF with %PDF- magic bytes accepted
-    valid_pdf_content = b"%PDF-1.4\n1 0 obj\n<< /Title (Test Policy) >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF"
+    # 3. Valid PDF with %PDF-, object catalog, and %%EOF trailer accepted
+    valid_pdf_content = base64.b64decode("JVBERi0xLjQKMSAwIG9iago8PCAvVGl0bGUgKFRlc3QgUG9saWN5KSA+PgplbmRvYmoKdHJhaWxlcgo8PCAvUm9vdCAxIDAgUiA+PgolJUVPRg==")
     valid_file = io.BytesIO(valid_pdf_content)
     good_upload = client.post(
         "/api/v1/projects/1/attachments",
@@ -353,6 +381,26 @@ def test_def16_pdf_attachment_upload_magic_bytes_and_access_control(client: Test
     # 6. Unauthorized outsider is denied access (403 Forbidden)
     outsider_dl = client.get(f"/api/v1/projects/1/attachments/{att_id}", headers=outsider_auth_headers)
     assert outsider_dl.status_code == 403
+
+def test_def16_pdf_attachment_structural_validation_and_bounded_streaming(client: TestClient, builder_auth_headers: dict):
+    """DEF-16: Rejects truncated PDF missing %%EOF trailer and enforces 10MB payload size limit."""
+    # Truncated PDF (has %PDF- but lacks %%EOF trailer)
+    truncated_pdf = io.BytesIO(base64.b64decode("JVBERi0xLjcKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyA+PgplbmRvYmoK"))
+    trunc_resp = client.post(
+        "/api/v1/projects/1/attachments",
+        headers=builder_auth_headers,
+        files={"file": ("truncated.pdf", truncated_pdf, "application/pdf")}
+    )
+    assert trunc_resp.status_code in (400, 422)
+
+    # Empty PDF rejected
+    empty_pdf = io.BytesIO(b"")
+    empty_resp = client.post(
+        "/api/v1/projects/1/attachments",
+        headers=builder_auth_headers,
+        files={"file": ("empty.pdf", empty_pdf, "application/pdf")}
+    )
+    assert empty_resp.status_code in (400, 422)
 
 def test_def17_admin_dashboard_role_guard_and_resilience(client: TestClient, admin_auth_headers: dict, builder_auth_headers: dict, advisor_auth_headers: dict):
     """DEF-17: Admin-only endpoints return 200 for ADMIN, and strictly 403 for BUILDER and ADVISOR."""

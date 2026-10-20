@@ -1,12 +1,16 @@
+import hashlib
+import secrets
 from datetime import datetime, timezone, timedelta
+from typing import Dict, List
 from sqlalchemy.orm import Session
 from app.core.security import verify_password, create_access_token, decode_access_token, get_password_hash, revoke_token, is_token_revoked
 from app.core.exceptions import AuthenticationError, InactiveUserError, ConflictError, ValidationError, ForbiddenError
 from app.core.config import settings
-from app.models.identity import User, Role
+from app.models.identity import User, Role, PasswordResetToken
 from app.models.advisor import AdvisorProfile
 from app.models.project import Project, ProjectMember
 from app.services.audit_service import log_audit_event
+from app.services.email_service import is_email_configured, send_password_reset_email
 from app.schemas.auth import (
     LoginRequest,
     RegisterRequest,
@@ -36,12 +40,14 @@ def authenticate_user(db: Session, request: LoginRequest) -> TokenResponse:
         raise InactiveUserError("Your account has been deactivated. Please contact administrator.")
 
     role_name = user.role.role_name if user.role else "USER"
+    pwd_sig = hashlib.sha256(user.password_hash.encode("utf-8")).hexdigest()[:16]
     token = create_access_token(
         subject=user.user_id,
         claims={
             "email": user.email,
             "full_name": user.full_name,
-            "platform_role": role_name
+            "platform_role": role_name,
+            "pwd_sig": pwd_sig
         }
     )
 
@@ -133,12 +139,14 @@ def register_user(db: Session, request: RegisterRequest) -> TokenResponse:
     db.commit()
     db.refresh(new_user)
 
+    pwd_sig = hashlib.sha256(new_user.password_hash.encode("utf-8")).hexdigest()[:16]
     token = create_access_token(
         subject=new_user.user_id,
         claims={
             "email": new_user.email,
             "full_name": new_user.full_name,
-            "platform_role": role_name
+            "platform_role": role_name,
+            "pwd_sig": pwd_sig
         }
     )
 
@@ -177,19 +185,58 @@ def change_user_password(db: Session, user: User, request: ChangePasswordRequest
     db.commit()
     return {"status": "success", "message": "Password updated successfully in PostgreSQL"}
 
-def request_password_reset(db: Session, request: PasswordResetRequest) -> PasswordResetResponse:
-    """Processes password reset request with safe anti-enumeration and truthful delivery messaging."""
-    clean_email = request.email.lower().strip()
-    user = db.query(User).filter(User.email == clean_email).first()
+_RESET_RATE_LIMIT: Dict[str, List[datetime]] = {}
 
-    reset_token = None
-    if user:
-        # Issue a time-limited (15 mins) single-use cryptographic reset token
-        reset_token = create_access_token(
-            subject=user.user_id,
-            expires_delta=timedelta(minutes=15),
-            claims={"purpose": "password_reset", "email": clean_email}
+def _check_reset_rate_limit(key: str, max_requests: int = 5, window_minutes: int = 15) -> bool:
+    """Enforces in-memory rate limiting per email/IP to prevent brute force flooding."""
+    now = datetime.now(timezone.utc)
+    timestamps = _RESET_RATE_LIMIT.get(key, [])
+    cutoff = now - timedelta(minutes=window_minutes)
+    recent = [ts for ts in timestamps if ts > cutoff]
+    if len(recent) >= max_requests:
+        _RESET_RATE_LIMIT[key] = recent
+        return False
+    recent.append(now)
+    _RESET_RATE_LIMIT[key] = recent
+    return True
+
+def request_password_reset(db: Session, request: PasswordResetRequest) -> PasswordResetResponse:
+    """
+    Processes password reset requests with robust anti-enumeration, secure token generation,
+    cryptographic hashing, and truthful delivery status. Never returns reset token in HTTP response.
+    """
+    clean_email = request.email.lower().strip()
+
+    # Apply rate limiting uniformly regardless of whether account exists
+    if not _check_reset_rate_limit(clean_email):
+        raise ValidationError("Too many password recovery requests for this address. Please wait a few minutes before trying again.")
+
+    user = db.query(User).filter(User.email == clean_email).first()
+    email_ready = is_email_configured()
+
+    if user and user.is_active:
+        # Generate unpredictable, high-entropy cryptographic token
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+
+        # Invalidate any prior unused reset tokens for this user
+        db.query(PasswordResetToken).filter(
+            PasswordResetToken.user_id == user.user_id,
+            PasswordResetToken.used_at.is_(None),
+            PasswordResetToken.is_revoked.is_(False)
+        ).update({"is_revoked": True})
+
+        # Persist secure hash in identity.password_reset_tokens
+        db_token = PasswordResetToken(
+            user_id=user.user_id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+            is_revoked=False
         )
+        db.add(db_token)
+        db.flush()
+
         log_audit_event(
             db=db,
             project_id=None,
@@ -198,46 +245,71 @@ def request_password_reset(db: Session, request: PasswordResetRequest) -> Passwo
             entity_type="USER",
             entity_id=user.user_id,
             event_description=f"Password recovery requested for {clean_email}.",
-            new_values={"email": clean_email}
+            new_values={"email": clean_email, "expires_at": expires_at.isoformat()}
         )
         db.commit()
 
-    return PasswordResetResponse(
-        status="pending_configuration",
-        message="Password recovery requested. Automated SMTP email delivery is currently unconfigured in this environment. A direct recovery token has been generated for verification.",
-        delivery_channel="SMTP (Unconfigured)",
-        reset_token=reset_token
-    )
+        if email_ready:
+            send_password_reset_email(to_email=clean_email, reset_token=raw_token, user_name=user.full_name)
+
+    # Public response is 100% identical for existing and non-existing accounts (anti-enumeration)
+    if email_ready:
+        return PasswordResetResponse(
+            status="success",
+            message="If an account with that email exists, password reset instructions have been sent.",
+            delivery_channel="Email"
+        )
+    else:
+        return PasswordResetResponse(
+            status="pending_configuration",
+            message="Password recovery via email is currently unconfigured in this environment. Automated SMTP delivery is unavailable.",
+            delivery_channel="SMTP (Unconfigured)"
+        )
 
 def confirm_password_reset(db: Session, request: PasswordResetConfirmRequest) -> dict:
-    """Validates reset token securely, updates user password, and revokes token to enforce single-use."""
-    token = request.token.strip()
-    payload = decode_access_token(token)
-    if not payload:
-        raise AuthenticationError("Password reset token is invalid or has expired")
+    """
+    Validates reset token securely via hash lookup, updates user password,
+    invalidates the reset token to enforce single-use, and revokes prior active sessions.
+    """
+    raw_token = request.token.strip()
+    if not raw_token or len(raw_token) < 16:
+        raise AuthenticationError("Password reset token is invalid, expired, or already used")
 
-    if payload.get("purpose") != "password_reset":
-        raise AuthenticationError("Token is not valid for password reset")
+    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+    token_rec = db.query(PasswordResetToken).filter(PasswordResetToken.token_hash == token_hash).first()
 
-    if is_token_revoked(token, db):
-        raise AuthenticationError("Password reset token has already been used")
+    if not token_rec:
+        raise AuthenticationError("Password reset token is invalid, expired, or already used")
 
-    user_id = payload.get("sub")
-    if not user_id:
-        raise AuthenticationError("Malformed reset token")
+    if token_rec.is_revoked or token_rec.used_at is not None:
+        raise AuthenticationError("Password reset token has already been used or revoked")
 
-    user = db.query(User).filter(User.user_id == int(user_id)).first()
+    now_utc = datetime.now(timezone.utc)
+    if token_rec.expires_at < now_utc:
+        token_rec.is_revoked = True
+        db.commit()
+        raise AuthenticationError("Password reset token has expired")
+
+    user = db.query(User).filter(User.user_id == token_rec.user_id).first()
     if not user or not user.is_active:
         raise AuthenticationError("User account not found or deactivated")
 
-    if len(request.new_password.strip()) < 6:
+    new_pwd = request.new_password.strip()
+    if len(new_pwd) < 6:
         raise ValidationError("New password must be at least 6 characters")
 
-    user.password_hash = get_password_hash(request.new_password.strip())
+    user.password_hash = get_password_hash(new_pwd)
     user.updated_at = datetime.now(timezone.utc)
 
-    # Enforce single-use by revoking the reset token persistently in PostgreSQL & cache
-    revoke_token(token, db, user)
+    # Invalidate this token and mark it used
+    token_rec.used_at = datetime.now(timezone.utc)
+    token_rec.is_revoked = True
+
+    # Revoke any other pending reset tokens for this user
+    db.query(PasswordResetToken).filter(
+        PasswordResetToken.user_id == user.user_id,
+        PasswordResetToken.is_revoked.is_(False)
+    ).update({"is_revoked": True})
 
     log_audit_event(
         db=db,
@@ -246,7 +318,7 @@ def confirm_password_reset(db: Session, request: PasswordResetConfirmRequest) ->
         event_type="PASSWORD_RESET_COMPLETED",
         entity_type="USER",
         entity_id=user.user_id,
-        event_description=f"Password successfully reset via recovery token for {user.email}",
+        event_description=f"Password successfully reset via single-use recovery token for {user.email}",
         new_values={"user_id": user.user_id, "status": "PASSWORD_RESET"}
     )
     db.commit()
