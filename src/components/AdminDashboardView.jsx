@@ -149,57 +149,9 @@ export default function AdminDashboardView({
 
   const [advisorInvitationsList, setAdvisorInvitationsList] = useState(loadInitialInvitations);
 
-  // 6 Metric Cards computed dynamically from live platform data (DEF-03)
-  const metricCards = [
-    {
-      title: 'Total Users',
-      val: String(users.length).padStart(2, '0'),
-      subtitle: `${users.filter((u) => u.status === 'Active').length} active platform accounts`,
-    },
-    {
-      title: 'Active Users',
-      val: String(users.filter((u) => u.status === 'Active').length).padStart(2, '0'),
-      subtitle: `${Math.round((users.filter((u) => u.status === 'Active').length / (users.length || 1)) * 100)}% of platform accounts`,
-    },
-    {
-      title: 'Total Projects',
-      val: String(projectsList.length).padStart(2, '0'),
-      subtitle: `${projectsList.filter((p) => p.status !== 'Draft').length} active · ${projectsList.filter((p) => p.status === 'Draft').length} draft`,
-    },
-    {
-      title: 'Active Advisor Invitations',
-      val: String(advisorInvitationsList.length).padStart(2, '0'),
-      subtitle: `${advisorInvitationsList.filter((i) => i.status === 'Accepted' || i.status === 'Active').length} accepted · ${advisorInvitationsList.filter((i) => i.status === 'Pending').length} pending`,
-    },
-    {
-      title: 'Pending Source Validation',
-      val: String(regulatorySources.filter((s) => s.status === 'Review Due').length).padStart(2, '0'),
-      subtitle: 'Regulatory review required',
-    },
-    {
-      title: 'Recent Security Events',
-      val: String(securityAlerts.length).padStart(2, '0'),
-      subtitle: securityAlerts.length > 0 ? `${securityAlerts.length} require attention` : 'Platform security normal',
-    },
-  ];
-
-  // Middle Section 4 Cards data
+  // Platform activity and security alerts initialized to empty arrays
   const recentPlatformActivity = [];
-
-  const recentUserRegistrations = users.slice(0, 3).map((u) => ({
-    date: u.registered ? u.registered.slice(0, 6).toUpperCase() : 'TODAY',
-    text: `${u.name} · ${u.role}`,
-  }));
-
-  const projectStatusOverview = [
-    { count: String(projectsList.filter((p) => p.status === 'In Progress').length).padStart(2, '0'), label: 'Active projects' },
-    { count: String(projectsList.filter((p) => p.status === 'Under Review').length).padStart(2, '0'), label: 'Under review' },
-    { count: String(projectsList.filter((p) => p.status === 'Draft' || p.status === 'Completed').length).padStart(2, '0'), label: 'Draft / Completed' },
-  ];
-
   const recentAccessChanges = [];
-
-  // Bottom Section Security Alerts initialized to empty array (ready for live security feed)
   const securityAlerts = [];
 
   const [searchUserQuery, setSearchUserQuery] = useState('');
@@ -380,6 +332,52 @@ export default function AdminDashboardView({
 
   // Admin settings notification preference matching uploaded image
   const [adminNotificationPref, setAdminNotificationPref] = useState('Essential Admin alerts');
+
+  // 6 Metric Cards computed dynamically from live platform data (DEF-03)
+  const metricCards = [
+    {
+      title: 'Total Users',
+      val: String(users.length).padStart(2, '0'),
+      subtitle: `${users.filter((u) => u.status === 'Active').length} active platform accounts`,
+    },
+    {
+      title: 'Active Users',
+      val: String(users.filter((u) => u.status === 'Active').length).padStart(2, '0'),
+      subtitle: `${Math.round((users.filter((u) => u.status === 'Active').length / (users.length || 1)) * 100)}% of platform accounts`,
+    },
+    {
+      title: 'Total Projects',
+      val: String(projectsList.length).padStart(2, '0'),
+      subtitle: `${projectsList.filter((p) => p.status !== 'Draft').length} active · ${projectsList.filter((p) => p.status === 'Draft').length} draft`,
+    },
+    {
+      title: 'Active Advisor Invitations',
+      val: String(advisorInvitationsList.length).padStart(2, '0'),
+      subtitle: `${advisorInvitationsList.filter((i) => i.status === 'Accepted' || i.status === 'Active').length} accepted · ${advisorInvitationsList.filter((i) => i.status === 'Pending').length} pending`,
+    },
+    {
+      title: 'Pending Source Validation',
+      val: String(regulatorySources.filter((s) => s.status === 'Review Due').length).padStart(2, '0'),
+      subtitle: 'Regulatory review required',
+    },
+    {
+      title: 'Recent Security Events',
+      val: String(securityAlerts.length).padStart(2, '0'),
+      subtitle: securityAlerts.length > 0 ? `${securityAlerts.length} require attention` : 'Platform security normal',
+    },
+  ];
+
+  // Middle Section 4 Cards data
+  const recentUserRegistrations = users.slice(0, 3).map((u) => ({
+    date: u.registered ? u.registered.slice(0, 6).toUpperCase() : 'TODAY',
+    text: `${u.name} · ${u.role}`,
+  }));
+
+  const projectStatusOverview = [
+    { count: String(projectsList.filter((p) => p.status === 'In Progress').length).padStart(2, '0'), label: 'Active projects' },
+    { count: String(projectsList.filter((p) => p.status === 'Under Review').length).padStart(2, '0'), label: 'Under review' },
+    { count: String(projectsList.filter((p) => p.status === 'Draft' || p.status === 'Completed').length).padStart(2, '0'), label: 'Draft / Completed' },
+  ];
 
   return (
     <div className="min-h-screen bg-[#0f1012] text-slate-100 flex flex-col font-sans select-none antialiased">
