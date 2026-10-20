@@ -9,13 +9,15 @@ from app.schemas.auth import (
     TokenResponse,
     ChangePasswordRequest,
     PasswordResetRequest,
-    PasswordResetResponse
+    PasswordResetResponse,
+    PasswordResetConfirmRequest,
 )
 from app.services.auth_service import (
     authenticate_user,
     register_user,
     change_user_password,
-    request_password_reset
+    request_password_reset,
+    confirm_password_reset,
 )
 from app.security.authentication import get_current_user
 
@@ -87,4 +89,16 @@ def password_reset_endpoint(
     db: Session = Depends(get_db)
 ):
     return request_password_reset(db=db, request=request)
+
+@router.post(
+    "/password-reset-confirm",
+    status_code=status.HTTP_200_OK,
+    summary="Confirm Password Reset",
+    description="Validates single-use reset token and updates user password securely in PostgreSQL."
+)
+def password_reset_confirm_endpoint(
+    request: PasswordResetConfirmRequest,
+    db: Session = Depends(get_db)
+):
+    return confirm_password_reset(db=db, request=request)
 

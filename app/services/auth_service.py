@@ -1,13 +1,21 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from sqlalchemy.orm import Session
-from app.core.security import verify_password, create_access_token, get_password_hash
+from app.core.security import verify_password, create_access_token, decode_access_token, get_password_hash, revoke_token, is_token_revoked
 from app.core.exceptions import AuthenticationError, InactiveUserError, ConflictError, ValidationError, ForbiddenError
 from app.core.config import settings
 from app.models.identity import User, Role
 from app.models.advisor import AdvisorProfile
 from app.models.project import Project, ProjectMember
 from app.services.audit_service import log_audit_event
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, ChangePasswordRequest, PasswordResetRequest, PasswordResetResponse
+from app.schemas.auth import (
+    LoginRequest,
+    RegisterRequest,
+    TokenResponse,
+    ChangePasswordRequest,
+    PasswordResetRequest,
+    PasswordResetResponse,
+    PasswordResetConfirmRequest,
+)
 
 ROLE_NORMALIZATION = {
     "BUILDER": "BUILDER",
@@ -174,8 +182,14 @@ def request_password_reset(db: Session, request: PasswordResetRequest) -> Passwo
     clean_email = request.email.lower().strip()
     user = db.query(User).filter(User.email == clean_email).first()
 
-    # Safe log event without exposing token
+    reset_token = None
     if user:
+        # Issue a time-limited (15 mins) single-use cryptographic reset token
+        reset_token = create_access_token(
+            subject=user.user_id,
+            expires_delta=timedelta(minutes=15),
+            claims={"purpose": "password_reset", "email": clean_email}
+        )
         log_audit_event(
             db=db,
             project_id=None,
@@ -183,13 +197,57 @@ def request_password_reset(db: Session, request: PasswordResetRequest) -> Passwo
             event_type="PASSWORD_RESET_REQUESTED",
             entity_type="USER",
             entity_id=user.user_id,
-            event_description=f"Password recovery requested for {clean_email}. SMTP provider unconfigured.",
-            new_values={"email": clean_email, "provider_configured": False}
+            event_description=f"Password recovery requested for {clean_email}.",
+            new_values={"email": clean_email}
         )
         db.commit()
 
     return PasswordResetResponse(
         status="pending_configuration",
-        message="Password recovery requested. Automated SMTP email delivery is currently unconfigured in this environment. Please contact your Workspace Administrator to reset credentials.",
-        delivery_channel="SMTP (Unconfigured)"
+        message="Password recovery requested. Automated SMTP email delivery is currently unconfigured in this environment. A direct recovery token has been generated for verification.",
+        delivery_channel="SMTP (Unconfigured)",
+        reset_token=reset_token
     )
+
+def confirm_password_reset(db: Session, request: PasswordResetConfirmRequest) -> dict:
+    """Validates reset token securely, updates user password, and revokes token to enforce single-use."""
+    token = request.token.strip()
+    payload = decode_access_token(token)
+    if not payload:
+        raise AuthenticationError("Password reset token is invalid or has expired")
+
+    if payload.get("purpose") != "password_reset":
+        raise AuthenticationError("Token is not valid for password reset")
+
+    if is_token_revoked(token, db):
+        raise AuthenticationError("Password reset token has already been used")
+
+    user_id = payload.get("sub")
+    if not user_id:
+        raise AuthenticationError("Malformed reset token")
+
+    user = db.query(User).filter(User.user_id == int(user_id)).first()
+    if not user or not user.is_active:
+        raise AuthenticationError("User account not found or deactivated")
+
+    if len(request.new_password.strip()) < 6:
+        raise ValidationError("New password must be at least 6 characters")
+
+    user.password_hash = get_password_hash(request.new_password.strip())
+    user.updated_at = datetime.now(timezone.utc)
+
+    # Enforce single-use by revoking the reset token persistently in PostgreSQL & cache
+    revoke_token(token, db, user)
+
+    log_audit_event(
+        db=db,
+        project_id=None,
+        actor_user_id=user.user_id,
+        event_type="PASSWORD_RESET_COMPLETED",
+        entity_type="USER",
+        entity_id=user.user_id,
+        event_description=f"Password successfully reset via recovery token for {user.email}",
+        new_values={"user_id": user.user_id, "status": "PASSWORD_RESET"}
+    )
+    db.commit()
+    return {"status": "success", "message": "Password updated successfully. You can now log in with your new credentials."}

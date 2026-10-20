@@ -8,3 +8,5 @@ __pycache__/
 *_results.json
 *_evidence.json
 .sqlite_data/
+uploads/
+!uploads/.gitkeep

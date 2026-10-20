@@ -11,6 +11,7 @@ from app.api.v1.advice import router as advice_router
 from app.api.v1.decisions import router as decisions_router
 from app.api.v1.readiness import router as readiness_router
 from app.api.v1.admin import router as admin_router
+from app.api.v1.attachments import router as attachments_router
 
 api_v1_router = APIRouter()
 
@@ -26,4 +27,5 @@ api_v1_router.include_router(advice_router)
 api_v1_router.include_router(decisions_router)
 api_v1_router.include_router(readiness_router)
 api_v1_router.include_router(admin_router)
+api_v1_router.include_router(attachments_router)
 

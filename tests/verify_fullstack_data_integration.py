@@ -22,7 +22,7 @@ if os.path.exists(env_path):
                 break
 
 if not test_db_url:
-    test_db_url = "postgresql://finreg_app:EVX8pHgSacdU-v__UJNBX4qdOF4q72Rm@localhost:5432/finregtech_test"
+    raise RuntimeError("TEST_DATABASE_URL must be configured in environment or .env file.")
 
 os.environ["DATABASE_URL"] = test_db_url
 os.environ["ENVIRONMENT"] = "manual_test"

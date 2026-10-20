@@ -31,3 +31,8 @@ class PasswordResetResponse(BaseModel):
     status: str
     message: str
     delivery_channel: str
+    reset_token: str | None = Field(None, description="Password reset token issued for test/local workflow")
+
+class PasswordResetConfirmRequest(BaseModel):
+    token: str = Field(..., description="Password reset token received from reset request")
+    new_password: str = Field(..., min_length=6, description="New account password (min 6 characters)")

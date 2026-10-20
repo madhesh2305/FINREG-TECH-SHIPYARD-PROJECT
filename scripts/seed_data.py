@@ -110,7 +110,8 @@ def seed_database(session_override: Session = None, engine_override=None):
                 db.flush()
                 print(f"Created user: {user.email}")
             else:
-                user.password_hash = user_hash
+                # DEF-14: Preserve existing user password hash to prevent credential rejection across test runs
+                pass
             users_map[u_data["email"]] = user
 
         db.commit()

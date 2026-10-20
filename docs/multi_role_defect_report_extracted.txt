@@ -1,0 +1,214 @@
+FINREGTECH SHIPYARD
+Multi-Role Dashboard &Data Integration Defect Report
+Reported application behaviour • Ownership & remediation recommendations
+--- TABLE ---
+REPORT TYPE  |  Functional defects / integration | STATUS  |  Reported; investigation required
+SCOPE  |  Registration, role routing, dashboards, project/advisor data | OWNERS  |  Frontend, Backend, Database & Integration
+-------------
+1. Executive Summary
+Nine related behaviours have been reported across Advisor and Builder workflows, the Admin dashboard, registration, project creation, and database visibility. The common theme is that the application appears to mix default/demo data with newly registered user data, or does not consistently connect persisted records to the relevant dashboard and project workflows.
+These are user-reported observations. The report assigns likely investigation owners and recommends fixes, but it does not claim that a particular root cause has been confirmed. Developers should use request/response evidence, server logs, runtime database configuration, and stored records to confirm each cause.
+2. Defect Summary and Suggested Ownership
+--- TABLE ---
+ID | Reported problem | Initial priority | Primary owner(s)
+DEF-01 | Advisor account is associated with default project data | P1 - High | Backend + Database/Integration; Frontend to verify display
+DEF-02 | Advisor login opens the correct dashboard but also displays an error popup | P1 - High | Frontend + Backend/API integration
+DEF-03 | Admin dashboard displays default or fabricated data | P1 - High | Frontend + Backend/API integration
+DEF-04 | Registration form retains details from an earlier sign-up | P2 - Medium | Frontend; Backend/Database review if records are duplicated or cross-linked
+DEF-05 | Registered user records are not visible in the PostgreSQL view | P1 - High | Backend + Database/Integration
+DEF-06 | Builder dashboard displays default/fake data | P1 - High | Frontend + Backend/API integration
+DEF-07 | Newly registered Advisor is not available in the Builder advisor selector | P1 - High | Backend + Database/Integration; Frontend selector/API binding
+DEF-08 | New project displays a random or incorrect creator name | P2 - Medium | Backend + Database/Integration; Frontend display mapping
+DEF-09 | Newly created Advisor cannot be added to a project because the selector shows default data | P1 - High | Backend + Database/Integration + Frontend; coordinate invite/membership API
+-------------
+Priority note: Initial priorities are recommended for triage, not a completed severity assessment. Confirm severity against business impact and reproducibility.
+3. Investigation Principles
+Follow the data flow: browser action → Network request → API response → backend logs → configured database record → UI rendering.
+Do not treat a mock/default entry as a real account or project unless the backend record and stable ID confirm it.
+Verify the exact database instance, database name, schema, and table used by the running backend before concluding that data is missing.
+Use non-production test accounts and test projects. Do not include passwords, access tokens, database credentials, or confidential customer data in evidence.
+Close a defect only after the developer fix is retested and persisted data remains correct after refresh/re-login.
+4. Detailed Defect Records
+DEF-01  |  Advisor account is associated with default project data
+--- TABLE ---
+P1 - High | Owner: Backend + Database/Integration; Frontend to verify display
+-------------
+Observed behaviour: A newly created Advisor account already appears to have an assigned project containing default data, although the user did not expect that assignment.
+Expected behaviour: A new Advisor should see only projects to which that account has been explicitly assigned. Seed/demo projects must not be treated as the new user’s own project assignments.
+Possible causes to verify (not confirmed):
+Seed/demo records may be returned for every user rather than filtered by membership.
+The advisor-to-project membership relationship may be missing, incorrectly linked, or joined using a default user/project ID.
+The frontend may render a static default project list when live data is empty or a request fails.
+Recommended fix / investigation:
+Backend: return projects by the authenticated user’s valid project-membership records; do not return global demo projects as assigned projects.
+Database: verify user ID, project ID, and membership/join-table relationships for the new account.
+Frontend: distinguish loading, empty, and error states; do not substitute demo records for live user-specific data.
+--- TABLE ---
+RETEST / ACCEPTANCE CRITERIACreate a fresh Advisor with no project assignment. Their assigned-project list should be empty. After assigning a specific test project, only that project should appear.
+-------------
+Current status: REPORTED - NOT YET REPRODUCED / ROOT CAUSE UNCONFIRMED
+DEF-02  |  Advisor login opens the correct dashboard but also displays an error popup
+--- TABLE ---
+P1 - High | Owner: Frontend + Backend/API integration
+-------------
+Observed behaviour: Using Advisor credentials opens the Advisor dashboard, but an error popup is also displayed during or after login.
+Expected behaviour: A successful login should take the user to the correct role-specific dashboard without a misleading error. Any failed secondary request should be reported accurately and should not be confused with login failure.
+Possible causes to verify (not confirmed):
+A secondary dashboard API request may fail after authentication succeeds.
+Frontend may retain a stale error message from a previous failed login/request.
+The login request and dashboard/profile/project requests may interpret status or response fields inconsistently.
+Recommended fix / investigation:
+Frontend: trace the popup source and clear stale errors on a new successful login; show errors next to the operation that failed.
+Integration: inspect Network requests after login and identify which exact request generated the popup.
+Backend: return consistent status codes and documented response shapes; log server errors without exposing secrets.
+--- TABLE ---
+RETEST / ACCEPTANCE CRITERIAWith a valid Advisor account, login routes to Advisor dashboard without a false error. Any failing follow-up request is identified and reported accurately.
+-------------
+Current status: REPORTED - NOT YET REPRODUCED / ROOT CAUSE UNCONFIRMED
+DEF-03  |  Admin dashboard displays default or fabricated data
+--- TABLE ---
+P1 - High | Owner: Frontend + Backend/API integration
+-------------
+Observed behaviour: After signing in to the Admin dashboard, the page shows default/fake data rather than the current persisted application data.
+Expected behaviour: The dashboard should display data returned by the authorized backend APIs and clearly show an empty state when there is no real data.
+Possible causes to verify (not confirmed):
+Admin dashboard components may still use hardcoded/mock arrays.
+API integration may be absent or the request may fail and fall back silently to demo data.
+The backend response may not match the field names expected by the UI.
+Recommended fix / investigation:
+Frontend: locate and remove production-path mock/default datasets; render live API response, loading state, empty state, and explicit error state.
+Backend: verify that the admin endpoints return the intended current records with correct permissions.
+Integration: compare Network response JSON with the data mapped by the dashboard components.
+--- TABLE ---
+RETEST / ACCEPTANCE CRITERIACreate/update a test record through supported workflows and verify the Admin dashboard shows the same data from the live API; no unrelated static records are shown as current data.
+-------------
+Current status: REPORTED - NOT YET REPRODUCED / ROOT CAUSE UNCONFIRMED
+DEF-04  |  Registration form retains details from an earlier sign-up
+--- TABLE ---
+P2 - Medium | Owner: Frontend; Backend/Database review if records are duplicated or cross-linked
+-------------
+Observed behaviour: When opening sign-up from the login dashboard, fields still contain details from a previous registration.
+Expected behaviour: A new registration form should start with cleared application-controlled values unless an explicitly intended and secure autofill behaviour is documented. It must not accidentally submit previous user details.
+Possible causes to verify (not confirmed):
+React form state is not reset when the form is reopened.
+Values are retained in local/session storage or a shared state store.
+Browser autofill may be repopulating fields.
+Recommended fix / investigation:
+Frontend: reset form state when starting a new registration and after successful submission; review local/session storage usage.
+Differentiate browser autofill from application-retained values by testing in a clean/private browser profile.
+Backend: verify each submitted registration creates/updates only the intended identity and does not reuse a previous user association.
+--- TABLE ---
+RETEST / ACCEPTANCE CRITERIAAfter one registration succeeds, open a fresh sign-up form and verify fields do not contain prior application-retained details. Submit a second test identity and confirm it is stored separately.
+-------------
+Current status: REPORTED - NOT YET REPRODUCED / ROOT CAUSE UNCONFIRMED
+DEF-05  |  Registered user records are not visible in the PostgreSQL view
+--- TABLE ---
+P1 - High | Owner: Backend + Database/Integration
+-------------
+Observed behaviour: The application indicates that registered details are stored, but the expected records cannot be found in the PostgreSQL database view being inspected.
+Expected behaviour: A successful registration should persist the user record in the configured authoritative database, with the expected schema/table and a traceable user ID.
+Possible causes to verify (not confirmed):
+The application may be connected to a different database, host, port, database name, or schema than the one being inspected.
+The table may be under a different schema/name, or the database UI query/filter may hide the record.
+Registration may be using mock/local storage or a separate development data source.
+The transaction may not have committed despite a misleading frontend success message.
+Recommended fix / investigation:
+Backend/DB: verify the runtime connection settings and compare them with the connection open in the database client; do not disclose credentials in the report.
+Database: inspect schema/table names, filters, and the registration timestamp/user ID using an authorized read-only query.
+Backend: confirm the transaction commits and the response is generated only after persistence succeeds.
+Frontend: ensure success messaging reflects the real server response, not just a local UI state change.
+--- TABLE ---
+RETEST / ACCEPTANCE CRITERIARegister a unique test user; record its response/user ID; locate the matching record in the same configured PostgreSQL database/schema; confirm persistence after application restart.
+-------------
+Current status: REPORTED - NOT YET REPRODUCED / ROOT CAUSE UNCONFIRMED
+DEF-06  |  Builder dashboard displays default/fake data
+--- TABLE ---
+P1 - High | Owner: Frontend + Backend/API integration
+-------------
+Observed behaviour: The Builder dashboard continues to show default/fake data instead of the current account’s projects and persisted records.
+Expected behaviour: Builder dashboard data should be queried from the backend and scoped to the authenticated Builder and their authorized projects.
+Possible causes to verify (not confirmed):
+Dashboard may rely on mock fixtures/static data.
+Project APIs may not be called, may fail, or may return unfiltered results.
+Frontend may not update after create/edit operations or may use a stale cached response.
+Recommended fix / investigation:
+Frontend: trace data source for each Builder dashboard widget and replace static values in the live workflow with API responses.
+Backend: enforce user/project filtering and return actual project status, requirements, advice, and decisions supported by the system.
+Integration: invalidate/refetch relevant queries after successful mutations; show empty/error states instead of fabricated records.
+--- TABLE ---
+RETEST / ACCEPTANCE CRITERIACreate a unique test project and update a supported field. The dashboard should show the same project and values returned by the backend; unrelated demo records should not be presented as the user’s data.
+-------------
+Current status: REPORTED - NOT YET REPRODUCED / ROOT CAUSE UNCONFIRMED
+DEF-07  |  Newly registered Advisor is not available in the Builder advisor selector
+--- TABLE ---
+P1 - High | Owner: Backend + Database/Integration; Frontend selector/API binding
+-------------
+Observed behaviour: A newly registered Advisor account does not appear in the advisor list when the Builder attempts to select or invite an Advisor; only default records appear.
+Expected behaviour: The Builder should see eligible, persisted Advisor accounts that meet the agreed invitation and role criteria. Ineligible users should be excluded for a documented reason, not replaced with fake entries.
+Possible causes to verify (not confirmed):
+Advisor list endpoint may return seeded/mock records only.
+Registration may not persist the Advisor role/profile/category as expected.
+The selector may filter by wrong role/category/status, use stale data, or call the wrong endpoint.
+The new Advisor may require an invitation/verification/approval state before being eligible; this rule may not be clear in the UI.
+Recommended fix / investigation:
+Backend: verify the new account exists with the correct role/status and ensure the advisor-list endpoint returns eligible persisted records under the correct policy.
+Frontend: connect the selector to the live endpoint, refresh after relevant changes, and display a clear empty/error state.
+Product/Integration: confirm any eligibility rule such as verification, category, or approval and expose that status clearly.
+--- TABLE ---
+RETEST / ACCEPTANCE CRITERIACreate a new eligible Advisor, refresh/reopen the Builder selector, and confirm the correct identity appears once. Selecting it should associate the intended account ID, not a display-only mock record.
+-------------
+Current status: REPORTED - NOT YET REPRODUCED / ROOT CAUSE UNCONFIRMED
+DEF-08  |  New project displays a random or incorrect creator name
+--- TABLE ---
+P2 - Medium | Owner: Backend + Database/Integration; Frontend display mapping
+-------------
+Observed behaviour: When a project is created from the Builder dashboard, the creator/owner name shown is random or does not match the signed-in user.
+Expected behaviour: The project creator should be derived from the authenticated identity and persisted owner/user relationship. Client-supplied display names should not determine ownership.
+Possible causes to verify (not confirmed):
+Backend may seed a random/default creator name or return fixture data.
+Project creation may not associate the authenticated user ID with the new project.
+Frontend may display the wrong field or a stale/mock profile value.
+Recommended fix / investigation:
+Backend: derive owner/creator identity from the authenticated principal, persist the owner foreign key, and return the associated profile data.
+Database: verify the new project’s owner/user ID relationship.
+Frontend: map the response to the correct display field and refresh project details after creation.
+--- TABLE ---
+RETEST / ACCEPTANCE CRITERIACreate a project as a uniquely named test Builder. The project record and returned UI show that authenticated Builder as owner/creator, including after refresh and re-login.
+-------------
+Current status: REPORTED - NOT YET REPRODUCED / ROOT CAUSE UNCONFIRMED
+DEF-09  |  Newly created Advisor cannot be added to a project because the selector shows default data
+--- TABLE ---
+P1 - High | Owner: Backend + Database/Integration + Frontend; coordinate invite/membership API
+-------------
+Observed behaviour: When adding an Advisor to a project, the newly registered Advisor is not listed; the selector displays default data.
+Expected behaviour: The project membership/invitation workflow should use eligible real accounts, create a membership/invitation linked to the correct user and project IDs, and show the resulting state after success.
+Possible causes to verify (not confirmed):
+Advisor selection may share the same mock-data issue as DEF-07.
+The add/invite API may be missing, failing, or not persisting membership/invitation records.
+Eligibility filters or role metadata may exclude the new account.
+The frontend may not refresh project members after a successful operation.
+Recommended fix / investigation:
+Backend: confirm the invite/add endpoint, eligibility checks, persisted invitation/membership record, and project authorization.
+Database: verify user ID, project ID, invitation/membership status, and relationship constraints.
+Frontend: bind the picker to real advisor records; submit stable IDs; refresh members/invitations after success and display API errors.
+Security: test that only authorized project roles can invite/manage members and that cross-project assignments are rejected.
+--- TABLE ---
+RETEST / ACCEPTANCE CRITERIASelect a real eligible Advisor, add/invite them to the intended test project, and verify the persisted relationship, correct project display, and recipient access. Unauthorized roles must not be able to assign members.
+-------------
+Current status: REPORTED - NOT YET REPRODUCED / ROOT CAUSE UNCONFIRMED
+5. Recommended Work Split
+Frontend team
+Remove hardcoded/demo fallbacks in live dashboard flows; correct role-based routing and display binding; reset registration form state; connect advisor selectors and notification/error states to APIs; refresh data after successful mutations.
+Backend/API team
+Ensure registration/login response and user profile derive from persisted identity; enforce role/project ownership; return user-specific project and advisor lists; associate created projects with authenticated owner; implement consistent validation and API response contracts.
+Database / integration owner
+Verify the running backend connection points to the intended PostgreSQL database/schema; confirm migrations/table mappings; check user, project, owner and membership relations; confirm inserts commit and list endpoints read from the same database.
+QA / Security
+Reproduce each defect with test accounts; capture sanitized Network requests/responses and timestamps; verify access boundaries; assign defect IDs; retest fixes across fresh login, refresh, and browser restart.
+6. Minimum Evidence Required Before Closure
+Unique test account/email and test project identifier (no passwords or tokens).
+Browser Network request URL/method, HTTP status, and sanitized response body.
+Relevant backend log excerpt with timestamp/correlation ID, where available.
+Database connection target and matching table/schema query result with sensitive values redacted.
+Before/after result after developer fix, including refresh or new login where applicable.
+Closure rule: Do not mark an issue fixed solely because the UI appears correct. Confirm the backend response and persisted relationship/data, then retest the relevant user journey. Keep the status as Open / In Progress / Ready for Retest / Closed based on evidence.
