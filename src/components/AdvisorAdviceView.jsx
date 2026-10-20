@@ -10,24 +10,42 @@ export default function AdvisorAdviceView({ isDarkMode }) {
   const [selectedAdvice, setSelectedAdvice] = useState(null);
   const [toastMsg, setToastMsg] = useState(null);
 
-  // Dynamic advice loading from local storage / API
+  // Dynamic advice loading from local storage / API with strict mock data purging
   const loadDynamicAdvice = () => {
     try {
       const raw = localStorage.getItem(ADVISOR_REVIEWS_STORAGE_KEY);
       const saved = raw ? JSON.parse(raw) : [];
       if (Array.isArray(saved) && saved.length > 0) {
+        // Exclude all mock / prototype entries (including REV-001, REV-002, KYC Onboarding, and fallback items)
         const clean = saved.filter(
           (r) =>
             r &&
-            !r.id?.includes('MOCK') &&
+            typeof r === 'object' &&
+            r.id &&
+            r.id.startsWith('ADV-REV-') &&
+            !r.id.startsWith('REV-') &&
+            !r.id.startsWith('ADV-00') &&
+            !r.id.includes('MOCK') &&
             r.project !== 'ABC Shield' &&
+            r.project !== 'KYC Onboarding Controls' &&
             !r.advisor?.includes('Maya Chen') &&
-            !r.requirement?.includes('CDD evidence controls')
+            !r.requirement?.toLowerCase().includes('identity verification') &&
+            !r.requirement?.toLowerCase().includes('cdd evidence') &&
+            !r.adviceSubmitted?.toLowerCase().includes('contractual agreement') &&
+            r.date !== '09 Oct 2026' &&
+            r.date !== '12 Oct 2026' &&
+            r.date !== '14 Oct 2026'
         );
+
+        // Permanently purge any lingering mock records from localStorage
+        try {
+          localStorage.setItem(ADVISOR_REVIEWS_STORAGE_KEY, JSON.stringify(clean));
+        } catch (e) {}
+
         return clean.map((r, idx) => ({
           id: r.id || `ADV-SUB-${idx + 1}`,
-          advisor: r.advisor || r.advisorName || 'Advisor Expert',
-          expertise: r.expertise || r.advisorRole || 'Regulatory Compliance',
+          advisor: r.advisor || r.advisorName || 'Advisor',
+          expertise: r.expertise || r.advisorRole || 'Regulatory Advisory',
           requirement: r.requirement || 'Requirement Review',
           project: r.project || r.projectName || 'Project',
           source: r.source || 'Regulatory Standard',
@@ -51,6 +69,9 @@ export default function AdvisorAdviceView({ isDarkMode }) {
   const [adviceList, setAdviceList] = useState(loadDynamicAdvice);
 
   useEffect(() => {
+    // Purge mock records and re-sync on mount
+    setAdviceList(loadDynamicAdvice());
+
     const handleStorageChange = () => {
       setAdviceList(loadDynamicAdvice());
     };

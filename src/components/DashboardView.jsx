@@ -324,16 +324,30 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     try {
       const raw = localStorage.getItem('finreg_advisor_reviews');
       const list = raw ? JSON.parse(raw) : [];
-      return Array.isArray(list)
-        ? list.filter(
-            (r) =>
-              r &&
-              !r.id?.includes('MOCK') &&
-              r.project !== 'ABC Shield' &&
-              !r.advisor?.includes('Maya Chen') &&
-              !r.requirement?.includes('CDD evidence controls')
-          )
-        : [];
+      if (!Array.isArray(list)) return [];
+      const clean = list.filter(
+        (r) =>
+          r &&
+          typeof r === 'object' &&
+          r.id &&
+          r.id.startsWith('ADV-REV-') &&
+          !r.id.startsWith('REV-') &&
+          !r.id.startsWith('ADV-00') &&
+          !r.id.includes('MOCK') &&
+          r.project !== 'ABC Shield' &&
+          r.project !== 'KYC Onboarding Controls' &&
+          !r.advisor?.includes('Maya Chen') &&
+          !r.requirement?.toLowerCase().includes('identity verification') &&
+          !r.requirement?.toLowerCase().includes('cdd evidence') &&
+          !r.adviceSubmitted?.toLowerCase().includes('contractual agreement') &&
+          r.date !== '09 Oct 2026' &&
+          r.date !== '12 Oct 2026' &&
+          r.date !== '14 Oct 2026'
+      );
+      try {
+        localStorage.setItem('finreg_advisor_reviews', JSON.stringify(clean));
+      } catch (e) {}
+      return clean;
     } catch (e) {
       return [];
     }

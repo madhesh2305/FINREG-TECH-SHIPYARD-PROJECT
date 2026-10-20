@@ -11,7 +11,21 @@ export const PROJECTS_STORAGE_KEY = 'finreg_projects';
 export function getLocalProjects() {
   try {
     const raw = localStorage.getItem(PROJECTS_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    const clean = parsed.filter(
+      (p) =>
+        p &&
+        p.id !== 'PRJ-001' &&
+        p.name !== 'ABC Shield' &&
+        p.name !== 'KYC Onboarding Controls' &&
+        !p.id?.includes('MOCK')
+    );
+    try {
+      localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(clean));
+    } catch (e) {}
+    return clean;
   } catch (e) {
     return [];
   }

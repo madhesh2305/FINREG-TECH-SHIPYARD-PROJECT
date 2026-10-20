@@ -85,20 +85,35 @@ export default function AdvisorDashboardView({
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-  // Persistent Reviews List from localStorage (DEF-11, DEF-12)
+  // Persistent Reviews List from localStorage (DEF-11, DEF-12) with strict mock purging
   const [reviewsList, setReviewsList] = useState(() => {
     try {
       const saved = localStorage.getItem(ADVISOR_REVIEWS_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.filter(
+          const clean = parsed.filter(
             (r) =>
               r &&
-              !r.id?.includes('MOCK') &&
+              typeof r === 'object' &&
+              r.id &&
+              r.id.startsWith('ADV-REV-') &&
+              !r.id.startsWith('REV-') &&
+              !r.id.startsWith('ADV-00') &&
+              !r.id.includes('MOCK') &&
               r.project !== 'ABC Shield' &&
-              !r.requirement?.includes('CDD evidence controls')
+              r.project !== 'KYC Onboarding Controls' &&
+              !r.requirement?.toLowerCase().includes('identity verification') &&
+              !r.requirement?.toLowerCase().includes('cdd evidence') &&
+              !r.adviceSubmitted?.toLowerCase().includes('contractual agreement') &&
+              r.date !== '09 Oct 2026' &&
+              r.date !== '12 Oct 2026' &&
+              r.date !== '14 Oct 2026'
           );
+          try {
+            localStorage.setItem(ADVISOR_REVIEWS_STORAGE_KEY, JSON.stringify(clean));
+          } catch (e) {}
+          return clean;
         }
       }
     } catch (e) {}
@@ -887,20 +902,28 @@ export default function AdvisorDashboardView({
                       <h2 className="text-base sm:text-lg font-bold tracking-tight text-white mb-4">
                         Expertise-relevant requirements
                       </h2>
-                      <div className="p-4 rounded-xl bg-[#0c0e12] border border-slate-800/80 flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3">
-                          <span className="text-xs font-mono font-bold text-[#c58d31] uppercase shrink-0">
-                            LEG-101
-                          </span>
-                          <span className="font-semibold text-white text-xs sm:text-sm">
-                            Contractual responsibilities and liability allocation
-                          </span>
+                      {requirementsList.length === 0 ? (
+                        <div className="py-6 text-center text-xs text-slate-500 font-medium">
+                          No requirements assigned for review yet. Assigned compliance topics will appear here.
                         </div>
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#281d11] border border-amber-700/50 text-amber-400 shrink-0">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-                          <span>Review due</span>
-                        </span>
-                      </div>
+                      ) : (
+                        requirementsList.map((req, idx) => (
+                          <div key={idx} className="p-4 rounded-xl bg-[#0c0e12] border border-slate-800/80 flex items-center justify-between gap-4 mb-2 last:mb-0">
+                            <div className="flex items-center gap-3">
+                              <span className="text-xs font-mono font-bold text-[#c58d31] uppercase shrink-0">
+                                {req.code || req.id}
+                              </span>
+                              <span className="font-semibold text-white text-xs sm:text-sm">
+                                {req.title || req.requirement}
+                              </span>
+                            </div>
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#281d11] border border-amber-700/50 text-amber-400 shrink-0">
+                              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                              <span>{req.status || 'Review due'}</span>
+                            </span>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
 

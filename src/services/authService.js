@@ -14,14 +14,35 @@ export function getRegisteredUsers() {
     const raw = localStorage.getItem(REGISTERED_USERS_KEY);
     if (!raw) return DEFAULT_USERS;
     const customUsers = JSON.parse(raw);
-    const existingEmails = new Set(customUsers.map((u) => u.email.toLowerCase()));
-    const merged = [...customUsers];
-    for (const def of DEFAULT_USERS) {
-      if (!existingEmails.has(def.email.toLowerCase())) {
-        merged.push(def);
-      }
-    }
-    return merged;
+    if (!Array.isArray(customUsers)) return DEFAULT_USERS;
+
+    // Purge any lingering demo / seed accounts
+    const mockEmails = new Set([
+      'builder@gmail.com',
+      'advisor@gmail.com',
+      'admin@gmail.com',
+      'jun@finregtech.io',
+      'demo@finregtech.io',
+    ]);
+
+    const cleanUsers = customUsers.filter(
+      (u) =>
+        u &&
+        u.email &&
+        !mockEmails.has(u.email.toLowerCase()) &&
+        !u.id?.startsWith('usr_builder_') &&
+        !u.id?.startsWith('usr_advisor_') &&
+        !u.id?.startsWith('usr_admin_') &&
+        !u.id?.startsWith('usr_00') &&
+        !u.name?.includes('Jun Nakamura') &&
+        !u.name?.includes('Maya Chen')
+    );
+
+    try {
+      localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(cleanUsers));
+    } catch (e) {}
+
+    return cleanUsers;
   } catch (e) {
     return DEFAULT_USERS;
   }

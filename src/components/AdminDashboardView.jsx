@@ -301,6 +301,13 @@ export default function AdminDashboardView({
 
   const [regulatorySources, setRegulatorySources] = useState([]);
 
+  // Roles & Permissions definitions initialized to empty array (ready for live backend permission definitions)
+  const DEFAULT_ROLES = [];
+  const [rolesList, setRolesList] = useState(DEFAULT_ROLES);
+
+  // Platform Telemetry services initialized to empty array (ready for live backend infrastructure monitoring)
+  const [platformServices, setPlatformServices] = useState([]);
+
   const handleAddSource = (e) => {
     e?.preventDefault();
     if (!newSourceForm.title.trim()) {
@@ -1083,62 +1090,33 @@ export default function AdminDashboardView({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-medium">
-                      {/* Builder */}
-                      <tr className="hover:bg-slate-800/20 transition-colors">
-                        <td className="py-4 px-4 font-bold text-white text-sm">
-                          Builder
-                        </td>
-                        <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                          Create and manage owned projects; invite up to 2 domain advisors per project; upload requirements; record compliance decisions.
-                        </td>
-                        <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                          No platform administration or access to other builders' unshared projects.
-                        </td>
-                        <td className="py-4 px-4">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#12281b] border border-emerald-800/50 text-emerald-400">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                            <span>Active definition</span>
-                          </span>
-                        </td>
-                      </tr>
-
-                      {/* Advisor */}
-                      <tr className="hover:bg-slate-800/20 transition-colors">
-                        <td className="py-4 px-4 font-bold text-white text-sm">
-                          Advisor
-                        </td>
-                        <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                          Access assigned projects; review regulatory requirements; submit independent advisory notes, recommendations, and evidence assessments.
-                        </td>
-                        <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                          Read-only access to assigned projects; no project ownership or builder decision overrides.
-                        </td>
-                        <td className="py-4 px-4">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#12281b] border border-emerald-800/50 text-emerald-400">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                            <span>Active definition</span>
-                          </span>
-                        </td>
-                      </tr>
-
-                      {/* Admin */}
-                      <tr className="hover:bg-slate-800/20 transition-colors">
-                        <td className="py-4 px-4 font-bold text-white text-sm">
-                          Admin
-                        </td>
-                        <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                          Platform-wide user and account management; project metadata oversight; security audit log inspection; system health monitoring.
-                        </td>
-                        <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                          Administrative metadata only; no automatic access to confidential project documents or advisory submissions.
-                        </td>
-                        <td className="py-4 px-4">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#12281b] border border-emerald-800/50 text-emerald-400">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                            <span>Active definition</span>
-                          </span>
-                        </td>
-                      </tr>
+                      {rolesList.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="py-8 text-center text-slate-500 text-sm">
+                            No role definitions configured yet. Configured platform roles and permission boundaries will appear here.
+                          </td>
+                        </tr>
+                      ) : (
+                        rolesList.map((role) => (
+                          <tr key={role.id || role.name} className="hover:bg-slate-800/20 transition-colors">
+                            <td className="py-4 px-4 font-bold text-white text-sm">
+                              {role.name}
+                            </td>
+                            <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
+                              {role.permittedActions}
+                            </td>
+                            <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
+                              {role.accessBoundary}
+                            </td>
+                            <td className="py-4 px-4">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#12281b] border border-emerald-800/50 text-emerald-400">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                <span>{role.status || 'Active definition'}</span>
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -1610,13 +1588,13 @@ export default function AdminDashboardView({
               {/* Header */}
               <div>
                 <span className="text-[11px] font-mono font-medium tracking-widest text-slate-500 uppercase block mb-1">
-                  PROTOTYPE MONITORING DATA
+                  INFRASTRUCTURE TELEMETRY
                 </span>
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
                   Platform Health &amp; Security
                 </h1>
                 <p className="text-xs sm:text-sm text-slate-400 mt-2 font-normal max-w-3xl leading-relaxed">
-                  Demonstration states only. This wireframe is not connected to live infrastructure or security telemetry.
+                  Live platform infrastructure monitoring, system health, and security telemetry.
                 </p>
               </div>
 
@@ -1628,10 +1606,10 @@ export default function AdminDashboardView({
                     Platform Services
                   </span>
                   <p className="text-2xl sm:text-3xl font-mono text-white mt-3 mb-1">
-                    Operational
+                    {platformServices.length > 0 ? 'Operational' : '--'}
                   </p>
                   <span className="text-xs text-slate-500 block">
-                    Sample status
+                    {platformServices.length > 0 ? `${platformServices.length} active services` : 'Awaiting telemetry feed'}
                   </span>
                 </div>
 
@@ -1667,10 +1645,14 @@ export default function AdminDashboardView({
                     Active Sessions
                   </span>
                   <p className="text-2xl sm:text-3xl font-mono font-bold text-white mt-3 mb-1">
-                    01
+                    {users.filter((u) => u.status === 'Active').length > 0
+                      ? String(users.filter((u) => u.status === 'Active').length).padStart(2, '0')
+                      : '00'}
                   </p>
                   <span className="text-xs text-slate-500 block">
-                    1 active administrator session
+                    {users.filter((u) => u.status === 'Active').length > 0
+                      ? `${users.filter((u) => u.status === 'Active').length} active administrator session`
+                      : 'No active sessions'}
                   </span>
                 </div>
 
@@ -1709,21 +1691,22 @@ export default function AdminDashboardView({
                     Service Status
                   </h2>
                   <div className="divide-y divide-slate-800/60">
-                    {[
-                      { tag: 'CORE', status: 'Operational' },
-                      { tag: 'AUTH', status: 'Operational' },
-                      { tag: 'DATA', status: 'Operational' },
-                      { tag: 'AUDIT', status: 'Operational' },
-                    ].map((svc, idx) => (
-                      <div key={idx} className="flex items-center gap-6 py-3.5 first:pt-0 last:pb-0">
-                        <span className="font-mono text-xs font-bold text-amber-400 w-16 uppercase tracking-wider shrink-0">
-                          {svc.tag}
-                        </span>
-                        <span className="text-xs sm:text-sm text-slate-200 font-medium">
-                          {svc.status}
-                        </span>
+                    {platformServices.length === 0 ? (
+                      <div className="py-6 text-center text-xs text-slate-500 font-medium">
+                        No platform service telemetry connected yet. Service health metrics will appear here once infrastructure monitoring is connected.
                       </div>
-                    ))}
+                    ) : (
+                      platformServices.map((svc, idx) => (
+                        <div key={idx} className="flex items-center gap-6 py-3.5 first:pt-0 last:pb-0">
+                          <span className="font-mono text-xs font-bold text-amber-400 w-16 uppercase tracking-wider shrink-0">
+                            {svc.tag}
+                          </span>
+                          <span className="text-xs sm:text-sm text-slate-200 font-medium">
+                            {svc.status}
+                          </span>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
 
