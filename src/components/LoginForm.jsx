@@ -100,19 +100,32 @@ export default function LoginForm({ isDarkMode = true }) {
 
     setIsSubmitting(true);
     try {
-      const authResult = await loginUser(cleanEmail, cleanPassword);
-      const user = authResult?.user || {
-        name: cleanEmail.split('@')[0],
-        email: cleanEmail,
-        role: 'ADMIN',
-        platform_role: 'ADMIN',
-      };
-      user.role = 'ADMIN';
-      user.platform_role = 'ADMIN';
+      let user;
+      try {
+        const authResult = await loginUser(cleanEmail, cleanPassword);
+        user = authResult?.user;
+      } catch (authErr) {
+        // If backend is not connected yet, allow login when prototype backend response is "Authorized Admin session"
+        if (adminResponse === 'Authorized Admin session') {
+          user = {
+            id: adminId.trim() || `ADM-${Date.now()}`,
+            name: cleanEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) || 'Administrator',
+            email: cleanEmail,
+            role: 'ADMIN',
+            platform_role: 'ADMIN',
+          };
+        } else {
+          throw authErr;
+        }
+      }
 
-      setCurrentUser(user);
-      setUserRole('ADMIN');
-      setStep('verifying');
+      if (user) {
+        user.role = 'ADMIN';
+        user.platform_role = 'ADMIN';
+        setCurrentUser(user);
+        setUserRole('ADMIN');
+        setStep('verifying');
+      }
     } catch (err) {
       setAdminError(err.message || 'Invalid administrator credentials. Please check your account details.');
     } finally {
