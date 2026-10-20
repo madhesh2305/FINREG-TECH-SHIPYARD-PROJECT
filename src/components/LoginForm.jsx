@@ -10,7 +10,7 @@ import DashboardView from './DashboardView';
 import AdvisorDashboardView from './AdvisorDashboardView';
 import AdminDashboardView from './AdminDashboardView';
 
-import { loginUser, registerUser, requestPasswordReset, logoutUser } from '../services/authService';
+import { loginUser, registerUser, requestPasswordReset, confirmPasswordReset, logoutUser } from '../services/authService';
 
 export default function LoginForm({ isDarkMode = true }) {
   // Persisted auth session detection (DEF-17: preserve Admin and role dashboard on refresh)
@@ -141,24 +141,25 @@ export default function LoginForm({ isDarkMode = true }) {
     setResetError('');
     try {
       const res = await requestPasswordReset(forgotEmail);
-      if (res && res.reset_token) {
-        setResetToken(res.reset_token);
-        setResetStep('confirm');
+      if (res && (res.status === 'pending_configuration' || (res.delivery_channel && res.delivery_channel.includes('Unconfigured')))) {
         setForgotResult({
-          success: true,
-          message: 'Password reset token issued. Enter your new password below to complete recovery.',
-          channel: res.delivery_channel || 'Direct Secure Reset Flow'
+          success: false,
+          isUnconfigured: true,
+          message: res.message || 'Password recovery via email is currently unconfigured in this environment. Please contact your system administrator.',
+          channel: res.delivery_channel || 'SMTP (Unconfigured)'
         });
       } else {
         setForgotResult({
           success: true,
-          message: res.message || 'Password reset requested.',
-          channel: res.delivery_channel || 'Configured channel'
+          isUnconfigured: false,
+          message: res.message || 'If an account with that email exists, password reset instructions have been sent.',
+          channel: res.delivery_channel || 'Email'
         });
       }
     } catch (err) {
       setForgotResult({
         success: false,
+        isUnconfigured: false,
         message: err.message || 'Failed to request password reset.'
       });
     } finally {
@@ -707,16 +708,39 @@ export default function LoginForm({ isDarkMode = true }) {
 
             {forgotResult && (
               <div
-                className={`p-3.5 rounded-xl text-xs font-medium space-y-1 ${
-                  forgotResult.success
-                    ? 'bg-amber-950/60 border border-amber-800 text-amber-200'
-                    : 'bg-rose-950/60 border border-rose-800 text-rose-300'
+                className={`p-3.5 rounded-xl text-xs font-medium space-y-1.5 ${
+                  forgotResult.isUnconfigured
+                    ? 'bg-amber-950/70 border border-amber-600 text-amber-200'
+                    : forgotResult.success
+                    ? 'bg-emerald-950/70 border border-emerald-700 text-emerald-200'
+                    : 'bg-rose-950/70 border border-rose-800 text-rose-300'
                 }`}
               >
-                <div className="font-semibold">{forgotResult.message}</div>
+                <div className="font-semibold flex items-center gap-1.5">
+                  {forgotResult.isUnconfigured && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold uppercase">
+                      Delivery Blocked / Unconfigured
+                    </span>
+                  )}
+                  {forgotResult.message}
+                </div>
                 {forgotResult.channel && (
-                  <div className="text-[11px] opacity-80 pt-1 border-t border-amber-800/50">
+                  <div className="text-[11px] opacity-80 pt-1 border-t border-slate-700/50">
                     Channel Status: <span className="font-mono">{forgotResult.channel}</span>
+                  </div>
+                )}
+                {forgotResult.success && !forgotResult.isUnconfigured && (
+                  <div className="pt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResetStep('confirm');
+                        setForgotResult(null);
+                      }}
+                      className="text-xs font-bold text-emerald-400 hover:underline cursor-pointer"
+                    >
+                      Enter Received Token & Set New Password &rarr;
+                    </button>
                   </div>
                 )}
               </div>
