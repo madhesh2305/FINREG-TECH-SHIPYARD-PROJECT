@@ -135,7 +135,7 @@ export default function AdvisorAdviceView({ isDarkMode }) {
             Advisor Advice Details
           </h1>
           <p className="text-xs sm:text-sm text-slate-400 font-normal mt-1.5">
-            Submitted by {selectedAdvice.advisor} for {selectedAdvice.project || 'ABC Shield'}.
+            Submitted by {selectedAdvice.advisor} for {selectedAdvice.project || 'Project'}.
           </p>
         </div>
 

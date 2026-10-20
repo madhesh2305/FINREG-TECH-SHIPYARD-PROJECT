@@ -13,7 +13,7 @@ export default function AdviceDecisionsView({ isDarkMode }) {
     builderDecision: 'Open',
     decisionRationale: '',
     followUpAction: '',
-    actionOwner: 'Jun Nakamura',
+    actionOwner: '',
     dueDate: '',
   });
 
@@ -23,7 +23,7 @@ export default function AdviceDecisionsView({ isDarkMode }) {
       builderDecision: record.decisionStatus || 'Open',
       decisionRationale: record.decisionRationale || '',
       followUpAction: record.followUpAction || '',
-      actionOwner: record.actionOwner || 'Jun Nakamura',
+      actionOwner: record.actionOwner || '',
       dueDate: record.dueDate || '',
     });
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -211,7 +211,7 @@ export default function AdviceDecisionsView({ isDarkMode }) {
                   onChange={(e) =>
                     setFormData({ ...formData, actionOwner: e.target.value })
                   }
-                  placeholder="Jun Nakamura"
+                  placeholder="e.g. Project Owner"
                   className="w-full bg-[#101013] border border-slate-700/80 hover:border-slate-600 rounded-xl px-4 py-3.5 text-sm text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
                 />
               </div>

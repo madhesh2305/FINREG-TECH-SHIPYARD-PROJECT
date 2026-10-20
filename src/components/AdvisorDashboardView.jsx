@@ -57,16 +57,18 @@ export default function AdvisorDashboardView({
     }
   }, [currentUser]);
 
-  const userName = userProfile?.name || 'Dr. Maya Chen';
-  const userFirstName = userName.split(' ')[0] || 'Maya';
-  const userEmail = userProfile?.email || 'advisor@gmail.com';
+  const userName = userProfile?.name || 'Advisor Expert';
+  const userFirstName = userName.split(' ')[0] || 'Advisor';
+  const userEmail = userProfile?.email || 'advisor@example.com';
   const userInitials = userName
     .split(' ')
     .filter(Boolean)
     .map((n) => n[0])
     .join('')
     .slice(0, 2)
-    .toUpperCase() || 'MC';
+    .toUpperCase() || 'AD';
+
+  const [selectedRequirement, setSelectedRequirement] = useState(null);
 
   // Active Expertise Profile (default to Legal Partner if not provided)
   const currentExpertise =
@@ -87,7 +89,18 @@ export default function AdvisorDashboardView({
   const [reviewsList, setReviewsList] = useState(() => {
     try {
       const saved = localStorage.getItem(ADVISOR_REVIEWS_STORAGE_KEY);
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter(
+            (r) =>
+              r &&
+              !r.id?.includes('MOCK') &&
+              r.project !== 'ABC Shield' &&
+              !r.requirement?.includes('CDD evidence controls')
+          );
+        }
+      }
     } catch (e) {}
     return INITIAL_REVIEWS;
   });
@@ -106,7 +119,7 @@ export default function AdvisorDashboardView({
     }
 
     const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-    const targetProjName = activeProject?.name || 'ABC Shield';
+    const targetProjName = activeProject?.name || 'Assigned Project';
     const targetProjId = activeProject?.id || 'PRJ-001';
 
     const newReview = {
@@ -717,29 +730,25 @@ export default function AdvisorDashboardView({
                     </div>
 
                     <div className="space-y-3.5 text-xs sm:text-sm">
-                      <div className="flex items-start gap-3 text-slate-300">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
-                        <div>
-                          <p className="font-semibold text-white">Project invitation accepted by Dr. Chen</p>
-                          <p className="text-xs text-slate-500 mt-0.5">Northbank Financial · PRJ-001</p>
+                      {reviewsList.length === 0 ? (
+                        <div className="py-8 text-center text-xs text-slate-500 font-medium">
+                          No recent activity recorded. New project invitations and updates will appear here.
                         </div>
-                      </div>
-
-                      <div className="flex items-start gap-3 text-slate-300">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
-                        <div>
-                          <p className="font-semibold text-white">New FCA source version available for ABC Shield</p>
-                          <p className="text-xs text-slate-500 mt-0.5">FCA Handbook · SYSC 6.3.8 update</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3 text-slate-300">
-                        <span className="w-1.5 h-1.5 rounded-full bg-slate-500 mt-1.5 shrink-0" />
-                        <div>
-                          <p className="font-semibold text-slate-300">Workspace initialized for {currentExpertise.name}</p>
-                          <p className="text-xs text-slate-500 mt-0.5">Default advisory permissions applied</p>
-                        </div>
-                      </div>
+                      ) : (
+                        reviewsList.slice(0, 3).map((act, idx) => (
+                          <div key={idx} className="flex items-start gap-3 text-slate-300">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                            <div>
+                              <p className="font-semibold text-white">
+                                {act.adviceSubmitted ? act.adviceSubmitted.slice(0, 45) + '...' : `Advice submitted for ${act.requirement}`}
+                              </p>
+                              <p className="text-xs text-slate-500 mt-0.5">
+                                {act.project} · {act.date}
+                              </p>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
                 </div>
@@ -766,49 +775,31 @@ export default function AdvisorDashboardView({
                           No pending advisor reviews or actions at this time.
                         </div>
                       ) : (
-                        <>
-                          <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
+                        assignedProjectsFullList.slice(0, 2).map((proj, idx) => (
+                          <div key={idx} className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="text-[10px] font-mono font-bold text-amber-400 uppercase">
-                                  {currentExpertise?.dueDate || 'DUE 24 SEP'}
+                                  {proj.status || 'Active'}
                                 </span>
-                                <span className="text-xs text-slate-500">· {assignedProjectsFullList[0]?.name || 'Assigned Project'}</span>
+                                <span className="text-xs text-slate-500">· {proj.name}</span>
                               </div>
                               <p className="font-bold text-white text-xs sm:text-sm mt-0.5">
-                                {currentExpertise?.nextAction || 'Review regulatory requirements'}
+                                Review requirements for {proj.name}
                               </p>
                             </div>
                             <button
                               type="button"
-                              onClick={() => setActiveTab('Requirements')}
+                              onClick={() => {
+                                setSelectedProject(proj);
+                                setActiveTab('Requirements');
+                              }}
                               className="px-3 py-1 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 hover:bg-amber-500/30 text-xs font-bold cursor-pointer transition-colors"
                             >
                               Review
                             </button>
                           </div>
-
-                          <div className="flex items-center justify-between gap-3 p-3 rounded-xl bg-slate-900/60 border border-slate-800">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-mono font-bold text-amber-400 uppercase">
-                                  DUE 27 SEP
-                                </span>
-                                <span className="text-xs text-slate-500">· {assignedProjectsFullList[0]?.name || 'Assigned Project'}</span>
-                              </div>
-                              <p className="font-bold text-white text-xs sm:text-sm mt-0.5">
-                                Validate CDD requirement on ownership structures
-                              </p>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setActiveTab('Requirements')}
-                              className="px-3 py-1 rounded-md bg-slate-800 text-slate-300 hover:text-white text-xs font-bold cursor-pointer transition-colors"
-                            >
-                              Review
-                            </button>
-                          </div>
-                        </>
+                        ))
                       )}
                     </div>
                   </div>
@@ -953,10 +944,10 @@ export default function AdvisorDashboardView({
                       </div>
                       <div>
                         <p className="font-bold text-white text-xs sm:text-sm">
-                          Project Services Agreement
+                          {selectedProject?.name ? `${selectedProject.name} Documentation` : 'Project Services Documentation'}
                         </p>
                         <p className="text-xs text-slate-400 mt-0.5">
-                          ABC Shield · Contractual responsibilities and liability allocation
+                          {selectedProject?.name || 'Project'} · Permitted advisory reference documents
                         </p>
                         <p className="text-[11px] text-slate-500 mt-0.5">
                           Shared project reference
@@ -1076,7 +1067,7 @@ export default function AdvisorDashboardView({
 
               {/* Requirements Table Card matching Image 3 (DEF-01) */}
               <div className="rounded-2xl border border-slate-800/90 bg-[#131519] shadow-lg p-6 overflow-hidden">
-                {assignedProjectsFullList.length === 0 ? (
+                {requirementsList.length === 0 ? (
                   <div className="py-14 px-6 text-center">
                     <Shield className="w-12 h-12 text-slate-600 mx-auto mb-3 stroke-[1.5]" />
                     <h3 className="text-lg font-bold text-slate-200">No Requirements to Review</h3>
@@ -1097,34 +1088,39 @@ export default function AdvisorDashboardView({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60 font-medium">
-                        <tr className="hover:bg-slate-800/20 transition-colors">
-                          <td className="py-4 px-4">
-                            <div className="font-bold text-white text-sm">
-                              Contractual responsibilities and liability allocation
-                            </div>
-                            <div className="text-xs font-mono text-slate-500 mt-0.5">
-                              LEG-101
-                            </div>
-                          </td>
-                          <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                            {assignedProjectsFullList[0]?.name || 'Assigned Project'}
-                          </td>
-                          <td className="py-4 px-4 text-slate-300 font-normal text-xs sm:text-sm max-w-[240px]">
-                            Review contractual responsibilities, liability caps, and supervisory audit access provisions.
-                          </td>
-                          <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                            Project Services Agreement · Section 8
-                          </td>
-                          <td className="py-4 px-4 text-right">
-                            <button
-                              type="button"
-                              onClick={() => setActiveTab('My Advice & Reviews')}
-                              className="px-4 py-1.5 rounded-md border border-slate-700/80 bg-[#1e222a] hover:bg-slate-700 text-slate-200 text-xs font-semibold cursor-pointer transition-colors"
-                            >
-                              Review
-                            </button>
-                          </td>
-                        </tr>
+                        {requirementsList.map((req, idx) => (
+                          <tr key={req.id || idx} className="hover:bg-slate-800/20 transition-colors">
+                            <td className="py-4 px-4">
+                              <div className="font-bold text-white text-sm">
+                                {req.title || req.requirement}
+                              </div>
+                              <div className="text-xs font-mono text-slate-500 mt-0.5">
+                                {req.id || req.code}
+                              </div>
+                            </td>
+                            <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
+                              {req.projectName || assignedProjectsFullList[0]?.name || 'Assigned Project'}
+                            </td>
+                            <td className="py-4 px-4 text-slate-300 font-normal text-xs sm:text-sm max-w-[240px]">
+                              {req.description}
+                            </td>
+                            <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
+                              {req.source}
+                            </td>
+                            <td className="py-4 px-4 text-right">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedRequirement(req);
+                                  setActiveTab('My Advice & Reviews');
+                                }}
+                                className="px-4 py-1.5 rounded-md border border-slate-700/80 bg-[#1e222a] hover:bg-slate-700 text-slate-200 text-xs font-semibold cursor-pointer transition-colors"
+                              >
+                                Review
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
@@ -1148,13 +1144,13 @@ export default function AdvisorDashboardView({
                 </button>
 
                 <span className="text-[11px] font-mono font-bold tracking-widest text-slate-400 uppercase block mb-1">
-                  ADV-001 · FCA HANDBOOK · SYSC 6.3.8
+                  {selectedRequirement ? `${selectedRequirement.id || selectedRequirement.code || 'REQ'} · ${selectedRequirement.source || 'REGULATORY STANDARD'}` : 'ADVISORY REVIEW'}
                 </span>
                 <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
                   My Advice &amp; Reviews
                 </h1>
                 <p className="text-xs sm:text-sm text-slate-400 mt-1 font-normal">
-                  Submit independent advisory interpretation and review notes for ABC Shield.
+                  Submit independent advisory interpretation and review notes for {assignedProjectsFullList[0]?.name || 'assigned project'}.
                 </p>
               </div>
 
@@ -1167,7 +1163,7 @@ export default function AdvisorDashboardView({
                       REQUIREMENT
                     </span>
                     <span className="font-bold text-white text-sm sm:text-base block">
-                      Risk-sensitive customer due diligence
+                      {selectedRequirement?.title || selectedRequirement?.requirement || 'General Advisory Review'}
                     </span>
                   </div>
                   <div>
@@ -1175,7 +1171,7 @@ export default function AdvisorDashboardView({
                       REGULATORY SOURCE
                     </span>
                     <span className="font-bold text-white text-sm sm:text-base block">
-                      FCA Handbook · SYSC 6.3.8
+                      {selectedRequirement?.source || 'Regulatory Standard'}
                     </span>
                   </div>
                   <div>
@@ -1280,7 +1276,14 @@ export default function AdvisorDashboardView({
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60 font-medium">
-                        {reviewsList.map((rev) => (
+                        {reviewsList.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-8 px-4 text-center text-slate-500 text-xs sm:text-sm font-medium">
+                              No authoritative advice submissions recorded yet. Advice submitted for assigned projects will appear here.
+                            </td>
+                          </tr>
+                        ) : (
+                          reviewsList.map((rev) => (
                           <tr key={rev.id} className="hover:bg-slate-800/20 transition-colors">
                             <td className="py-3.5 px-4 font-mono font-bold text-amber-400">
                               {rev.id}
@@ -1304,7 +1307,7 @@ export default function AdvisorDashboardView({
                               </span>
                             </td>
                           </tr>
-                        ))}
+                        )))}
                       </tbody>
                     </table>
                   </div>

@@ -29,7 +29,7 @@ export default function ReadinessView({ isDarkMode, onOpenRelatedItem, items = [
       {/* TOP HEADER SECTION MATCHING media_1791739750674_a1d6ca4d.png */}
       <div>
         <div className="text-[11px] font-mono tracking-widest text-slate-500 uppercase font-semibold mb-1">
-          ABC SHIELD
+          PROJECT READINESS
         </div>
         <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
           Readiness

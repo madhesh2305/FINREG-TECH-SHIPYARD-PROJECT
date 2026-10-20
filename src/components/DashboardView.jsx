@@ -69,8 +69,8 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     }
   }, [currentUser]);
 
-  const userName = userProfile?.name || 'Jun Nakamura';
-  const userEmail = userProfile?.email || 'jun@northbank.com';
+  const userName = userProfile?.name || 'Project Builder';
+  const userEmail = userProfile?.email || 'builder@example.com';
   const userRoleTitle = userProfile?.role || 'Builder';
   const userInitials = userName
     .split(' ')
@@ -78,7 +78,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     .map((n) => n[0])
     .join('')
     .slice(0, 2)
-    .toUpperCase() || 'JN';
+    .toUpperCase() || 'PB';
 
   // Interactive Notifications State
   const [notificationsList, setNotificationsList] = useState([]);
@@ -171,23 +171,12 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
         if (isMounted && Array.isArray(liveProjects) && liveProjects.length > 0) {
           const email = (currentUser?.email || '').toLowerCase().trim();
           const name = (currentUser?.name || '').toLowerCase().trim();
-          if (email === 'builder@gmail.com' || name === 'jun nakamura') {
-            const scoped = liveProjects.filter(
-              (p) =>
-                !p.ownerEmail ||
-                p.ownerEmail.toLowerCase() === email ||
-                (p.owner && p.owner.toLowerCase() === name)
-            );
-            setAllProjects(scoped);
-          } else {
-            // Keep scoped strictly to current user (DEF-13)
-            const scoped = liveProjects.filter(
-              (p) =>
-                (p.ownerEmail && p.ownerEmail.toLowerCase() === email) ||
-                (p.owner && p.owner.toLowerCase() === name)
-            );
-            if (scoped.length > 0) setAllProjects(scoped);
-          }
+          const scoped = liveProjects.filter(
+            (p) =>
+              (p.ownerEmail && p.ownerEmail.toLowerCase() === email) ||
+              (p.owner && p.owner.toLowerCase() === name)
+          );
+          if (scoped.length > 0) setAllProjects(scoped);
         }
       } catch (err) {
         console.warn('[DashboardView] API load warning, using local scoped projects:', err);
@@ -330,6 +319,19 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
 
   // Activity Feed Data initialized to empty array (ready for live backend audit stream)
   const activityFeed = [];
+
+  const loadDynamicAdvice = () => {
+    try {
+      const raw = localStorage.getItem('finreg_advisor_reviews');
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  };
+  const dynamicAdviceList = loadDynamicAdvice();
+  const pendingReviewsCount = dynamicAdviceList.filter((a) => a.status === 'Pending Review' || a.status === 'Submitted').length;
+  const acceptedReviewsCount = dynamicAdviceList.filter((a) => a.status === 'Accepted').length;
+  const clarificationReviewsCount = dynamicAdviceList.filter((a) => a.status === 'Needs Clarification').length;
 
   // Metric Cards Config computed dynamically from live user projects
   const activeCount = allProjects.filter((p) => p.status === 'In Progress').length;
@@ -596,12 +598,12 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <span className="text-[11px] font-mono font-extrabold tracking-widest text-slate-400 dark:text-slate-500 uppercase block mb-1">
-                    MONDAY, 22 SEPTEMBER
+                    {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}
                   </span>
                   <h1 className={`text-2xl sm:text-3xl font-bold tracking-tight ${
                     isDarkMode ? 'text-slate-100' : 'text-slate-900'
                   }`}>
-                    Welcome back, Jun
+                    Welcome back, {currentUser?.name ? currentUser.name.split(' ')[0] : 'Builder'}
                   </h1>
                   <p className={`text-xs sm:text-sm mt-1 font-medium ${
                     isDarkMode ? 'text-slate-300' : 'text-slate-500'
@@ -677,7 +679,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                         ADVISOR ADVICE
                       </div>
                       <h2 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white">
-                        Expert reviews for ABC Shield
+                        {currentProject?.name ? `Expert reviews for ${currentProject.name}` : 'Advisor reviews overview'}
                       </h2>
                     </div>
 
@@ -688,7 +690,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                           PENDING REVIEWS
                         </div>
                         <div className="text-xl sm:text-2xl font-bold text-[#e6a13d] dark:text-[#f59e0b]">
-                          2
+                          {pendingReviewsCount}
                         </div>
                       </div>
 
@@ -697,7 +699,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                           ACCEPTED
                         </div>
                         <div className="text-xl sm:text-2xl font-bold text-[#e6a13d] dark:text-[#f59e0b]">
-                          3
+                          {acceptedReviewsCount}
                         </div>
                       </div>
 
@@ -706,7 +708,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                           NEEDS CLARIFICATION
                         </div>
                         <div className="text-xl sm:text-2xl font-bold text-[#e6a13d] dark:text-[#f59e0b]">
-                          1
+                          {clarificationReviewsCount}
                         </div>
                       </div>
                     </div>
@@ -734,10 +736,10 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                         AI / RAG FINDINGS
                       </div>
                       <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white mb-2">
-                        3 findings require human review
+                        {currentProject ? 'No open evidence conflicts' : 'No findings requiring human review'}
                       </h3>
                       <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-normal leading-relaxed mb-6">
-                        One evidence gap and one possible interpretation conflict are open for ABC Shield.
+                        {currentProject ? `AI retrieval-augmented findings for ${currentProject.name} will appear once documents are linked.` : 'Connect project requirements to generate RAG findings.'}
                       </p>
                     </div>
                     <div>
@@ -759,10 +761,10 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                         READINESS SUMMARY
                       </div>
                       <h3 className="text-lg sm:text-xl font-bold text-slate-900 dark:text-white mb-2">
-                        70% progressing
+                        {currentProject ? `${currentProject.progress || 0}% progressing` : '0% progressing'}
                       </h3>
                       <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-normal leading-relaxed mb-6">
-                        7 items complete, 4 open, and 1 blocked. Readiness is not a compliance certificate.
+                        {currentProject ? 'Readiness updates as shared advice statuses change.' : 'No readiness items recorded. Connect requirements to begin tracking.'}
                       </p>
                     </div>
                     <div>
@@ -2141,65 +2143,32 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                   </h2>
 
                   <div className="divide-y divide-slate-800/80">
-                    {/* Row 1: POLICY */}
-                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4 sm:gap-6">
-                        <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
-                          POLICY
-                        </span>
-                        <span className="font-bold text-slate-100 text-sm sm:text-base">
-                          AML Programme Policy.pdf
-                        </span>
+                    {Array.isArray(currentProject?.documents) && currentProject.documents.length > 0 ? (
+                      currentProject.documents.map((doc, idx) => (
+                        <div key={idx} className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-4 sm:gap-6">
+                            <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
+                              {doc.type || 'DOCUMENT'}
+                            </span>
+                            <span className="font-bold text-slate-100 text-sm sm:text-base">
+                              {doc.name || doc.title}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setToastMessage(`Opening ${doc.name || doc.title}...`)}
+                            className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                          >
+                            <span>View</span>
+                            <ArrowRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-8 text-center text-slate-500 text-sm">
+                        No documents uploaded for this project yet. Uploaded policies, evidence matrices, and source files will appear here.
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setToastMessage('Opening AML Programme Policy.pdf...')}
-                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
-                      >
-                        <span>View</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {/* Row 2: EVIDENCE */}
-                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4 sm:gap-6">
-                        <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
-                          EVIDENCE
-                        </span>
-                        <span className="font-bold text-slate-100 text-sm sm:text-base">
-                          Transaction Monitoring Matrix.xlsx
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setToastMessage('Opening Transaction Monitoring Matrix.xlsx...')}
-                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
-                      >
-                        <span>View</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {/* Row 3: SOURCE */}
-                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4 sm:gap-6">
-                        <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
-                          SOURCE
-                        </span>
-                        <span className="font-bold text-slate-100 text-sm sm:text-base">
-                          FCA Handbook SYSC 6.pdf
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setToastMessage('Opening FCA Handbook SYSC 6.pdf...')}
-                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
-                      >
-                        <span>View</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -2212,65 +2181,32 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                   </h2>
 
                   <div className="divide-y divide-slate-800/80">
-                    {/* Row 1: 22 SEP */}
-                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4 sm:gap-6">
-                        <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
-                          22 SEP
-                        </span>
-                        <span className="font-bold text-slate-100 text-sm sm:text-base">
-                          Workflow opened by Jun Nakamura
-                        </span>
+                    {Array.isArray(currentProject?.auditEvents) && currentProject.auditEvents.length > 0 ? (
+                      currentProject.auditEvents.map((evt, idx) => (
+                        <div key={idx} className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-4 sm:gap-6">
+                            <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
+                              {evt.date || 'LOG'}
+                            </span>
+                            <span className="font-bold text-slate-100 text-sm sm:text-base">
+                              {evt.action || evt.text}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setToastMessage('Viewing audit event details...')}
+                            className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                          >
+                            <span>View</span>
+                            <ArrowRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="py-8 text-center text-slate-500 text-sm">
+                        No audit trail events recorded for this project yet. Actions and validations will be recorded here automatically.
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setToastMessage('Viewing audit event details...')}
-                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
-                      >
-                        <span>View</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {/* Row 2: 21 SEP */}
-                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4 sm:gap-6">
-                        <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
-                          21 SEP
-                        </span>
-                        <span className="font-bold text-slate-100 text-sm sm:text-base">
-                          Requirement REQ-142 validated by Maya Chen
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setToastMessage('Viewing audit event details...')}
-                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
-                      >
-                        <span>View</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {/* Row 3: 19 SEP */}
-                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4 sm:gap-6">
-                        <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
-                          19 SEP
-                        </span>
-                        <span className="font-bold text-slate-100 text-sm sm:text-base">
-                          Project status changed to In Progress
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setToastMessage('Viewing audit event details...')}
-                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
-                      >
-                        <span>View</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
+                    )}
                   </div>
                 </div>
               )}

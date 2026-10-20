@@ -45,15 +45,15 @@ export default function AdminDashboardView({
   const [toastMsg, setToastMsg] = useState(null);
 
   // Dynamic Admin Profile (DEF-03)
-  const adminName = currentUser?.name || 'Avery Patel';
-  const adminEmail = currentUser?.email || 'admin@gmail.com';
+  const adminName = currentUser?.name || 'Administrator';
+  const adminEmail = currentUser?.email || 'admin@finregtech.com';
   const adminInitials = adminName
     .split(' ')
     .filter(Boolean)
     .map((n) => n[0])
     .join('')
     .slice(0, 2)
-    .toUpperCase() || 'AP';
+    .toUpperCase() || 'AD';
 
   const showToast = (msg) => {
     setToastMsg(msg);
@@ -173,22 +173,18 @@ export default function AdminDashboardView({
     },
     {
       title: 'Pending Source Validation',
-      val: '01',
+      val: String(regulatorySources.filter((s) => s.status === 'Review Due').length).padStart(2, '0'),
       subtitle: 'Regulatory review required',
     },
     {
       title: 'Recent Security Events',
-      val: '05',
-      subtitle: '2 require attention',
+      val: String(securityAlerts.length).padStart(2, '0'),
+      subtitle: securityAlerts.length > 0 ? `${securityAlerts.length} require attention` : 'Platform security normal',
     },
   ];
 
-  // Middle Section 4 Cards data matching Image 2 (media_1791981200685_5461ca8a.png)
-  const recentPlatformActivity = [
-    { time: '15:14', text: 'Account status changed for Sofia Alvarez' },
-    { time: '14:42', text: 'Blocked Admin authentication attempt' },
-    { time: '13:06', text: 'Advisor role metadata reviewed' },
-  ];
+  // Middle Section 4 Cards data
+  const recentPlatformActivity = [];
 
   const recentUserRegistrations = users.slice(0, 3).map((u) => ({
     date: u.registered ? u.registered.slice(0, 6).toUpperCase() : 'TODAY',
@@ -426,7 +422,7 @@ export default function AdminDashboardView({
           </span>
         </div>
 
-        {/* Right: Notifications & Avery Patel Profile */}
+        {/* Right: Notifications & Admin Profile */}
         <div className="flex items-center gap-3">
           {/* Notification Bell */}
           <div className="relative">
@@ -440,7 +436,9 @@ export default function AdminDashboardView({
               title="Notifications"
             >
               <Bell className="w-4 h-4" />
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-[#121316]" />
+              {securityAlerts.length > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-[#121316]" />
+              )}
             </button>
 
             {/* Notification Dropdown */}
@@ -450,25 +448,29 @@ export default function AdminDashboardView({
                   <span className="text-xs font-bold text-white uppercase tracking-wider font-mono">
                     Security Alerts
                   </span>
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-mono font-bold">
-                    2 New
-                  </span>
+                  {securityAlerts.length > 0 && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-mono font-bold">
+                      {securityAlerts.length} New
+                    </span>
+                  )}
                 </div>
                 <div className="space-y-2.5 text-xs">
-                  <div className="p-2.5 rounded-md bg-slate-900/80 border border-slate-800">
-                    <p className="font-bold text-amber-400">Repeated Admin authentication failures</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Blocked attempt from 192.168.1.104</p>
-                  </div>
-                  <div className="p-2.5 rounded-md bg-slate-900/80 border border-slate-800">
-                    <p className="font-bold text-amber-400">Expired privileged session</p>
-                    <p className="text-[11px] text-slate-400 mt-0.5">Session timeout reached for audit administrator</p>
-                  </div>
+                  {securityAlerts.length === 0 ? (
+                    <p className="text-center text-slate-500 py-3 font-medium">No active security alerts.</p>
+                  ) : (
+                    securityAlerts.map((alert, idx) => (
+                      <div key={idx} className="p-2.5 rounded-md bg-slate-900/80 border border-slate-800">
+                        <p className="font-bold text-amber-400">{alert.title || alert.tag}</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{alert.description || alert.text}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </div>
             )}
           </div>
 
-          {/* User Profile Badge (AP · Avery Patel) */}
+          {/* User Profile Badge */}
           <div className="relative">
             <button
               type="button"
@@ -670,16 +672,22 @@ export default function AdminDashboardView({
                     Recent Platform Activity
                   </h2>
                   <div className="divide-y divide-slate-800/60">
-                    {recentPlatformActivity.map((act, idx) => (
-                      <div key={idx} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
-                        <span className="font-mono text-xs font-semibold text-amber-400 w-12 shrink-0">
-                          {act.time}
-                        </span>
-                        <span className="text-xs sm:text-sm text-slate-200 font-medium">
-                          {act.text}
-                        </span>
+                    {recentPlatformActivity.length === 0 ? (
+                      <div className="py-4 text-center text-xs text-slate-500 font-medium">
+                        No recent platform activity recorded.
                       </div>
-                    ))}
+                    ) : (
+                      recentPlatformActivity.map((act, idx) => (
+                        <div key={idx} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
+                          <span className="font-mono text-xs font-semibold text-amber-400 w-12 shrink-0">
+                            {act.time}
+                          </span>
+                          <span className="text-xs sm:text-sm text-slate-200 font-medium">
+                            {act.text}
+                          </span>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
 
@@ -689,16 +697,22 @@ export default function AdminDashboardView({
                     Recent User Registrations
                   </h2>
                   <div className="divide-y divide-slate-800/60">
-                    {recentUserRegistrations.map((reg, idx) => (
-                      <div key={idx} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
-                        <span className="font-mono text-xs font-semibold text-amber-400 w-16 shrink-0 uppercase">
-                          {reg.date}
-                        </span>
-                        <span className="text-xs sm:text-sm text-slate-200 font-medium">
-                          {reg.text}
-                        </span>
+                    {recentUserRegistrations.length === 0 ? (
+                      <div className="py-4 text-center text-xs text-slate-500 font-medium">
+                        No user registrations recorded yet.
                       </div>
-                    ))}
+                    ) : (
+                      recentUserRegistrations.map((reg, idx) => (
+                        <div key={idx} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
+                          <span className="font-mono text-xs font-semibold text-amber-400 w-16 shrink-0 uppercase">
+                            {reg.date}
+                          </span>
+                          <span className="text-xs sm:text-sm text-slate-200 font-medium">
+                            {reg.text}
+                          </span>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
 
@@ -1075,10 +1089,10 @@ export default function AdminDashboardView({
                           Builder
                         </td>
                         <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                          Owned projects; invite max 2 advisors;
+                          Create and manage owned projects; invite up to 2 domain advisors per project; upload requirements; record compliance decisions.
                         </td>
                         <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                          No platform administration
+                          No platform administration or access to other builders' unshared projects.
                         </td>
                         <td className="py-4 px-4">
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#12281b] border border-emerald-800/50 text-emerald-400">
@@ -1094,10 +1108,10 @@ export default function AdminDashboardView({
                           Advisor
                         </td>
                         <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                          Assigned projects; permitted requirem
+                          Access assigned projects; review regulatory requirements; submit independent advisory notes, recommendations, and evidence assessments.
                         </td>
                         <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                          No ownership or Builder decisions
+                          Read-only access to assigned projects; no project ownership or builder decision overrides.
                         </td>
                         <td className="py-4 px-4">
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#12281b] border border-emerald-800/50 text-emerald-400">
@@ -1113,10 +1127,10 @@ export default function AdminDashboardView({
                           Admin
                         </td>
                         <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                          Users and roles; project metadata; invit
+                          Platform-wide user and account management; project metadata oversight; security audit log inspection; system health monitoring.
                         </td>
                         <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                          No automatic confidential document access
+                          Administrative metadata only; no automatic access to confidential project documents or advisory submissions.
                         </td>
                         <td className="py-4 px-4">
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#12281b] border border-emerald-800/50 text-emerald-400">
@@ -1627,7 +1641,7 @@ export default function AdminDashboardView({
                     Authentication Failures
                   </span>
                   <p className="text-2xl sm:text-3xl font-mono font-bold text-white mt-3 mb-1">
-                    07
+                    00
                   </p>
                   <span className="text-xs text-slate-500 block">
                     Last 24 hours
@@ -1640,10 +1654,10 @@ export default function AdminDashboardView({
                     Suspicious Alerts
                   </span>
                   <p className="text-2xl sm:text-3xl font-mono font-bold text-white mt-3 mb-1">
-                    02
+                    00
                   </p>
                   <span className="text-xs text-slate-500 block">
-                    Human review required
+                    No active alerts
                   </span>
                 </div>
 
@@ -1653,10 +1667,10 @@ export default function AdminDashboardView({
                     Active Sessions
                   </span>
                   <p className="text-2xl sm:text-3xl font-mono font-bold text-white mt-3 mb-1">
-                    34
+                    01
                   </p>
                   <span className="text-xs text-slate-500 block">
-                    3 privileged sessions
+                    1 active administrator session
                   </span>
                 </div>
 
@@ -1666,10 +1680,10 @@ export default function AdminDashboardView({
                     System Errors
                   </span>
                   <p className="text-2xl sm:text-3xl font-mono font-bold text-white mt-3 mb-1">
-                    03
+                    00
                   </p>
                   <span className="text-xs text-slate-500 block">
-                    No critical outage
+                    No critical outages
                   </span>
                 </div>
 
@@ -1679,10 +1693,10 @@ export default function AdminDashboardView({
                     Security Events
                   </span>
                   <p className="text-2xl sm:text-3xl font-mono font-bold text-white mt-3 mb-1">
-                    05
+                    00
                   </p>
                   <span className="text-xs text-slate-500 block">
-                    Recent recorded events
+                    No recorded events
                   </span>
                 </div>
               </div>
@@ -1719,20 +1733,9 @@ export default function AdminDashboardView({
                     Recent Authentication Failures
                   </h2>
                   <div className="divide-y divide-slate-800/60">
-                    {[
-                      { time: '15:42', text: 'Repeated invalid credentials attempt' },
-                      { time: '14:38', text: 'Unknown account · generic failure' },
-                      { time: '11:16', text: 'Expired session rejected' },
-                    ].map((fail, idx) => (
-                      <div key={idx} className="flex items-center gap-6 py-3.5 first:pt-0 last:pb-0">
-                        <span className="font-mono text-xs font-bold text-amber-400 w-16 shrink-0">
-                          {fail.time}
-                        </span>
-                        <span className="text-xs sm:text-sm text-slate-200 font-medium">
-                          {fail.text}
-                        </span>
-                      </div>
-                    ))}
+                    <div className="py-4 text-center text-xs text-slate-500 font-medium">
+                      No authentication failures recorded.
+                    </div>
                   </div>
                 </div>
 
@@ -1742,20 +1745,9 @@ export default function AdminDashboardView({
                     Session &amp; Access Events
                   </h2>
                   <div className="divide-y divide-slate-800/60">
-                    {[
-                      { tag: 'SESSION', text: 'Privileged session expired normally' },
-                      { tag: 'ACCESS', text: 'Revoked advisor access confirmed' },
-                      { tag: 'ROLE', text: 'Role change required confirmation' },
-                    ].map((evt, idx) => (
-                      <div key={idx} className="flex items-center gap-6 py-3.5 first:pt-0 last:pb-0">
-                        <span className="font-mono text-[10px] font-bold text-amber-400 tracking-wider uppercase w-16 shrink-0">
-                          {evt.tag}
-                        </span>
-                        <span className="text-xs sm:text-sm text-slate-200 font-medium">
-                          {evt.text}
-                        </span>
-                      </div>
-                    ))}
+                    <div className="py-4 text-center text-xs text-slate-500 font-medium">
+                      No session access events recorded.
+                    </div>
                   </div>
                 </div>
 
@@ -1765,20 +1757,9 @@ export default function AdminDashboardView({
                     Security Event History
                   </h2>
                   <div className="divide-y divide-slate-800/60">
-                    {[
-                      { tag: 'ALERT', text: 'Repeated failed Admin attempts' },
-                      { tag: 'INFO', text: 'Access key rotation review due' },
-                      { tag: 'ERROR', text: '3 non-critical background errors' },
-                    ].map((sec, idx) => (
-                      <div key={idx} className="flex items-center gap-6 py-3.5 first:pt-0 last:pb-0">
-                        <span className="font-mono text-[10px] font-bold text-amber-400 tracking-wider uppercase w-16 shrink-0">
-                          {sec.tag}
-                        </span>
-                        <span className="text-xs sm:text-sm text-slate-200 font-medium">
-                          {sec.text}
-                        </span>
-                      </div>
-                    ))}
+                    <div className="py-4 text-center text-xs text-slate-500 font-medium">
+                      No security events recorded.
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1807,7 +1788,7 @@ export default function AdminDashboardView({
                       ADMIN PROFILE
                     </span>
                     <p className="text-sm font-semibold text-white">
-                      Avery Patel · Global Administrator
+                      {adminName} · Global Administrator
                     </p>
                   </div>
 
