@@ -24,38 +24,7 @@ import { ADVISOR_PROFILES } from './AdvisorExpertiseView';
 
 const ADVISOR_REVIEWS_STORAGE_KEY = 'finreg_advisor_reviews';
 
-const INITIAL_REVIEWS = [
-  {
-    id: 'REV-001',
-    project: 'ABC Shield',
-    projectId: 'PRJ-001',
-    requirement: 'Risk-sensitive customer due diligence',
-    reqCode: 'ADV-001',
-    source: 'FCA Handbook · SYSC 6.3.8',
-    adviceSubmitted: 'Ensure explicit enhanced due diligence triggers for complex structures...',
-    recommendation: 'Implement tiered risk thresholds for ultimate beneficial owner (UBO) screening exceeding 25% ownership.',
-    referenceAttachment: 'SYSC-6.3-Guidance-Notes.pdf',
-    date: '12 Oct 2026',
-    status: 'Pending Review',
-    statusColor: 'bg-amber-950/60 text-amber-400 border-amber-800/80',
-    dotColor: 'bg-amber-400',
-  },
-  {
-    id: 'REV-002',
-    project: 'KYC Onboarding Controls',
-    projectId: 'PRJ-002',
-    requirement: 'Identity verification provider fallback',
-    reqCode: 'ADV-002',
-    source: 'EBA Guidelines 2026',
-    adviceSubmitted: 'Contractual agreement requires second-line manual check SLA...',
-    recommendation: 'Establish an automated failover identity provider with explicit SLA for manual escalations.',
-    referenceAttachment: 'EBA-KYC-Fallback-Spec.pdf',
-    date: '09 Oct 2026',
-    status: 'Accepted',
-    statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
-    dotColor: 'bg-emerald-400',
-  },
-];
+const INITIAL_REVIEWS = [];
 
 export default function AdvisorDashboardView({
   isDarkMode = true,
@@ -180,27 +149,8 @@ export default function AdvisorDashboardView({
     setActiveTab('Dashboard');
   };
 
-  // Interactive Notifications State (DEF-05)
-  const [notificationsList, setNotificationsList] = useState([
-    {
-      id: 'adv-notif-1',
-      text: 'Advisor review added to ABC Shield',
-      tab: 'Requirements',
-      read: false,
-    },
-    {
-      id: 'adv-notif-2',
-      text: 'New FCA source version available',
-      tab: 'Requirements',
-      read: false,
-    },
-    {
-      id: 'adv-notif-3',
-      text: 'Project invitation accepted by Dr. Chen',
-      tab: 'My Projects',
-      read: true,
-    },
-  ]);
+  // Interactive Notifications State initialized to empty array
+  const [notificationsList, setNotificationsList] = useState([]);
 
   const unreadCount = notificationsList.filter((n) => !n.read).length;
 
@@ -218,50 +168,10 @@ export default function AdvisorDashboardView({
     setNotificationsList((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
-  // Predefined sample projects for demonstration account (advisor@gmail.com)
-  const SEEDED_ADVISOR_PROJECTS = [
-    {
-      id: 'PRJ-001',
-      name: 'ABC Shield',
-      company: 'Northbank Financial',
-      domain: currentExpertise?.domain || 'Financial Crime Compliance',
-      nextAction: currentExpertise?.nextAction || 'Review legal requirements',
-      type: 'AML / CTF',
-      status: 'In Progress',
-      statusColor: 'bg-amber-950/40 text-amber-400 border-amber-800/50',
-      dotColor: 'bg-amber-400',
-      owner: 'J. Nakamura',
-      lastUpdated: '12 Oct 2026',
-    },
-    {
-      id: 'PRJ-002',
-      name: 'KYC Onboarding Controls',
-      company: 'Apex Digital Bank',
-      domain: 'Customer Verification & Identity',
-      nextAction: 'Validate automated CDD logic',
-      type: 'KYC / CDD',
-      status: 'Under Review',
-      statusColor: 'bg-slate-800/80 text-slate-300 border-slate-700',
-      dotColor: 'bg-slate-400',
-      owner: 'S. Okonkwo',
-      lastUpdated: '10 Oct 2026',
-    },
-    {
-      id: 'PRJ-003',
-      name: 'Regulatory Reporting Q3',
-      company: 'Vanguard Capital',
-      domain: 'Prudential Filings & Audit',
-      nextAction: 'Provide sign-off advice',
-      type: 'Reporting',
-      status: 'Draft',
-      statusColor: 'bg-slate-800/60 text-slate-400 border-slate-700/60',
-      dotColor: 'bg-slate-500',
-      owner: 'A. Petrov',
-      lastUpdated: '08 Oct 2026',
-    },
-  ];
+  // Seeded advisor projects initialized to empty array (ready for live backend project assignments)
+  const SEEDED_ADVISOR_PROJECTS = [];
 
-  // DEF-01: Load dynamically assigned projects for this specific advisor account
+  // Load dynamically assigned projects for this specific advisor account
   const [assignedProjectsFullList, setAssignedProjectsFullList] = useState(() => {
     try {
       const email = (currentUser?.email || '').toLowerCase();
@@ -290,11 +200,6 @@ export default function AdvisorDashboardView({
           owner: a.invitedBy || 'Project Owner',
           lastUpdated: 'Recently assigned',
         }));
-      }
-
-      // Default demo account gets seeded projects; newly registered advisors strictly start with an EMPTY list (DEF-01)
-      if (email === 'advisor@gmail.com' || name === 'Dr. Maya Chen') {
-        return SEEDED_ADVISOR_PROJECTS;
       }
 
       return [];
@@ -334,8 +239,6 @@ export default function AdvisorDashboardView({
             lastUpdated: 'Recently assigned',
           }))
         );
-      } else if (email === 'advisor@gmail.com' || name === 'Dr. Maya Chen') {
-        setAssignedProjectsFullList(SEEDED_ADVISOR_PROJECTS);
       } else {
         setAssignedProjectsFullList([]);
       }
@@ -371,36 +274,8 @@ export default function AdvisorDashboardView({
   // Authoritative active project based on selectedProject ID (DEF-08, DEF-10)
   const activeProject = assignedProjectsFullList.find((p) => p.id === selectedProject) || assignedProjectsFullList[0] || null;
 
-  // Requirements List for Requirements tab
-  const requirementsList = [
-    {
-      id: 'REQ-142',
-      requirement: 'Risk-sensitive customer due diligence',
-      source: 'FCA Handbook · SYSC 6.3.8',
-      authority: 'FCA',
-      status: 'Review due',
-      statusColor: 'bg-amber-950/60 text-amber-400 border-amber-800/80',
-      dotColor: 'bg-amber-400',
-    },
-    {
-      id: 'REQ-157',
-      requirement: 'Ongoing transaction monitoring',
-      source: 'JMLSG Guidance · Part I, 5.7',
-      authority: 'JMLSG',
-      status: 'Pending validation',
-      statusColor: 'bg-slate-800 text-slate-300 border-slate-700',
-      dotColor: 'bg-slate-400',
-    },
-    {
-      id: 'REQ-163',
-      requirement: 'Suspicious activity escalation',
-      source: 'SAR Guidance · Chapter 3',
-      authority: 'NCA',
-      status: 'Validated',
-      statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
-      dotColor: 'bg-emerald-400',
-    },
-  ];
+  // Requirements List initialized to empty array (ready for live backend requirements)
+  const requirementsList = [];
 
 
 

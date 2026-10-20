@@ -9,9 +9,10 @@ export default function SettingsView({ isDarkMode, onSignOut, currentUser }) {
     }
   };
 
-  const displayName = currentUser?.name || 'Jun Nakamura';
-  const displayEmail = currentUser?.email || 'jun@northbank.com';
-  const displayRole = currentUser?.role || 'Builder / Project Owner';
+  const displayName = currentUser?.name || 'Account User';
+  const displayEmail = currentUser?.email || '—';
+  const displayRole = currentUser?.role || currentUser?.platform_role || 'User';
+  const projectAccessSummary = currentUser?.projectAccessSummary || 'Direct workspace access';
 
   return (
     <div className="space-y-6 animate-fadeIn text-left relative max-w-5xl">
@@ -76,7 +77,7 @@ export default function SettingsView({ isDarkMode, onSignOut, currentUser }) {
                 PROJECT ACCESS SUMMARY
               </div>
               <div className="text-sm sm:text-base font-semibold text-slate-900 dark:text-slate-100">
-                3 owned projects · 1 active advisor
+                {projectAccessSummary}
               </div>
             </div>
           </div>

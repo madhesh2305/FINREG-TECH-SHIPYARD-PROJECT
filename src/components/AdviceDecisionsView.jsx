@@ -5,105 +5,8 @@ export default function AdviceDecisionsView({ isDarkMode }) {
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [toastMsg, setToastMsg] = useState(null);
 
-  // Master Decision Records matching uploaded image media_1791738876275_cf9f871c.png
-  const [records, setRecords] = useState([
-    {
-      id: 'ADV-001',
-      requirement: 'Risk-sensitive customer due diligence',
-      citation: 'FCA Handbook · SYSC 6.3.8',
-      advisor: 'Dr. Maya Chen',
-      adviceStatus: 'Pending Review',
-      adviceStatusType: 'amber', // amber | emerald
-      possibleDifference: 'Compare inputs',
-      hasDifferenceBadge: true,
-      decisionStatus: 'Open',
-      decisionStatusType: 'open', // open | closed
-      decisionRationale: '',
-      followUpAction: '',
-      actionOwner: 'Jun Nakamura',
-      dueDate: '',
-    },
-    {
-      id: 'ADV-002',
-      requirement: 'Ongoing transaction monitoring',
-      citation: 'JMLSG Guidance · Part I, 5.7',
-      advisor: 'Daniel Okafor',
-      adviceStatus: 'Accepted',
-      adviceStatusType: 'emerald',
-      possibleDifference: 'No conflict flagged',
-      hasDifferenceBadge: false,
-      decisionStatus: 'Open',
-      decisionStatusType: 'open',
-      decisionRationale: '',
-      followUpAction: '',
-      actionOwner: 'Jun Nakamura',
-      dueDate: '',
-    },
-    {
-      id: 'ADV-003',
-      requirement: 'Suspicious activity escalation',
-      citation: 'NCA SAR Guidance · Chapter 3',
-      advisor: 'Dr. Maya Chen',
-      adviceStatus: 'Pending Review',
-      adviceStatusType: 'amber',
-      possibleDifference: 'No conflict flagged',
-      hasDifferenceBadge: false,
-      decisionStatus: 'Closed',
-      decisionStatusType: 'closed',
-      decisionRationale: '',
-      followUpAction: '',
-      actionOwner: 'Jun Nakamura',
-      dueDate: '',
-    },
-    {
-      id: 'ADV-004',
-      requirement: 'Alert investigation continuity',
-      citation: 'FCA Handbook · SYSC 15A',
-      advisor: 'Daniel Okafor',
-      adviceStatus: 'Accepted',
-      adviceStatusType: 'emerald',
-      possibleDifference: 'No conflict flagged',
-      hasDifferenceBadge: false,
-      decisionStatus: 'Closed',
-      decisionStatusType: 'closed',
-      decisionRationale: '',
-      followUpAction: '',
-      actionOwner: 'Jun Nakamura',
-      dueDate: '',
-    },
-    {
-      id: 'ADV-005',
-      requirement: 'High-risk customer approval',
-      citation: 'JMLSG Guidance · Part I, 5.5',
-      advisor: 'Dr. Maya Chen',
-      adviceStatus: 'Accepted',
-      adviceStatusType: 'emerald',
-      possibleDifference: 'No conflict flagged',
-      hasDifferenceBadge: false,
-      decisionStatus: 'Closed',
-      decisionStatusType: 'closed',
-      decisionRationale: '',
-      followUpAction: '',
-      actionOwner: 'Jun Nakamura',
-      dueDate: '',
-    },
-    {
-      id: 'ADV-006',
-      requirement: 'Enhanced due diligence evidence',
-      citation: 'FCA Handbook · FC 2.2',
-      advisor: 'Dr. Maya Chen',
-      adviceStatus: 'Needs Clarification',
-      adviceStatusType: 'amber',
-      possibleDifference: 'No conflict flagged',
-      hasDifferenceBadge: false,
-      decisionStatus: 'Closed',
-      decisionStatusType: 'closed',
-      decisionRationale: '',
-      followUpAction: '',
-      actionOwner: 'Jun Nakamura',
-      dueDate: '',
-    },
-  ]);
+  // Decision Records initialized to empty array (ready for live backend records)
+  const [records, setRecords] = useState([]);
 
   // Form states for the detail view
   const [formData, setFormData] = useState({
@@ -394,7 +297,14 @@ export default function AdviceDecisionsView({ isDarkMode }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
-              {records.map((item) => (
+              {records.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-12 text-center text-slate-500 text-sm">
+                    No advice decisions recorded yet. Decisions recorded on advisor inputs will appear here.
+                  </td>
+                </tr>
+              ) : (
+                records.map((item) => (
                 <tr
                   key={item.id}
                   onClick={() => handleOpenDetail(item)}
@@ -474,7 +384,8 @@ export default function AdviceDecisionsView({ isDarkMode }) {
                     </button>
                   </td>
                 </tr>
-              ))}
+              ))
+            )}
             </tbody>
           </table>
         </div>

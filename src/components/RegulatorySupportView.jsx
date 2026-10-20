@@ -16,95 +16,7 @@ export default function RegulatorySupportView({ isDarkMode, initialRequirementId
   const [isSourceModalOpen, setIsSourceModalOpen] = useState(false);
 
   // Master Regulatory Library Data with live API integration
-  const [requirementsList, setRequirementsList] = useState([
-    {
-      id: 'REQ-142',
-      requirement: 'Risk-sensitive customer due diligence',
-      authority: 'FCA',
-      jurisdiction: 'United Kingdom',
-      source: 'FCA Handbook',
-      reference: 'SYSC 6.3.8',
-      dateVersion: 'Release 126 · Sep 2026',
-      layer: 'FCA Rules / Principles',
-      applicability: 'Applicable to all UK-authorised firms conducting customer onboarding',
-      validationStatus: 'Validated',
-      validationBadge: 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400',
-      dotColor: 'bg-emerald-500',
-      description: 'Firms must establish and maintain effective systems and controls for compliance with applicable financial crime requirements.',
-      officialSource: 'Linked source record available in prototype',
-      notesLimitations: 'This prototype does not claim legal validation. Interpretation and final applicability require appropriate human review.',
-    },
-    {
-      id: 'REQ-157',
-      requirement: 'Ongoing transaction monitoring',
-      authority: 'JMLSG',
-      jurisdiction: 'United Kingdom',
-      source: 'JMLSG Guidance',
-      reference: 'Part I, 5.7',
-      dateVersion: 'Jul 2024 revision',
-      layer: 'Government Guidance',
-      applicability: 'Applicable to UK financial services firms conducting ongoing customer activity',
-      validationStatus: 'Review due',
-      validationBadge: 'border-amber-800/80 bg-amber-950/60 text-amber-400',
-      dotColor: 'bg-amber-500',
-      description: 'Continuous monitoring of customer accounts and transactions to detect unusual patterns and potential money laundering indicators.',
-      officialSource: 'Linked source record available in prototype',
-      notesLimitations: 'This prototype does not claim legal validation. Interpretation and final applicability require appropriate human review.',
-    },
-    {
-      id: 'REQ-163',
-      requirement: 'Suspicious activity escalation',
-      authority: 'NCA',
-      jurisdiction: 'United Kingdom',
-      source: 'SAR Guidance',
-      reference: 'Chapter 3',
-      dateVersion: 'Version 3.1 · Jan 2025',
-      layer: 'Statutory Law',
-      applicability: 'Applicable to all UK-based firms subject to the Money Laundering Regulations',
-      validationStatus: 'Validated',
-      validationBadge: 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400',
-      dotColor: 'bg-emerald-500',
-      description: 'Mandatory obligation to report suspicious activity reports (SARs) directly to the UK National Crime Agency without tipping off.',
-      officialSource: 'Linked source record available in prototype',
-      notesLimitations: 'This prototype does not claim legal validation. Interpretation and final applicability require appropriate human review.',
-    },
-    {
-      id: 'REQ-178',
-      requirement: 'Politically exposed persons (PEP) screening',
-      authority: 'FATF',
-      jurisdiction: 'Global / International',
-      source: 'FATF Recommendations',
-      reference: 'Recommendation 12',
-      dateVersion: 'Updated Feb 2026',
-      layer: 'International Standard',
-      applicability: 'Applicable to All Financial Institutions',
-      validationStatus: 'Validated',
-      validationBadge: 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400',
-      dotColor: 'bg-emerald-500',
-      description: 'Enhanced due diligence requirements for PEPs, family members, and close associates across all onboarding channels.',
-      officialSource: 'Linked source record available in prototype',
-      notesLimitations: 'This prototype does not claim legal validation. Interpretation and final applicability require appropriate human review.',
-      topic: 'PEP Screening',
-    },
-    {
-      id: 'REQ-189',
-      requirement: 'Consumer Duty governance & oversight',
-      authority: 'FCA',
-      jurisdiction: 'United Kingdom',
-      source: 'FCA FG22/5',
-      reference: 'PRIN 2A.8',
-      dateVersion: 'Release 124 · Jun 2026',
-      layer: 'FCA Rules / Principles',
-      applicability: 'Applicable to Retail Financial Products & Services',
-      validationStatus: 'Review due',
-      validationBadge: 'border-amber-800/80 bg-amber-950/60 text-amber-400',
-      dotColor: 'bg-amber-500',
-      description: 'Boards must monitor customer outcomes, pricing value, and product governance to ensure good outcomes for retail customers.',
-      officialSource: 'Linked source record available in prototype',
-      notesLimitations: 'This prototype does not claim legal validation. Interpretation and final applicability require appropriate human review.',
-      topic: 'Consumer Duty',
-    },
-  ]);
+  const [requirementsList, setRequirementsList] = useState([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -594,7 +506,17 @@ export default function RegulatorySupportView({ isDarkMode, initialRequirementId
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
-              {filteredRequirements.map((req) => {
+              {filteredRequirements.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={10}
+                    className="py-12 px-7 text-center text-slate-400 dark:text-slate-500 text-sm font-normal"
+                  >
+                    No regulatory requirements found. Regulatory rules and frameworks loaded from the backend will appear here.
+                  </td>
+                </tr>
+              ) : (
+                filteredRequirements.map((req) => {
                 const isSelected = activeRowId === req.id;
 
                 return (
@@ -682,7 +604,7 @@ export default function RegulatorySupportView({ isDarkMode, initialRequirementId
                     </td>
                   </tr>
                 );
-              })}
+              }))}
             </tbody>
           </table>
         </div>

@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Calendar, ChevronDown, X } from 'lucide-react';
+import { getAuditEvents } from '../services/auditService';
 
-export default function AuditTrailView({ isDarkMode }) {
+export default function AuditTrailView({ isDarkMode, events = [] }) {
   const [selectedEvent, setSelectedEvent] = useState(null);
 
   // Filter states
@@ -11,83 +12,48 @@ export default function AuditTrailView({ isDarkMode }) {
   const [eventTypeFilter, setEventTypeFilter] = useState('All event types');
   const [dateFilter, setDateFilter] = useState('');
 
-  // Master Audit Trail items matching uploaded image media_1791740746094_bb421bec.png
-  const [auditEvents, setAuditEvents] = useState([
-    {
-      id: 'AUD-001',
-      dateTime: '29 Sep 2026 · 14:32',
-      user: 'Dr. Maya Chen',
-      role: 'Advisor',
-      eventType: 'Advice',
-      action: 'Resubmitted review for REQ-142',
-      relatedProject: 'ABC Shield',
-      result: 'Success',
-      resultType: 'success', // success | recorded | open
-    },
-    {
-      id: 'AUD-002',
-      dateTime: '29 Sep 2026 · 11:08',
-      user: 'Jun Nakamura',
-      role: 'Builder',
-      eventType: 'Clarification',
-      action: 'Requested additional evidence fields',
-      relatedProject: 'ABC Shield',
-      result: 'Success',
-      resultType: 'success',
-    },
-    {
-      id: 'AUD-003',
-      dateTime: '28 Sep 2026 · 16:41',
-      user: 'Avery Patel',
-      role: 'Admin',
-      eventType: 'Permission',
-      action: 'Confirmed revoked project access',
-      relatedProject: 'ABC Shield',
-      result: 'Recorded',
-      resultType: 'recorded',
-    },
-    {
-      id: 'AUD-004',
-      dateTime: '27 Sep 2026 · 09:20',
-      user: 'System',
-      role: 'System',
-      eventType: 'AI Review',
-      action: 'Flagged evidence gap for human review',
-      relatedProject: 'ABC Shield',
-      result: 'Open',
-      resultType: 'open',
-    },
-    {
-      id: 'AUD-005',
-      dateTime: '22 Sep 2026 · 10:05',
-      user: 'Jun Nakamura',
-      role: 'Builder',
-      eventType: 'Project',
-      action: 'Created ABC Shield project profile',
-      relatedProject: 'ABC Shield',
-      result: 'Success',
-      resultType: 'success',
-    },
-  ]);
+  // Master Audit Trail items - clean default ready for live backend integration
+  const [auditEvents, setAuditEvents] = useState(events);
+
+  useEffect(() => {
+    if (events && events.length > 0) {
+      setAuditEvents(events);
+    } else {
+      getAuditEvents().then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setAuditEvents(data);
+        }
+      });
+    }
+  }, [events]);
+
+  const projectOptions = Array.from(
+    new Set(auditEvents.map((e) => e.relatedProject).filter(Boolean))
+  );
 
   // Filtering
   const filteredEvents = auditEvents.filter((item) => {
+    const action = item.action || '';
+    const user = item.user || '';
+    const relatedProject = item.relatedProject || '';
+    const eventType = item.eventType || '';
+
     const matchesSearch =
-      item.action.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.user.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.relatedProject.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.eventType.toLowerCase().includes(searchQuery.toLowerCase());
+      action.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      user.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      relatedProject.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      eventType.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesProject =
-      projectFilter === 'All projects' || item.relatedProject === projectFilter;
+      projectFilter === 'All projects' || relatedProject === projectFilter;
 
     const matchesRole =
       roleFilter === 'All roles' || item.role === roleFilter;
 
     const matchesEventType =
-      eventTypeFilter === 'All event types' || item.eventType === eventTypeFilter;
+      eventTypeFilter === 'All event types' || eventType === eventTypeFilter;
 
-    const matchesDate = !dateFilter || item.dateTime.includes(dateFilter);
+    const matchesDate = !dateFilter || (item.dateTime && item.dateTime.includes(dateFilter));
 
     return matchesSearch && matchesProject && matchesRole && matchesEventType && matchesDate;
   });
@@ -104,7 +70,7 @@ export default function AuditTrailView({ isDarkMode }) {
         </p>
       </div>
 
-      {/* FILTER BAR CONTROLS MATCHING media_1791740746094_bb421bec.png */}
+      {/* FILTER BAR CONTROLS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 pt-1">
         {/* Search Field */}
         <div className="relative">
@@ -128,7 +94,11 @@ export default function AuditTrailView({ isDarkMode }) {
             className="w-full px-4 py-2.5 text-xs sm:text-sm rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#161619] text-slate-900 dark:text-slate-100 focus:outline-none focus:border-[#96562c] appearance-none cursor-pointer pr-10 transition-all"
           >
             <option value="All projects">All projects</option>
-            <option value="ABC Shield">ABC Shield</option>
+            {projectOptions.map((proj) => (
+              <option key={proj} value={proj}>
+                {proj}
+              </option>
+            ))}
           </select>
           <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
         </div>
@@ -179,7 +149,7 @@ export default function AuditTrailView({ isDarkMode }) {
         </div>
       </div>
 
-      {/* AUDIT EVENTS TABLE MATCHING media_1791740746094_bb421bec.png */}
+      {/* AUDIT EVENTS TABLE */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-[#161619] shadow-xl overflow-hidden mt-6">
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[950px]">
@@ -196,85 +166,102 @@ export default function AuditTrailView({ isDarkMode }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
-              {filteredEvents.map((item) => (
-                <tr
-                  key={item.id}
-                  onClick={() => setSelectedEvent(item)}
-                  className="transition-colors cursor-pointer hover:bg-stone-50 dark:hover:bg-white/[0.02]"
-                >
-                  {/* DATE / TIME */}
-                  <td className="py-5 px-6 text-slate-400 dark:text-slate-400 text-xs sm:text-sm">
-                    {item.dateTime}
-                  </td>
-
-                  {/* USER */}
-                  <td className="py-5 px-6 font-semibold text-slate-900 dark:text-white text-sm">
-                    {item.user}
-                  </td>
-
-                  {/* ROLE */}
-                  <td className="py-5 px-6 text-slate-600 dark:text-slate-400 text-sm">
-                    {item.role}
-                  </td>
-
-                  {/* EVENT TYPE */}
-                  <td className="py-5 px-6 text-slate-700 dark:text-slate-300 text-sm">
-                    {item.eventType}
-                  </td>
-
-                  {/* ACTION */}
-                  <td className="py-5 px-6 text-slate-800 dark:text-slate-300 text-sm">
-                    {item.action}
-                  </td>
-
-                  {/* RELATED PROJECT */}
-                  <td className="py-5 px-6 text-slate-700 dark:text-slate-300 text-sm">
-                    {item.relatedProject}
-                  </td>
-
-                  {/* RESULT */}
-                  <td className="py-5 px-6">
-                    {item.resultType === 'success' && (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-emerald-800/80 bg-emerald-950/40 text-emerald-300">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                        <span>{item.result}</span>
-                      </span>
-                    )}
-                    {item.resultType === 'recorded' && (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-emerald-800/80 bg-emerald-950/40 text-emerald-300">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-                        <span>{item.result}</span>
-                      </span>
-                    )}
-                    {item.resultType === 'open' && (
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-amber-800/80 bg-amber-950/40 text-amber-300">
-                        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
-                        <span>{item.result}</span>
-                      </span>
-                    )}
-                  </td>
-
-                  {/* VIEW DETAILS ACTION */}
-                  <td className="py-5 px-6 text-right">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedEvent(item);
-                      }}
-                      className="text-sm font-medium text-slate-300 hover:text-white transition-colors cursor-pointer"
-                    >
-                      View details
-                    </button>
+              {filteredEvents.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={8}
+                    className="py-12 px-6 text-center text-slate-400 dark:text-slate-500 text-sm"
+                  >
+                    No audit trail events found. System and workflow actions will be recorded here automatically.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredEvents.map((item) => (
+                  <tr
+                    key={item.id}
+                    onClick={() => setSelectedEvent(item)}
+                    className="transition-colors cursor-pointer hover:bg-stone-50 dark:hover:bg-white/[0.02]"
+                  >
+                    {/* DATE / TIME */}
+                    <td className="py-5 px-6 text-slate-400 dark:text-slate-400 text-xs sm:text-sm">
+                      {item.dateTime}
+                    </td>
+
+                    {/* USER */}
+                    <td className="py-5 px-6 font-semibold text-slate-900 dark:text-white text-sm">
+                      {item.user}
+                    </td>
+
+                    {/* ROLE */}
+                    <td className="py-5 px-6 text-slate-600 dark:text-slate-400 text-sm">
+                      {item.role}
+                    </td>
+
+                    {/* EVENT TYPE */}
+                    <td className="py-5 px-6 text-slate-700 dark:text-slate-300 text-sm">
+                      {item.eventType}
+                    </td>
+
+                    {/* ACTION */}
+                    <td className="py-5 px-6 text-slate-800 dark:text-slate-300 text-sm">
+                      {item.action}
+                    </td>
+
+                    {/* RELATED PROJECT */}
+                    <td className="py-5 px-6 text-slate-700 dark:text-slate-300 text-sm">
+                      {item.relatedProject}
+                    </td>
+
+                    {/* RESULT */}
+                    <td className="py-5 px-6">
+                      {item.resultType === 'success' && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-emerald-800/80 bg-emerald-950/40 text-emerald-300">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                          <span>{item.result}</span>
+                        </span>
+                      )}
+                      {item.resultType === 'recorded' && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-emerald-800/80 bg-emerald-950/40 text-emerald-300">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
+                          <span>{item.result}</span>
+                        </span>
+                      )}
+                      {item.resultType === 'open' && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-amber-800/80 bg-amber-950/40 text-amber-300">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
+                          <span>{item.result}</span>
+                        </span>
+                      )}
+                      {!['success', 'recorded', 'open'].includes(item.resultType) && (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border border-slate-700 bg-slate-800 text-slate-300">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400 shrink-0" />
+                          <span>{item.result || 'Logged'}</span>
+                        </span>
+                      )}
+                    </td>
+
+                    {/* VIEW DETAILS ACTION */}
+                    <td className="py-5 px-6 text-right">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedEvent(item);
+                        }}
+                        className="text-sm font-medium text-slate-300 hover:text-white transition-colors cursor-pointer"
+                      >
+                        View details
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* AUDIT EVENT DETAILS MODAL MATCHING media_1791740799469_3c3a4c41.png */}
+      {/* AUDIT EVENT DETAILS MODAL */}
       {selectedEvent && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-fadeIn"

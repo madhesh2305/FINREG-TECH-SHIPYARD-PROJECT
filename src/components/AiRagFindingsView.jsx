@@ -1,75 +1,50 @@
 import React, { useState } from 'react';
 import { ArrowLeft, Check, Search, ShieldAlert, FileText, ChevronRight } from 'lucide-react';
 
-export default function AiRagFindingsView({ isDarkMode }) {
+export default function AiRagFindingsView({ isDarkMode, findings = [] }) {
   const [selectedFinding, setSelectedFinding] = useState(null);
   const [toastMsg, setToastMsg] = useState(null);
 
-  // Findings master data matching uploaded images
-  const [findingsList, setFindingsList] = useState([
-    {
-      id: 'REQ-142',
-      finding: 'Enhanced due diligence evidence gap',
-      type: 'Evidence Gap',
-      typeBadge: 'border-amber-800/80 bg-amber-950/40 text-amber-300',
-      typeDot: 'bg-amber-400',
-      typeDetailBadge: 'border-amber-800/80 bg-amber-950/40 text-amber-300',
-      requirement: 'REQ-142',
-      supportingSource: 'FCA Handbook · SYSC 6.3.8',
-      humanReview: 'Needs Human Review',
-      reviewDetails:
-        'Project materials do not yet distinguish source-of-funds evidence from source-of-wealth evidence for each risk tier.',
-      statusBadge: 'border-slate-700/80 bg-slate-800/50 text-slate-300',
-      statusDot: 'bg-slate-400',
-      detailStatusBadge: 'border-amber-800/80 bg-amber-950/40 text-amber-300',
-      detailStatusDot: 'bg-amber-400',
-    },
-    {
-      id: 'REQ-157',
-      finding: 'Monitoring continuity interpretation',
-      type: 'Possible Conflict',
-      typeBadge: 'border-rose-900/80 bg-rose-950/40 text-rose-300',
-      typeDot: 'bg-rose-400',
-      typeDetailBadge: 'border-rose-900/80 bg-rose-950/40 text-rose-300',
-      requirement: 'REQ-157',
-      supportingSource: 'JMLSG Guidance · Part I, 5.7',
-      humanReview: 'Source Found',
-      reviewDetails:
-        'Conflicting advice between operational throughput goals and manual secondary verification queuing periods.',
-      statusBadge: 'border-slate-700/80 bg-slate-800/50 text-slate-300',
-      statusDot: 'bg-slate-400',
-      detailStatusBadge: 'border-emerald-800/80 bg-emerald-950/40 text-emerald-300',
-      detailStatusDot: 'bg-emerald-400',
-    },
-    {
-      id: 'REQ-163',
-      finding: 'Out-of-hours escalation citation',
-      type: 'No Reliable Source Found',
-      typeBadge: 'border-amber-800/80 bg-amber-950/40 text-amber-300',
-      typeDot: 'bg-amber-400',
-      typeDetailBadge: 'border-amber-800/80 bg-amber-950/40 text-amber-300',
-      requirement: 'REQ-163',
-      supportingSource: 'No reliable source identified',
-      humanReview: 'Needs Human Review',
-      reviewDetails:
-        'No statutory source identified within NCA or FCA corpora for specified automated out-of-hours emergency notification thresholds.',
-      statusBadge: 'border-slate-700/80 bg-slate-800/50 text-slate-300',
-      statusDot: 'bg-slate-400',
-      detailStatusBadge: 'border-amber-800/80 bg-amber-950/40 text-amber-300',
-      detailStatusDot: 'bg-amber-400',
-    },
-  ]);
+  // Findings master data - clean default ready for live backend integration
+  const [findingsList, setFindingsList] = useState(findings);
+
+  React.useEffect(() => {
+    if (findings && findings.length > 0) {
+      setFindingsList(findings);
+    }
+  }, [findings]);
 
   const handleOpenDetail = (item) => {
     setSelectedFinding(item);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // IF REVIEW DETAILS IS SELECTED, RENDER FULL PAGE VIEW MATCHING media_1791739498832_02c0375d.png & media_1791739521860_87e2ee7c.png
+  const needsHumanReviewCount = findingsList.filter(
+    (f) =>
+      (f.humanReview && f.humanReview.toLowerCase().includes('needs')) ||
+      (f.humanReview && f.humanReview.toLowerCase().includes('review'))
+  ).length;
+
+  const sourcesFoundCount = findingsList.filter(
+    (f) =>
+      f.supportingSource &&
+      !f.supportingSource.toLowerCase().includes('no reliable source') &&
+      f.supportingSource !== '-'
+  ).length;
+
+  const evidenceGapsCount = findingsList.filter(
+    (f) => f.type && f.type.toLowerCase().includes('gap')
+  ).length;
+
+  const conflictsCount = findingsList.filter(
+    (f) => f.type && f.type.toLowerCase().includes('conflict')
+  ).length;
+
+  // IF REVIEW DETAILS IS SELECTED, RENDER FULL PAGE VIEW
   if (selectedFinding) {
     return (
       <div className="space-y-6 animate-fadeIn text-left relative max-w-5xl">
-        {/* Back navigation button matching media_1791739498832_02c0375d.png */}
+        {/* Back navigation button */}
         <div className="pt-1">
           <button
             type="button"
@@ -81,7 +56,7 @@ export default function AiRagFindingsView({ isDarkMode }) {
           </button>
         </div>
 
-        {/* Top Header metadata matching Image 2 */}
+        {/* Top Header metadata */}
         <div className="space-y-1.5">
           <div className="text-xs sm:text-sm font-mono text-slate-400 tracking-wide font-normal">
             {selectedFinding.requirement} · {selectedFinding.type}
@@ -94,7 +69,7 @@ export default function AiRagFindingsView({ isDarkMode }) {
           </p>
         </div>
 
-        {/* Main Card Container matching media_1791739498832_02c0375d.png & media_1791739521860_87e2ee7c.png */}
+        {/* Main Card Container */}
         <div className="rounded-2xl border border-slate-800/90 bg-[#141417] p-6 sm:p-8 space-y-6 shadow-xl">
           {/* SECTION 1: FINDING TYPE */}
           <div className="pb-6 border-b border-slate-800/80">
@@ -103,10 +78,17 @@ export default function AiRagFindingsView({ isDarkMode }) {
             </div>
             <div>
               <span
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-mono uppercase tracking-wider border ${selectedFinding.typeDetailBadge} font-medium`}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-mono uppercase tracking-wider border ${
+                  selectedFinding.typeDetailBadge ||
+                  'border-amber-800/80 bg-amber-950/40 text-amber-300'
+                } font-medium`}
               >
-                <span className={`w-1.5 h-1.5 rounded-full ${selectedFinding.typeDot} shrink-0`} />
-                <span>{selectedFinding.type.toUpperCase()}</span>
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    selectedFinding.typeDot || 'bg-amber-400'
+                  } shrink-0`}
+                />
+                <span>{(selectedFinding.type || 'Finding').toUpperCase()}</span>
               </span>
             </div>
           </div>
@@ -127,7 +109,7 @@ export default function AiRagFindingsView({ isDarkMode }) {
               SUPPORTING SOURCE / CITATION
             </div>
             <div className="text-sm sm:text-base font-semibold text-slate-100">
-              {selectedFinding.supportingSource}
+              {selectedFinding.supportingSource || 'None specified'}
             </div>
           </div>
 
@@ -137,7 +119,7 @@ export default function AiRagFindingsView({ isDarkMode }) {
               REVIEW DETAILS
             </div>
             <div className="text-sm sm:text-base font-medium text-slate-100 leading-relaxed">
-              {selectedFinding.reviewDetails}
+              {selectedFinding.reviewDetails || 'No details provided.'}
             </div>
           </div>
 
@@ -148,16 +130,21 @@ export default function AiRagFindingsView({ isDarkMode }) {
             </div>
             <div className="mb-6">
               <span
-                className={`inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-mono uppercase tracking-wider border ${selectedFinding.detailStatusBadge} font-medium`}
+                className={`inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full text-xs font-mono uppercase tracking-wider border ${
+                  selectedFinding.detailStatusBadge ||
+                  'border-amber-800/80 bg-amber-950/40 text-amber-300'
+                } font-medium`}
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full ${selectedFinding.detailStatusDot} shrink-0`}
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    selectedFinding.detailStatusDot || 'bg-amber-400'
+                  } shrink-0`}
                 />
-                <span>{selectedFinding.humanReview.toUpperCase()}</span>
+                <span>{(selectedFinding.humanReview || 'Pending').toUpperCase()}</span>
               </span>
             </div>
 
-            {/* SECTION 6: CALLOUT CARD matching Image 3 */}
+            {/* SECTION 6: CALLOUT CARD */}
             <div className="rounded-xl border border-amber-900/60 bg-amber-950/20 p-5 sm:p-6 space-y-2">
               <div className="text-xs font-mono tracking-wider uppercase text-amber-400 font-bold">
                 HUMAN REVIEW REQUIRED
@@ -173,7 +160,7 @@ export default function AiRagFindingsView({ isDarkMode }) {
     );
   }
 
-  // MAIN AI / RAG FINDINGS DASHBOARD VIEW MATCHING media_1791739423221_f6794049.png
+  // MAIN AI / RAG FINDINGS DASHBOARD VIEW
   return (
     <div className="space-y-6 animate-fadeIn text-left relative">
       {/* Toast Notification Banner */}
@@ -184,7 +171,7 @@ export default function AiRagFindingsView({ isDarkMode }) {
         </div>
       )}
 
-      {/* HEADER SECTION MATCHING media_1791739423221_f6794049.png */}
+      {/* HEADER SECTION */}
       <div>
         <div className="text-[11px] font-mono tracking-widest text-slate-500 uppercase font-semibold mb-1">
           BUILDER WORKSPACE
@@ -197,7 +184,7 @@ export default function AiRagFindingsView({ isDarkMode }) {
         </p>
       </div>
 
-      {/* 4 SUMMARY STAT CARDS MATCHING media_1791739423221_f6794049.png */}
+      {/* 4 SUMMARY STAT CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Needs human review */}
         <div className="rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-[#161619] p-6 shadow-sm">
@@ -205,7 +192,7 @@ export default function AiRagFindingsView({ isDarkMode }) {
             Needs human review
           </div>
           <div className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white my-2.5">
-            03
+            {String(needsHumanReviewCount).padStart(2, '0')}
           </div>
           <div className="text-xs text-slate-400 dark:text-slate-500">
             No automatic legal conclusions
@@ -218,7 +205,7 @@ export default function AiRagFindingsView({ isDarkMode }) {
             Sources found
           </div>
           <div className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white my-2.5">
-            02
+            {String(sourcesFoundCount).padStart(2, '0')}
           </div>
           <div className="text-xs text-slate-400 dark:text-slate-500">
             Approved source set
@@ -231,7 +218,7 @@ export default function AiRagFindingsView({ isDarkMode }) {
             Evidence gaps
           </div>
           <div className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white my-2.5">
-            01
+            {String(evidenceGapsCount).padStart(2, '0')}
           </div>
           <div className="text-xs text-slate-400 dark:text-slate-500">
             Open project evidence
@@ -244,7 +231,7 @@ export default function AiRagFindingsView({ isDarkMode }) {
             Possible conflicts
           </div>
           <div className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-white my-2.5">
-            01
+            {String(conflictsCount).padStart(2, '0')}
           </div>
           <div className="text-xs text-slate-400 dark:text-slate-500">
             Builder decision needed
@@ -252,7 +239,7 @@ export default function AiRagFindingsView({ isDarkMode }) {
         </div>
       </div>
 
-      {/* MAIN TABLE CONTAINER MATCHING media_1791739423221_f6794049.png */}
+      {/* MAIN TABLE CONTAINER */}
       <div className="rounded-2xl border border-slate-200 dark:border-slate-800/90 bg-white dark:bg-[#161619] shadow-xl overflow-hidden mt-6">
         <div className="overflow-x-auto custom-scrollbar">
           <table className="w-full text-left text-xs sm:text-sm border-collapse min-w-[950px]">
@@ -267,63 +254,86 @@ export default function AiRagFindingsView({ isDarkMode }) {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60 font-medium">
-              {findingsList.map((item) => (
-                <tr
-                  key={item.id}
-                  onClick={() => handleOpenDetail(item)}
-                  className="transition-colors cursor-pointer hover:bg-stone-50 dark:hover:bg-white/[0.02]"
-                >
-                  {/* FINDING Column */}
-                  <td className="py-5 px-6 font-semibold text-slate-900 dark:text-slate-100 text-sm">
-                    {item.finding}
-                  </td>
-
-                  {/* TYPE Column */}
-                  <td className="py-5 px-6">
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${item.typeBadge}`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${item.typeDot} shrink-0`} />
-                      <span>{item.type}</span>
-                    </span>
-                  </td>
-
-                  {/* REQUIREMENT Column */}
-                  <td className="py-5 px-6 text-slate-700 dark:text-slate-300 font-mono text-sm">
-                    {item.requirement}
-                  </td>
-
-                  {/* SUPPORTING SOURCE Column */}
-                  <td className="py-5 px-6 text-slate-600 dark:text-slate-300 text-sm">
-                    {item.supportingSource}
-                  </td>
-
-                  {/* HUMAN REVIEW Column */}
-                  <td className="py-5 px-6">
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${item.statusBadge}`}
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${item.statusDot} shrink-0`} />
-                      <span>{item.humanReview}</span>
-                    </span>
-                  </td>
-
-                  {/* ACTION Column */}
-                  <td className="py-5 px-6 text-right">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenDetail(item);
-                      }}
-                      className="inline-flex items-center gap-1 text-sm font-medium text-slate-300 hover:text-white transition-colors cursor-pointer group"
-                    >
-                      <span>Review details</span>
-                      <span className="transition-transform group-hover:translate-x-0.5">→</span>
-                    </button>
+              {findingsList.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={6}
+                    className="py-12 px-6 text-center text-slate-400 dark:text-slate-500 text-sm"
+                  >
+                    No AI / RAG findings generated. Run retrieval-augmented generation on regulatory documents to populate findings.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                findingsList.map((item) => (
+                  <tr
+                    key={item.id}
+                    onClick={() => handleOpenDetail(item)}
+                    className="transition-colors cursor-pointer hover:bg-stone-50 dark:hover:bg-white/[0.02]"
+                  >
+                    {/* FINDING Column */}
+                    <td className="py-5 px-6 font-semibold text-slate-900 dark:text-slate-100 text-sm">
+                      {item.finding}
+                    </td>
+
+                    {/* TYPE Column */}
+                    <td className="py-5 px-6">
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${
+                          item.typeBadge || 'border-amber-800/80 bg-amber-950/40 text-amber-300'
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            item.typeDot || 'bg-amber-400'
+                          } shrink-0`}
+                        />
+                        <span>{item.type}</span>
+                      </span>
+                    </td>
+
+                    {/* REQUIREMENT Column */}
+                    <td className="py-5 px-6 text-slate-700 dark:text-slate-300 font-mono text-sm">
+                      {item.requirement}
+                    </td>
+
+                    {/* SUPPORTING SOURCE Column */}
+                    <td className="py-5 px-6 text-slate-600 dark:text-slate-300 text-sm">
+                      {item.supportingSource}
+                    </td>
+
+                    {/* HUMAN REVIEW Column */}
+                    <td className="py-5 px-6">
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border ${
+                          item.statusBadge || 'border-slate-700/80 bg-slate-800/50 text-slate-300'
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            item.statusDot || 'bg-slate-400'
+                          } shrink-0`}
+                        />
+                        <span>{item.humanReview}</span>
+                      </span>
+                    </td>
+
+                    {/* ACTION Column */}
+                    <td className="py-5 px-6 text-right">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenDetail(item);
+                        }}
+                        className="inline-flex items-center gap-1 text-sm font-medium text-slate-300 hover:text-white transition-colors cursor-pointer group"
+                      >
+                        <span>Review details</span>
+                        <span className="transition-transform group-hover:translate-x-0.5">→</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

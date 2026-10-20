@@ -87,39 +87,36 @@ export default function LoginForm({ isDarkMode = true }) {
 
     const cleanEmail = adminEmail.toLowerCase().trim();
     const cleanPassword = adminPassword.trim();
-    const cleanId = adminId.trim();
-    const cleanKey = adminAccessKey.trim();
 
     if (adminResponse === 'Unauthorized Admin session') {
       setAdminError('Access denied: Selected backend response indicates an unauthorized session.');
       return;
     }
 
-    const isEmailValid = cleanEmail === 'admin@gmail.com';
-    const isPasswordValid = cleanPassword === 'admin';
-    const isIdValid = cleanId === '1234' || cleanId === 'admin';
-    const isKeyValid = cleanKey === '1234' || cleanKey === 'admin';
+    if (!cleanEmail || !cleanPassword) {
+      setAdminError('Administrator email and password are required.');
+      return;
+    }
 
-    if (isEmailValid && isPasswordValid && isIdValid && isKeyValid) {
-      const adminUser = {
-        id: 'usr_admin_001',
-        name: 'System Administrator',
+    setIsSubmitting(true);
+    try {
+      const authResult = await loginUser(cleanEmail, cleanPassword);
+      const user = authResult?.user || {
+        name: cleanEmail.split('@')[0],
         email: cleanEmail,
         role: 'ADMIN',
         platform_role: 'ADMIN',
       };
-      setCurrentUser(adminUser);
+      user.role = 'ADMIN';
+      user.platform_role = 'ADMIN';
+
+      setCurrentUser(user);
       setUserRole('ADMIN');
-      try {
-        await loginUser(cleanEmail, cleanPassword);
-      } catch (err) {
-        // Fallback already saved
-      }
       setStep('verifying');
-    } else {
-      setAdminError(
-        'Invalid admin credentials. Please enter email "admin@gmail.com", password "admin", Admin ID "1234", and Admin Access Key "1234".'
-      );
+    } catch (err) {
+      setAdminError(err.message || 'Invalid administrator credentials. Please check your account details.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 

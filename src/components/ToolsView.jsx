@@ -12,54 +12,8 @@ export default function ToolsView({ isDarkMode }) {
   const [selectedTool, setSelectedTool] = useState(null);
   const [toastMsg, setToastMsg] = useState(null);
 
-  // Master Tools List matching reference image
-  const [toolsList, setToolsList] = useState([
-    {
-      id: 'TOOL-001',
-      name: 'ControlMap',
-      category: 'Compliance',
-      description: 'Control mapping and evidence management',
-      fullDescription: 'ControlMap is a trusted platform used to support controlled regulatory delivery.',
-      mainFunctionality: 'Control mapping and evidence management',
-      useCase: 'Integrate structured outputs into project evidence and workflow reviews.',
-      supportedArea: 'Requirements',
-      developerProvider: 'ControlMap Ltd',
-      status: 'Approved',
-      statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
-      dotColor: 'bg-emerald-500',
-      isUsed: true,
-    },
-    {
-      id: 'TOOL-002',
-      name: 'RiskLens',
-      category: 'Risk Management',
-      description: 'Quantitative operational risk analysis',
-      fullDescription: 'RiskLens provides FAIR-based quantitative operational risk modeling and financial impact estimation.',
-      mainFunctionality: 'Quantitative operational risk analysis',
-      useCase: 'Model financial exposure and stress-test capital adequacy controls.',
-      supportedArea: 'Risk assessment',
-      developerProvider: 'RiskLens Inc',
-      status: 'Approved',
-      statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
-      dotColor: 'bg-emerald-500',
-      isUsed: true,
-    },
-    {
-      id: 'TOOL-003',
-      name: 'ModelGuard',
-      category: 'AI / ML',
-      description: 'Model governance and explainability testing',
-      fullDescription: 'ModelGuard evaluates algorithmic bias, explainability metrics, and model lineage for compliance sign-off.',
-      mainFunctionality: 'Model governance and explainability testing',
-      useCase: 'Validate machine learning models used in automated customer onboarding.',
-      supportedArea: 'AI governance',
-      developerProvider: 'ModelGuard Systems Ltd',
-      status: 'Review due',
-      statusColor: 'bg-amber-950/60 text-amber-400 border-amber-800/80',
-      dotColor: 'bg-amber-500',
-      isUsed: true,
-    },
-  ]);
+  // Master Tools List - clean default ready for live backend integration
+  const [toolsList, setToolsList] = useState([]);
 
   useEffect(() => {
     let isMounted = true;
@@ -339,7 +293,12 @@ export default function ToolsView({ isDarkMode }) {
 
       {/* Tools Cards Grid (3 columns matching reference screenshot) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pt-2">
-        {filteredTools.map((tool) => {
+        {filteredTools.length === 0 ? (
+          <div className="col-span-1 md:col-span-2 lg:col-span-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-[#161619] p-12 text-center text-slate-400 dark:text-slate-500 text-sm">
+            No tools or software integrations available. Approved ecosystem tools will appear here when configured in the backend.
+          </div>
+        ) : (
+          filteredTools.map((tool) => {
           const isActive = activeCardId === tool.id;
           const isApproved = tool.status?.toLowerCase() === 'approved';
 
@@ -409,7 +368,7 @@ export default function ToolsView({ isDarkMode }) {
               </div>
             </div>
           );
-        })}
+        }))}
       </div>
     </div>
   );

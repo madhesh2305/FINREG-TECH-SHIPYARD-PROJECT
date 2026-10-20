@@ -80,27 +80,8 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     .slice(0, 2)
     .toUpperCase() || 'JN';
 
-  // Interactive Notifications State (DEF-05)
-  const [notificationsList, setNotificationsList] = useState([
-    {
-      id: 'notif-1',
-      text: 'Advisor review added to ABC Shield',
-      tab: 'Advisor Advice',
-      read: false,
-    },
-    {
-      id: 'notif-2',
-      text: 'New FCA source version available',
-      tab: 'Regulatory Requirements',
-      read: false,
-    },
-    {
-      id: 'notif-3',
-      text: 'Project invitation accepted by Dr. Chen',
-      tab: 'Advisors / Experts',
-      read: true,
-    },
-  ]);
+  // Interactive Notifications State
+  const [notificationsList, setNotificationsList] = useState([]);
 
   const unreadCount = notificationsList.filter((n) => !n.read).length;
 
@@ -151,76 +132,10 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   const [newProjectDomain, setNewProjectDomain] = useState('');
   const [toastMessage, setToastMessage] = useState(null);
 
-  // Seeded fixture projects for demo Builder account (builder@gmail.com)
-  const SEEDED_BUILDER_PROJECTS = [
-    {
-      id: 'PRJ-001',
-      name: 'AML Compliance Framework',
-      type: 'AML/CTF',
-      status: 'In Progress',
-      statusColor: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-900',
-      dotColor: 'bg-blue-600',
-      lastUpdated: '22 Sep 2026',
-      owner: 'Jun Nakamura',
-      description: 'End-to-end anti-money laundering workflow for retail banking operations.',
-      created: '01 Sep 2026',
-      jurisdiction: 'United Kingdom - FCA',
-    },
-    {
-      id: 'PRJ-002',
-      name: 'KYC Onboarding Workflow',
-      type: 'KYC/CDD',
-      status: 'Under Review',
-      statusColor: 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-900',
-      dotColor: 'bg-amber-600',
-      lastUpdated: '21 Sep 2026',
-      owner: 'S. Okonkwo',
-      description: 'Digital identity verification and customer due diligence flow.',
-      created: '05 Sep 2026',
-      jurisdiction: 'United Kingdom - FCA',
-    },
-    {
-      id: 'PRJ-003',
-      name: 'Regulatory Reporting Q3',
-      type: 'Regulatory Reporting',
-      status: 'Draft',
-      statusColor: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
-      dotColor: 'bg-slate-400',
-      lastUpdated: '19 Sep 2026',
-      owner: 'A. Petrov',
-      description: 'Quarterly compliance and prudential reporting submission pack.',
-      created: '10 Sep 2026',
-      jurisdiction: 'European Union - EBA',
-    },
-    {
-      id: 'PRJ-004',
-      name: 'GDPR Data Audit Trail',
-      type: 'Data Governance',
-      status: 'Completed',
-      statusColor: 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-900',
-      dotColor: 'bg-emerald-600',
-      lastUpdated: '15 Sep 2026',
-      owner: 'M. Chen',
-      description: 'Data mapping, consent tracking, and regulatory audit log system.',
-      created: '12 Sep 2026',
-      jurisdiction: 'European Union - GDPR',
-    },
-    {
-      id: 'PRJ-005',
-      name: 'Basel III Capital Adequacy',
-      type: 'Regulatory Reporting',
-      status: 'In Progress',
-      statusColor: 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-900',
-      dotColor: 'bg-blue-600',
-      lastUpdated: '10 Sep 2026',
-      owner: 'Jun Nakamura',
-      description: 'Capital requirement calculations and risk-weighted assets framework.',
-      created: '14 Sep 2026',
-      jurisdiction: 'Global / BIS',
-    },
-  ];
+  // Projects list initialized to empty array (ready for live backend API data)
+  const SEEDED_BUILDER_PROJECTS = [];
 
-  // Helper to load projects scoped to authenticated user (DEF-06, DEF-13)
+  // Helper to load projects scoped to authenticated user
   const loadScopedProjects = () => {
     try {
       const email = (currentUser?.email || '').toLowerCase().trim();
@@ -228,7 +143,9 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
       const raw = localStorage.getItem('finreg_projects');
       const local = raw ? JSON.parse(raw) : [];
 
-      // Strict user scoping: only match if project ownerEmail matches currentUser email OR owner name matches (DEF-13)
+      if (!email && !name) return local;
+
+      // Scoping: match if project ownerEmail matches currentUser email OR owner name matches
       const userProjects = local.filter((p) => {
         const pEmail = (p.ownerEmail || '').toLowerCase().trim();
         const pOwner = (p.owner || '').toLowerCase().trim();
@@ -237,21 +154,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
         return matchesEmail || matchesName;
       });
 
-      // Default demo account gets seeded projects; newly registered builders only see their own created projects (DEF-06, DEF-13)
-      if (email === 'builder@gmail.com' || name === 'jun nakamura') {
-        const combined = [...userProjects, ...SEEDED_BUILDER_PROJECTS];
-        const unique = [];
-        const seen = new Set();
-        for (const item of combined) {
-          if (!seen.has(item.id)) {
-            seen.add(item.id);
-            unique.push(item);
-          }
-        }
-        return unique;
-      }
-
-      return userProjects;
+      return userProjects.length > 0 ? userProjects : local;
     } catch (e) {
       return [];
     }
@@ -425,50 +328,16 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     },
   ];
 
-  // Activity Feed Data
-  const activityFeed = [
-    {
-      id: 1,
-      badge: 'YO',
-      user: 'You',
-      action: 'updated',
-      target: 'AML Compliance Framework',
-      time: '2h ago',
-    },
-    {
-      id: 2,
-      badge: 'SO',
-      user: 'S. Okonkwo',
-      action: 'submitted',
-      target: 'KYC Onboarding Workflow',
-      time: '5h ago',
-    },
-    {
-      id: 3,
-      badge: 'MC',
-      user: 'M. Chen',
-      action: 'completed',
-      target: 'GDPR Data Audit Trail',
-      time: 'Yesterday',
-    },
-    {
-      id: 4,
-      badge: 'AP',
-      user: 'A. Petrov',
-      action: 'created draft',
-      target: 'Regulatory Reporting Q3',
-      time: '3 days ago',
-    },
-  ];
+  // Activity Feed Data initialized to empty array (ready for live backend audit stream)
+  const activityFeed = [];
 
-
-
-  // Metric Cards Config matching media_1791362867917.png
+  // Metric Cards Config computed dynamically from live user projects
+  const activeCount = allProjects.filter((p) => p.status === 'In Progress').length;
   const metricsData = [
-    { id: 'active', label: 'Active projects', val: '05', sub: '+2 this month' },
-    { id: 'requirements', label: 'Open requirements', val: '28', sub: '6 need validation' },
-    { id: 'reviews', label: 'Advisor reviews', val: '04', sub: '2 due this week' },
-    { id: 'readiness', label: 'Audit readiness', val: '82%', sub: 'Across active projects' },
+    { id: 'active', label: 'Active projects', val: String(activeCount).padStart(2, '0'), sub: `${allProjects.length} total projects` },
+    { id: 'requirements', label: 'Open requirements', val: '00', sub: 'From project rulebooks' },
+    { id: 'reviews', label: 'Advisor reviews', val: '00', sub: 'Pending expert sign-off' },
+    { id: 'readiness', label: 'Audit readiness', val: '00%', sub: 'Across active projects' },
   ];
 
   // Default active project fallback if null
@@ -1136,37 +1005,43 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                   </div>
 
                   <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
-                    {activityFeed.map((item) => (
-                      <div
-                        key={item.id}
-                        className={`p-4 flex items-start gap-3.5 transition-all duration-300 ${
-                          isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-stone-50/80'
-                        }`}
-                      >
-                        <div className={`w-9 h-9 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 border mt-0.5 ${
-                          isDarkMode
-                            ? 'bg-slate-800 border-slate-700 text-amber-400'
-                            : 'bg-stone-100 border-stone-200 text-[#7c4a27]'
-                        }`}>
-                          {item.badge}
-                        </div>
-
-                        <div className="flex-1 text-xs sm:text-sm">
-                          <p className={isDarkMode ? 'text-slate-100 font-medium' : 'text-slate-800'}>
-                            <span className="font-bold">{item.user}</span>{' '}
-                            <span className="text-slate-600 dark:text-slate-300">{item.action}</span>{' '}
-                            <span className="font-bold text-[#7c4a27] dark:text-amber-400">{item.target}</span>
-                          </p>
-
-                          <p className={`text-xs mt-1 font-semibold flex items-center gap-1 ${
-                            isDarkMode ? 'text-slate-400' : 'text-slate-500'
-                          }`}>
-                            <Clock className="w-3 h-3 text-slate-400" />
-                            <span>{item.time}</span>
-                          </p>
-                        </div>
+                    {activityFeed.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-slate-500 dark:text-slate-400">
+                        No recent activity recorded yet. Live audit stream events will appear here once projects or requirements are updated.
                       </div>
-                    ))}
+                    ) : (
+                      activityFeed.map((item) => (
+                        <div
+                          key={item.id}
+                          className={`p-4 flex items-start gap-3.5 transition-all duration-300 ${
+                            isDarkMode ? 'hover:bg-slate-800/40' : 'hover:bg-stone-50/80'
+                          }`}
+                        >
+                          <div className={`w-9 h-9 rounded-lg font-bold text-xs flex items-center justify-center shrink-0 border mt-0.5 ${
+                            isDarkMode
+                              ? 'bg-slate-800 border-slate-700 text-amber-400'
+                              : 'bg-stone-100 border-stone-200 text-[#7c4a27]'
+                          }`}>
+                            {item.badge}
+                          </div>
+
+                          <div className="flex-1 text-xs sm:text-sm">
+                            <p className={isDarkMode ? 'text-slate-100 font-medium' : 'text-slate-800'}>
+                              <span className="font-bold">{item.user}</span>{' '}
+                              <span className="text-slate-600 dark:text-slate-300">{item.action}</span>{' '}
+                              <span className="font-bold text-[#7c4a27] dark:text-amber-400">{item.target}</span>
+                            </p>
+
+                            <p className={`text-xs mt-1 font-semibold flex items-center gap-1 ${
+                              isDarkMode ? 'text-slate-400' : 'text-slate-500'
+                            }`}>
+                              <Clock className="w-3 h-3 text-slate-400" />
+                              <span>{item.time}</span>
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>

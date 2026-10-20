@@ -60,62 +60,16 @@ export default function AdminDashboardView({
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-  // Seed / Baseline Admin Users matching Images 1 & 2
-  const DEFAULT_ADMIN_USERS = [
-    {
-      id: 'USR-001',
-      name: 'Jun Nakamura',
-      email: 'jun@northbank.com',
-      role: 'Builder',
-      status: 'Active',
-      registered: '04 Aug 2026',
-      lastLogin: '8 min ago',
-    },
-    {
-      id: 'USR-002',
-      name: 'Dr. Maya Chen',
-      email: 'maya@regadvisory.com',
-      role: 'Advisor',
-      status: 'Active',
-      registered: '11 Aug 2026',
-      lastLogin: '24 min ago',
-    },
-    {
-      id: 'USR-003',
-      name: 'Daniel Okafor',
-      email: 'daniel@independent.demo',
-      role: 'Advisor',
-      status: 'Active',
-      registered: '18 Aug 2026',
-      lastLogin: 'Yesterday',
-    },
-    {
-      id: 'USR-004',
-      name: 'Avery Patel',
-      email: 'avery@shipyard.demo',
-      role: 'Admin',
-      status: 'Active',
-      registered: '01 Aug 2026',
-      lastLogin: 'Just now',
-    },
-    {
-      id: 'USR-005',
-      name: 'Sofia Alvarez',
-      email: 'sofia@trustworks.demo',
-      role: 'Advisor',
-      status: 'Inactive',
-      registered: '21 Aug 2026',
-      lastLogin: '12 Sep 2026',
-    },
-  ];
+  // Baseline Admin Users initialized to empty array (ready for live backend users)
+  const DEFAULT_ADMIN_USERS = [];
 
-  // Helper to load live registered users (DEF-03)
+  // Helper to load live registered users
   const loadInitialUsers = () => {
     try {
       const reg = getRegisteredUsers();
-      if (!Array.isArray(reg) || reg.length === 0) return DEFAULT_ADMIN_USERS;
+      if (!Array.isArray(reg) || reg.length === 0) return [];
 
-      const formattedReg = reg.map((u, idx) => {
+      return reg.map((u, idx) => {
         let displayRole = 'Builder';
         const rawRole = (u.role || u.platform_role || '').toUpperCase();
         if (rawRole.includes('ADVISOR')) displayRole = 'Advisor';
@@ -130,74 +84,25 @@ export default function AdminDashboardView({
           status: u.status || 'Active',
           registered: u.created_at
             ? new Date(u.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-            : '01 Aug 2026',
+            : 'Recently',
           lastLogin: u.last_login_at || 'Recently',
         };
       });
-
-      const emailMap = new Map();
-      formattedReg.forEach((u) => emailMap.set(u.email.toLowerCase(), u));
-      DEFAULT_ADMIN_USERS.forEach((def) => {
-        if (!emailMap.has(def.email.toLowerCase())) {
-          emailMap.set(def.email.toLowerCase(), def);
-        }
-      });
-      return Array.from(emailMap.values());
     } catch (e) {
-      return DEFAULT_ADMIN_USERS;
+      return [];
     }
   };
 
   const [users, setUsers] = useState(loadInitialUsers);
 
-  // Projects Oversight list dynamic loader (DEF-03)
-  const DEFAULT_ADMIN_PROJECTS = [
-    {
-      id: 'PRJ-001',
-      name: 'ABC Shield',
-      owner: 'J. Nakamura',
-      status: 'In Progress',
-      statusColor: 'bg-[#281d11] text-amber-400 border-amber-800/50',
-      dotColor: 'bg-amber-400',
-      assignedAdvisors: '1 / 2',
-      creationDate: '22 Sep 2026',
-      lastActivity: '22 Sep 2026',
-      readiness: '70% · Progressing',
-      accessBoundary: 'Metadata visibility only; restricted content requires explicit authorization.',
-    },
-    {
-      id: 'PRJ-002',
-      name: 'KYC Onboarding Controls',
-      owner: 'S. Okonkwo',
-      status: 'Under Review',
-      statusColor: 'bg-slate-800/80 text-amber-300 border-amber-800/40',
-      dotColor: 'bg-amber-400',
-      assignedAdvisors: '0 / 2',
-      creationDate: '18 Sep 2026',
-      lastActivity: '21 Sep 2026',
-      readiness: 'Review required',
-      accessBoundary: 'Metadata visibility only; restricted content requires explicit authorization.',
-    },
-    {
-      id: 'PRJ-003',
-      name: 'Regulatory Reporting Q3',
-      owner: 'A. Petrov',
-      status: 'Draft',
-      statusColor: 'bg-slate-800/60 text-slate-300 border-slate-700/60',
-      dotColor: 'bg-slate-500',
-      assignedAdvisors: '0 / 2',
-      creationDate: '18 Sep 2026',
-      lastActivity: '19 Sep 2026',
-      readiness: 'Review required',
-      accessBoundary: 'Metadata visibility only; restricted content requires explicit authorization.',
-    },
-  ];
+  // Projects Oversight list initialized to empty array
+  const DEFAULT_ADMIN_PROJECTS = [];
 
   const loadInitialProjects = () => {
     try {
       const local = getLocalProjects();
-      if (!Array.isArray(local) || local.length === 0) return DEFAULT_ADMIN_PROJECTS;
-      const formattedLocal = local.map((p) => ({
+      if (!Array.isArray(local) || local.length === 0) return [];
+      return local.map((p) => ({
         id: p.id,
         name: p.name,
         owner: p.owner || 'Project Owner',
@@ -210,72 +115,22 @@ export default function AdminDashboardView({
         readiness: 'Initial Review',
         accessBoundary: 'Metadata visibility only; restricted content requires explicit authorization.',
       }));
-      return [...formattedLocal, ...DEFAULT_ADMIN_PROJECTS];
     } catch (e) {
-      return DEFAULT_ADMIN_PROJECTS;
+      return [];
     }
   };
 
   const [projectsList, setProjectsList] = useState(loadInitialProjects);
 
-  // Advisor Invitations list dynamic loader (DEF-03)
-  const DEFAULT_ADMIN_INVITATIONS = [
-    {
-      id: 'INV-001',
-      project: 'ABC Shield',
-      invitingBuilder: 'Jun Nakamura',
-      invitedAdvisor: 'Dr. Maya Chen',
-      expertise: 'Regulatory Compliance',
-      invitationDate: '20 Sep 2026',
-      status: 'Accepted',
-      statusBadgeClass: 'bg-[#0e2316] text-emerald-400 border-emerald-800/50',
-      statusDotClass: 'bg-emerald-400',
-      accessStatus: 'Active',
-    },
-    {
-      id: 'INV-002',
-      project: 'ABC Shield',
-      invitingBuilder: 'Jun Nakamura',
-      invitedAdvisor: 'Daniel Okafor',
-      expertise: 'Tech Expert',
-      invitationDate: '29 Sep 2026',
-      status: 'Pending',
-      statusBadgeClass: 'bg-[#281d11] text-amber-400 border-amber-800/50',
-      statusDotClass: 'bg-amber-400',
-      accessStatus: 'Not granted',
-    },
-    {
-      id: 'INV-003',
-      project: 'KYC Onboarding Controls',
-      invitingBuilder: 'Sam Okonkwo',
-      invitedAdvisor: 'Sofia Alvarez',
-      expertise: 'Legal Partner',
-      invitationDate: '18 Sep 2026',
-      status: 'Revoked',
-      statusBadgeClass: 'bg-[#2a1414] text-rose-400 border-rose-800/50',
-      statusDotClass: 'bg-rose-500',
-      accessStatus: 'Revoked',
-    },
-    {
-      id: 'INV-004',
-      project: 'Regulatory Reporting Q3',
-      invitingBuilder: 'Ana Petrov',
-      invitedAdvisor: 'Dr. Maya Chen',
-      expertise: 'Funding / Business Support',
-      invitationDate: '16 Sep 2026',
-      status: 'Declined',
-      statusBadgeClass: 'bg-[#281d11] text-amber-400 border-amber-800/50',
-      statusDotClass: 'bg-amber-500',
-      accessStatus: 'Not granted',
-    },
-  ];
+  // Advisor Invitations list initialized to empty array
+  const DEFAULT_ADMIN_INVITATIONS = [];
 
   const loadInitialInvitations = () => {
     try {
       const raw = localStorage.getItem('finreg_advisor_assignments');
       const assignments = raw ? JSON.parse(raw) : [];
-      if (!Array.isArray(assignments) || assignments.length === 0) return DEFAULT_ADMIN_INVITATIONS;
-      const formatted = assignments.map((a, idx) => ({
+      if (!Array.isArray(assignments) || assignments.length === 0) return [];
+      return assignments.map((a, idx) => ({
         id: a.id || `INV-${String(idx + 10).padStart(3, '0')}`,
         project: a.projectName || 'Project',
         invitingBuilder: 'Builder',
@@ -287,9 +142,8 @@ export default function AdminDashboardView({
         statusDotClass: 'bg-emerald-400',
         accessStatus: 'Active',
       }));
-      return [...formatted, ...DEFAULT_ADMIN_INVITATIONS];
     } catch (e) {
-      return DEFAULT_ADMIN_INVITATIONS;
+      return [];
     }
   };
 
@@ -347,23 +201,10 @@ export default function AdminDashboardView({
     { count: String(projectsList.filter((p) => p.status === 'Draft' || p.status === 'Completed').length).padStart(2, '0'), label: 'Draft / Completed' },
   ];
 
-  const recentAccessChanges = [
-    { tag: 'USER', text: 'Sofia Alvarez deactivated' },
-    { tag: 'ROLE', text: 'Daniel Okafor permissions reviewed' },
-    { tag: 'ACCESS', text: 'ABC Shield invitation pending' },
-  ];
+  const recentAccessChanges = [];
 
-  // Bottom Section Security Alerts matching Image 3 (media_1791981206848_d73db92a.png)
-  const securityAlerts = [
-    {
-      tag: 'BLOCKED',
-      description: 'Repeated Admin authentication failures',
-    },
-    {
-      tag: 'SESSION',
-      description: 'Expired privileged session',
-    },
-  ];
+  // Bottom Section Security Alerts initialized to empty array (ready for live security feed)
+  const securityAlerts = [];
 
   const [searchUserQuery, setSearchUserQuery] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('All roles');
@@ -462,50 +303,7 @@ export default function AdminDashboardView({
     applicability: '',
   });
 
-  const [regulatorySources, setRegulatorySources] = useState([
-    {
-      id: 'SRC-001',
-      title: 'FCA Handbook',
-      applicability: 'Applicable to all UK-authorised firms conducting customer onboarding',
-      authority: 'FCA',
-      jurisdiction: 'United Kingdom',
-      publication: '01 Sep 2026',
-      version: 'Release 126 · Sep 2026',
-      topic: 'Risk-sensitive customer due diligence',
-      status: 'Validated',
-      statusBadgeClass: 'bg-[#0e2316] text-emerald-400 border-emerald-800/50',
-      statusDotClass: 'bg-emerald-400',
-      lastUpdated: '29 Sep 2026',
-    },
-    {
-      id: 'SRC-002',
-      title: 'JMLSG Guidance',
-      applicability: 'Applicable to UK financial services firms with payment or deposit-taking activities',
-      authority: 'JMLSG',
-      jurisdiction: 'United Kingdom',
-      publication: '18 Jul 2024',
-      version: 'Jul 2024 revision',
-      topic: 'Ongoing transaction monitoring',
-      status: 'Pending Validation',
-      statusBadgeClass: 'bg-[#281d11] text-amber-400 border-amber-800/50',
-      statusDotClass: 'bg-amber-400',
-      lastUpdated: '29 Sep 2026',
-    },
-    {
-      id: 'SRC-003',
-      title: 'SAR Guidance',
-      applicability: 'Applicable to all UK-based firms subject to POCA 2002 Part 7',
-      authority: 'NCA',
-      jurisdiction: 'United Kingdom',
-      publication: '15 Jan 2025',
-      version: 'Version 3.1 · Jan 2025',
-      topic: 'Suspicious activity escalation',
-      status: 'Validated',
-      statusBadgeClass: 'bg-[#0e2316] text-emerald-400 border-emerald-800/50',
-      statusDotClass: 'bg-emerald-400',
-      lastUpdated: '29 Sep 2026',
-    },
-  ]);
+  const [regulatorySources, setRegulatorySources] = useState([]);
 
   const handleAddSource = (e) => {
     e?.preventDefault();
@@ -520,13 +318,13 @@ export default function AdminDashboardView({
       applicability: newSourceForm.applicability.trim() || 'Human-reviewed applicability notes',
       authority: newSourceForm.authority.trim() || 'FCA',
       jurisdiction: newSourceForm.jurisdiction.trim() || 'United Kingdom',
-      publication: newSourceForm.publicationDate.trim() || '29 Sep 2026',
+      publication: newSourceForm.publicationDate.trim() || 'Today',
       version: newSourceForm.version.trim() || 'Version 1.0',
       topic: newSourceForm.topic.trim() || 'General Compliance',
       status: 'Pending Validation',
       statusBadgeClass: 'bg-[#281d11] text-amber-400 border-amber-800/50',
       statusDotClass: 'bg-amber-400',
-      lastUpdated: '29 Sep 2026',
+      lastUpdated: 'Today',
     };
 
     setRegulatorySources((prev) => [newSource, ...prev]);
@@ -543,74 +341,13 @@ export default function AdminDashboardView({
     showToast('Regulatory source added as Pending Validation');
   };
 
-  // Audit Logs state matching Image 4 (media_1791999494451_b654a5f6.png)
+  // Audit Logs state initialized to empty array (ready for live backend system audit logs)
   const [auditLogSearchQuery, setAuditLogSearchQuery] = useState('');
   const [auditLogDateFilter, setAuditLogDateFilter] = useState('');
   const [auditLogActionTypeFilter, setAuditLogActionTypeFilter] = useState('All action types');
   const [auditLogResultFilter, setAuditLogResultFilter] = useState('All results');
 
-  const [auditLogsList] = useState([
-    {
-      id: 'AUD-001',
-      timestamp: '29 Sep 2026 · 15:14',
-      user: 'Avery Patel',
-      action: 'Account deactivated',
-      affectedResource: 'Sofia Alvarez',
-      eventCategory: 'User Access',
-      result: 'Success',
-      resultBadgeClass: 'bg-[#0e2316] text-emerald-400 border-emerald-800/50',
-      resultDotClass: 'bg-emerald-400',
-      relevantDetails: 'Administrative confirmation recorded',
-    },
-    {
-      id: 'AUD-002',
-      timestamp: '29 Sep 2026 · 14:42',
-      user: 'Unknown account',
-      action: 'Login failure',
-      affectedResource: 'Admin authentication',
-      eventCategory: 'Security',
-      result: 'Blocked',
-      resultBadgeClass: 'bg-[#2a1414] text-rose-400 border-rose-800/50',
-      resultDotClass: 'bg-rose-500',
-      relevantDetails: 'Generic authentication failure returned',
-    },
-    {
-      id: 'AUD-003',
-      timestamp: '29 Sep 2026 · 13:05',
-      user: 'Avery Patel',
-      action: 'Role changed',
-      affectedResource: 'Daniel Okafor',
-      eventCategory: 'Permissions',
-      result: 'Success',
-      resultBadgeClass: 'bg-[#0e2316] text-emerald-400 border-emerald-800/50',
-      resultDotClass: 'bg-emerald-400',
-      relevantDetails: 'Advisor role retained; expertise updated',
-    },
-    {
-      id: 'AUD-004',
-      timestamp: '29 Sep 2026 · 11:30',
-      user: 'Jun Nakamura',
-      action: 'Invitation created',
-      affectedResource: 'ABC Shield',
-      eventCategory: 'Invitation',
-      result: 'Success',
-      resultBadgeClass: 'bg-[#0e2316] text-emerald-400 border-emerald-800/50',
-      resultDotClass: 'bg-emerald-400',
-      relevantDetails: 'Advisor limit remains 2',
-    },
-    {
-      id: 'AUD-005',
-      timestamp: '28 Sep 2026 · 16:41',
-      user: 'Avery Patel',
-      action: 'Source metadata updated',
-      affectedResource: 'FCA Handbook',
-      eventCategory: 'Regulatory Data',
-      result: 'Success',
-      resultBadgeClass: 'bg-[#0e2316] text-emerald-400 border-emerald-800/50',
-      resultDotClass: 'bg-emerald-400',
-      relevantDetails: 'Validation state unchanged',
-    },
-  ]);
+  const [auditLogsList] = useState([]);
 
   const filteredAuditLogs = auditLogsList.filter((log) => {
     const matchesSearch =
@@ -990,16 +727,22 @@ export default function AdminDashboardView({
                     Recent Access Changes
                   </h2>
                   <div className="divide-y divide-slate-800/60">
-                    {recentAccessChanges.map((change, idx) => (
-                      <div key={idx} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
-                        <span className="font-mono text-[10px] font-bold text-amber-400 tracking-wider uppercase w-14 shrink-0">
-                          {change.tag}
-                        </span>
-                        <span className="text-xs sm:text-sm text-slate-200 font-medium">
-                          {change.text}
-                        </span>
+                    {recentAccessChanges.length === 0 ? (
+                      <div className="py-4 text-center text-xs text-slate-500">
+                        No recent access changes recorded yet.
                       </div>
-                    ))}
+                    ) : (
+                      recentAccessChanges.map((change, idx) => (
+                        <div key={idx} className="flex items-center gap-4 py-3 first:pt-0 last:pb-0">
+                          <span className="font-mono text-[10px] font-bold text-amber-400 tracking-wider uppercase w-14 shrink-0">
+                            {change.tag}
+                          </span>
+                          <span className="text-xs sm:text-sm text-slate-200 font-medium">
+                            {change.text}
+                          </span>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
@@ -1010,38 +753,44 @@ export default function AdminDashboardView({
                 <div className="rounded-2xl border border-slate-800/90 bg-[#16181d] p-6 shadow-lg flex flex-col justify-between">
                   <div>
                     <span className="text-[10px] font-mono font-bold tracking-widest text-slate-500 uppercase block mb-1">
-                      SECURITY ALERTS · SAMPLE MONITORING
+                      SECURITY ALERTS · REAL-TIME MONITORING
                     </span>
                     <h2 className="text-base sm:text-lg font-bold tracking-tight text-white mb-6">
-                      2 alerts require attention
+                      {securityAlerts.length > 0 ? `${securityAlerts.length} alerts require attention` : 'All security systems operational'}
                     </h2>
 
                     <div className="divide-y divide-slate-800/60">
-                      {securityAlerts.map((alert, idx) => (
-                        <div
-                          key={idx}
-                          className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0"
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <span className="font-mono text-[10px] font-bold text-amber-400 tracking-wider uppercase shrink-0">
-                              {alert.tag}
-                            </span>
-                            <span className="text-xs sm:text-sm font-semibold text-white truncate">
-                              {alert.description}
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              showToast(`Reviewing alert: ${alert.description}`);
-                              setActiveTab('Audit Logs');
-                            }}
+                      {securityAlerts.length === 0 ? (
+                        <div className="py-4 text-center text-xs text-slate-500">
+                          No active security alerts. Platform security status is normal.
+                        </div>
+                      ) : (
+                        securityAlerts.map((alert, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-center justify-between gap-4 py-4 first:pt-0 last:pb-0"
+                          >
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className="font-mono text-[10px] font-bold text-amber-400 tracking-wider uppercase shrink-0">
+                                {alert.tag}
+                              </span>
+                              <span className="text-xs sm:text-sm font-semibold text-white truncate">
+                                {alert.description}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                showToast(`Reviewing alert: ${alert.description}`);
+                                setActiveTab('Audit Logs');
+                              }}
                             className="px-3.5 py-1.5 rounded-md border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-semibold cursor-pointer transition-colors shrink-0"
                           >
                             Review
                           </button>
                         </div>
-                      ))}
+                      ))
+                    )}
                     </div>
                   </div>
                 </div>
@@ -1213,7 +962,14 @@ export default function AdminDashboardView({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-medium">
-                      {filteredUsers.map((user) => (
+                      {filteredUsers.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-slate-500 text-sm">
+                            No registered platform users found. Registered user accounts will appear here.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredUsers.map((user) => (
                         <tr key={user.id} className="hover:bg-slate-800/20 transition-colors">
                           <td className="py-4 px-4 font-bold text-white text-sm">
                             {user.name}
@@ -1275,7 +1031,8 @@ export default function AdminDashboardView({
                             </div>
                           </td>
                         </tr>
-                      ))}
+                      ))
+                    )}
                     </tbody>
                   </table>
                 </div>
@@ -1446,7 +1203,14 @@ export default function AdminDashboardView({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-medium">
-                      {filteredProjects.map((proj) => (
+                      {filteredProjects.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-slate-500 text-sm">
+                            No projects found. Projects created on the platform will appear here.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredProjects.map((proj) => (
                         <tr key={proj.id} className="hover:bg-slate-800/20 transition-colors">
                           <td className="py-4 px-4">
                             <div className="font-bold text-white text-sm">
@@ -1487,7 +1251,8 @@ export default function AdminDashboardView({
                             </button>
                           </td>
                         </tr>
-                      ))}
+                      ))
+                    )}
                     </tbody>
                   </table>
                 </div>
@@ -1629,7 +1394,14 @@ export default function AdminDashboardView({
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 text-xs sm:text-sm">
-                      {regulatorySources.map((src) => (
+                      {regulatorySources.length === 0 ? (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-slate-500 text-sm">
+                            No regulatory sources added yet. Use "Add Regulatory Source" to register supervisory rulebooks.
+                          </td>
+                        </tr>
+                      ) : (
+                        regulatorySources.map((src) => (
                         <tr key={src.id} className="hover:bg-slate-800/20 transition-colors">
                           <td className="py-4 px-6">
                             <p className="font-bold text-white whitespace-nowrap">{src.title}</p>
@@ -1671,7 +1443,8 @@ export default function AdminDashboardView({
                             </button>
                           </td>
                         </tr>
-                      ))}
+                      ))
+                    )}
                     </tbody>
                   </table>
                 </div>

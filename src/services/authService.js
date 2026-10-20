@@ -3,44 +3,8 @@ import { apiCall, setToken, clearToken, getToken } from './api';
 const REGISTERED_USERS_KEY = 'finreg_registered_users';
 const CURRENT_USER_KEY = 'finreg_current_user';
 
-// Predefined Seed / Demo Accounts
-export const DEFAULT_USERS = [
-  {
-    id: 'usr_builder_001',
-    name: 'Jun Nakamura',
-    email: 'builder@gmail.com',
-    password: 'builder',
-    organization: 'NorthBank Tech Ltd',
-    role: 'BUILDER',
-    platform_role: 'BUILDER',
-    memberships: [
-      { projectId: 'PRJ-001', role: 'OWNER' },
-      { projectId: 'PRJ-005', role: 'OWNER' },
-    ],
-  },
-  {
-    id: 'usr_advisor_001',
-    name: 'Dr. Maya Chen',
-    email: 'advisor@gmail.com',
-    password: 'advisor',
-    organization: 'RegAdvisory Partners',
-    role: 'ADVISOR',
-    platform_role: 'ADVISOR',
-    memberships: [
-      { projectId: 'PRJ-001', role: 'ADVISOR' },
-    ],
-  },
-  {
-    id: 'usr_admin_001',
-    name: 'System Administrator',
-    email: 'admin@gmail.com',
-    password: 'admin',
-    organization: 'FinRegTech Global Admin',
-    role: 'ADMIN',
-    platform_role: 'ADMIN',
-    memberships: [],
-  },
-];
+// Seed / Demo Accounts - initialized to empty array (ready for live backend authentication)
+export const DEFAULT_USERS = [];
 
 /**
  * Retrieves all registered users from local persistence merged with defaults
