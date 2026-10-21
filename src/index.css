@@ -101,4 +101,21 @@
   background: #f59e0b;
 }
 
+/* Light scrollbar matching admin table screenshots */
+.admin-table-scrollbar::-webkit-scrollbar {
+  height: 8px;
+}
 
+.admin-table-scrollbar::-webkit-scrollbar-track {
+  background: #181a20;
+  border-radius: 9999px;
+}
+
+.admin-table-scrollbar::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+
+.admin-table-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #ffffff;
+}

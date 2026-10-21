@@ -681,7 +681,7 @@ export default function LoginForm({ isDarkMode = true }) {
           )}
 
           {/* STEP 2: CREDENTIALS VERIFIED LOADING SCREEN - LASTS 4 SECONDS THEN GOES DIRECTLY TO DASHBOARD */}
-          {step === 'verifying' && <CredentialsVerified isDarkMode={isDarkMode} role={userRole} />}
+          {step === 'verifying' && <CredentialsVerified isDarkMode={isDarkMode} role={userRole} userRole={userRole} onProceed={() => setStep('dashboard')} />}
         </div>
       </main>
 

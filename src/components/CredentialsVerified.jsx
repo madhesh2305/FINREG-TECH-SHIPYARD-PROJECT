@@ -1,9 +1,22 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { BarChart3, Check } from 'lucide-react';
 
-export default function CredentialsVerified({ isDarkMode, role = 'BUILDER' }) {
+export default function CredentialsVerified({ isDarkMode, onProceed, role = 'BUILDER', userRole }) {
+  const effectiveRole = (userRole || role)?.toUpperCase();
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (onProceed) onProceed();
+    }, 1400);
+    return () => clearTimeout(timer);
+  }, [onProceed]);
+
   return (
-    <div className="text-center py-2 animate-fadeIn">
+    <div
+      onClick={onProceed}
+      className="text-center py-2 animate-fadeIn cursor-pointer"
+      title="Click to proceed"
+    >
       {/* Top Icon Box (Rich Brown Badge) */}
       <div className="flex justify-center mb-5">
         <div className="w-13 h-13 bg-[#7c4a27] dark:bg-[#96562c] rounded-2xl flex items-center justify-center shadow-md shadow-amber-950/20">
@@ -43,9 +56,9 @@ export default function CredentialsVerified({ isDarkMode, role = 'BUILDER' }) {
         <p className={`text-sm mt-1 ${
           isDarkMode ? 'text-slate-400' : 'text-slate-500'
         }`}>
-          {role?.toUpperCase() === 'ADVISOR'
+          {effectiveRole === 'ADVISOR'
             ? 'Proceeding to Advisor Workspace...'
-            : role?.toUpperCase() === 'ADMIN'
+            : effectiveRole === 'ADMIN'
             ? 'Proceeding to Platform Administrator Console...'
             : 'Proceeding to Builder Dashboard...'}
         </p>
