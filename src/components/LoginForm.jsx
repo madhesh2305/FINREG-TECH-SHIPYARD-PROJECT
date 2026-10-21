@@ -141,10 +141,19 @@ export default function LoginForm({ isDarkMode = true }) {
     setResetError('');
     try {
       const res = await requestPasswordReset(forgotEmail);
-      if (res && (res.status === 'pending_configuration' || (res.delivery_channel && res.delivery_channel.includes('Unconfigured')))) {
+      if (res && res.status === 'delivery_failed') {
+        setForgotResult({
+          success: false,
+          isUnconfigured: false,
+          isDeliveryFailed: true,
+          message: res.message || 'Password reset delivery is temporarily unavailable. Please try again later or contact support.',
+          channel: res.delivery_channel || 'Email (Service Unavailable)'
+        });
+      } else if (res && (res.status === 'pending_configuration' || (res.delivery_channel && res.delivery_channel.includes('Unconfigured')))) {
         setForgotResult({
           success: false,
           isUnconfigured: true,
+          isDeliveryFailed: false,
           message: res.message || 'Password recovery via email is currently unconfigured in this environment. Please contact your system administrator.',
           channel: res.delivery_channel || 'SMTP (Unconfigured)'
         });
@@ -152,7 +161,8 @@ export default function LoginForm({ isDarkMode = true }) {
         setForgotResult({
           success: true,
           isUnconfigured: false,
-          message: res.message || 'If an account with that email exists, password reset instructions have been sent.',
+          isDeliveryFailed: false,
+          message: res.message || 'If an account associated with this email address exists, password recovery instructions have been dispatched.',
           channel: res.delivery_channel || 'Email'
         });
       }
@@ -160,6 +170,7 @@ export default function LoginForm({ isDarkMode = true }) {
       setForgotResult({
         success: false,
         isUnconfigured: false,
+        isDeliveryFailed: false,
         message: err.message || 'Failed to request password reset.'
       });
     } finally {
@@ -720,6 +731,11 @@ export default function LoginForm({ isDarkMode = true }) {
                   {forgotResult.isUnconfigured && (
                     <span className="px-1.5 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 border border-amber-500/40 font-bold uppercase">
                       Delivery Blocked / Unconfigured
+                    </span>
+                  )}
+                  {forgotResult.isDeliveryFailed && (
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-rose-500/20 text-rose-300 border border-rose-500/40 font-bold uppercase">
+                      Delivery Failed
                     </span>
                   )}
                   {forgotResult.message}
