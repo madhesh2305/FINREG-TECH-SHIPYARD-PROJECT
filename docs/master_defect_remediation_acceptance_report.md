@@ -2,7 +2,7 @@
 
 **Project:** FinRegTech ShipYard — FCC Project Cockpit  
 **Target Repository:** `https://github.com/madhesh2305/FINREG-TECH-SHIPYARD-PROJECT`  
-**Backend Branch:** `feature/vishal-backend` (`b48f7df`)  
+**Backend Branch:** `feature/vishal-backend` (`b916315`)  
 **Frontend Branch:** `feature/vishal-frontend` (`47f3d40`)  
 **Teammate Branch:** `feature/harshini-frontend` strictly preserved and untouched  
 **Engineer:** Backend & Workflow Engineer Intern (Vishal)  
@@ -125,8 +125,34 @@ In strict compliance with engineering governance:
 ### 4.4 Frontend Production Build
 - **Command:** `npm run build`
 - **Exit Status:** 0 (Clean exit)
-- **Duration:** 1.41s
+- **Duration:** 1.86s
 - **Artifacts:** `dist/index.html` (1.03 kB), `dist/assets/index-C_KaZoyt.css` (88.39 kB), `dist/assets/index-k6Mg-OEL.js` (501.21 kB)
+
+### 4.5 Deep BOLA / IDOR Project Isolation Audit (DEF-13 Sub-Resource Matrix)
+- **Execution Script:** `scratch/verify_comprehensive_def13_isolation.py`
+- **Setup:** Initialized Builder 1 with Project 1 (`id=198`) and Builder 2 with Project 2 (`id=199`) containing proprietary requirements, decisions, advice, and attachments.
+- **Result:** **18 / 18 Security Invariants PASSED (100% Forbidden / Zero Leakage)**
+
+| Tested Target Resource | Method | Path Checked | HTTP Status | Zero Data Leakage | Verdict |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| Project Details | `GET` | `/api/v1/projects/{p2_id}` | 403 Forbidden | Confirmed | **PASS** |
+| Project Mutation | `PATCH` | `/api/v1/projects/{p2_id}` | 403 Forbidden | Confirmed | **PASS** |
+| Project Members List | `GET` | `/api/v1/projects/{p2_id}/members` | 403 Forbidden | Confirmed | **PASS** |
+| Add Member Injection | `POST` | `/api/v1/projects/{p2_id}/members` | 403 Forbidden | Confirmed | **PASS** |
+| Advisor Invitations List | `GET` | `/api/v1/projects/{p2_id}/advisor-invitations` | 403 Forbidden | Confirmed | **PASS** |
+| Advisor Invitation Create | `POST` | `/api/v1/projects/{p2_id}/advisor-invitations` | 403 Forbidden | Confirmed | **PASS** |
+| Project Advice Query | `GET` | `/api/v1/projects/{p2_id}/advice` | 403 Forbidden | Confirmed | **PASS** |
+| Project Advice Submit | `POST` | `/api/v1/projects/{p2_id}/advice` | 403 Forbidden | Confirmed | **PASS** |
+| Executive Decisions List | `GET` | `/api/v1/projects/{p2_id}/decisions` | 403 Forbidden | Confirmed | **PASS** |
+| Executive Decision Create | `POST` | `/api/v1/projects/{p2_id}/decisions` | 403 Forbidden | Confirmed | **PASS** |
+| Audit Readiness Assessment | `GET` | `/api/v1/projects/{p2_id}/readiness` | 403 Forbidden | Confirmed | **PASS** |
+| Regulatory Requirements List | `GET` | `/api/v1/projects/{p2_id}/requirements` | 403 Forbidden | Confirmed | **PASS** |
+| Regulatory Requirement Add | `POST` | `/api/v1/projects/{p2_id}/requirements` | 403 Forbidden | Confirmed | **PASS** |
+| Document Attachments List | `GET` | `/api/v1/projects/{p2_id}/attachments` | 403 Forbidden | Confirmed | **PASS** |
+| Forensic Audit Events List | `GET` | `/api/v1/projects/{p2_id}/audit-events` | 403 Forbidden | Confirmed | **PASS** |
+| RAG AI Context Retrieval | `POST` | `/api/v1/projects/{p2_id}/ai/retrieve` | 403 Forbidden | Confirmed | **PASS** |
+| Builder 1 List Scoping | `GET` | `/api/v1/projects` | 200 OK | Contains P1, Excludes P2 | **PASS** |
+| Reverse B2 Query on P1 | `GET` | `/api/v1/projects/{p1_id}` | 403 Forbidden | Confirmed | **PASS** |
 
 ---
 
