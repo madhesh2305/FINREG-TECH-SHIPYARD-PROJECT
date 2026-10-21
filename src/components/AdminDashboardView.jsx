@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Menu,
   Bell,
@@ -31,7 +31,8 @@ import {
   X
 } from 'lucide-react';
 import { logoutUser, getRegisteredUsers } from '../services/authService';
-import { getLocalProjects } from '../services/projectService';
+import { getLocalProjects, getProjects } from '../services/projectService';
+import { getAdminStats, getAdminUsers } from '../services/adminService';
 
 export default function AdminDashboardView({
   isDarkMode = true,
@@ -333,21 +334,88 @@ export default function AdminDashboardView({
   // Admin settings notification preference matching uploaded image
   const [adminNotificationPref, setAdminNotificationPref] = useState('Essential Admin alerts');
 
+  const [adminStats, setAdminStats] = useState(null);
+
+  // Live admin metrics and users fetch from PostgreSQL backend
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchAdminData() {
+      try {
+        const [statsData, usersData, projectsData] = await Promise.allSettled([
+          getAdminStats(),
+          getAdminUsers(),
+          getProjects(),
+        ]);
+
+        if (!isMounted) return;
+
+        if (statsData.status === 'fulfilled' && statsData.value) {
+          setAdminStats(statsData.value);
+        }
+
+        if (usersData.status === 'fulfilled' && Array.isArray(usersData.value) && usersData.value.length > 0) {
+          setUsers(
+            usersData.value.map((u, idx) => ({
+              id: u.id || `USR-${String(idx + 1).padStart(3, '0')}`,
+              name: u.full_name || u.name || 'User',
+              email: u.email || '',
+              role: u.role || 'Builder',
+              status: u.status || (u.is_active !== false ? 'Active' : 'Inactive'),
+              registered: u.created_at
+                ? new Date(u.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                : 'Recently',
+              lastLogin: u.last_login_at || 'Recently',
+            }))
+          );
+        }
+
+        if (projectsData.status === 'fulfilled' && Array.isArray(projectsData.value) && projectsData.value.length > 0) {
+          setProjectsList(
+            projectsData.value.map((p) => ({
+              id: p.id,
+              name: p.name,
+              owner: p.owner || 'Project Owner',
+              status: p.status || 'In Progress',
+              statusColor: p.statusColor || 'bg-[#281d11] text-amber-400 border-amber-800/50',
+              dotColor: p.dotColor || 'bg-amber-400',
+              assignedAdvisors: p.assignedAdvisors || '0 / 2',
+              creationDate: p.created || 'Recently',
+              lastActivity: p.lastUpdated || 'Recently',
+              readiness: p.readiness || 'Initial Review',
+              accessBoundary: 'Metadata visibility only; restricted content requires explicit authorization.',
+            }))
+          );
+        }
+      } catch (err) {
+        console.warn('[AdminDashboardView] Live admin data fetch error:', err.message);
+      }
+    }
+
+    fetchAdminData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const totalUsersDisplay = adminStats?.total_users != null ? String(adminStats.total_users).padStart(2, '0') : String(users.length).padStart(2, '0');
+  const activeUsersDisplay = adminStats?.active_users != null ? String(adminStats.active_users).padStart(2, '0') : String(users.filter((u) => u.status === 'Active').length).padStart(2, '0');
+  const totalProjectsDisplay = adminStats?.total_projects != null ? String(adminStats.total_projects).padStart(2, '0') : String(projectsList.length).padStart(2, '0');
+
   // 6 Metric Cards computed dynamically from live platform data (DEF-03)
   const metricCards = [
     {
       title: 'Total Users',
-      val: String(users.length).padStart(2, '0'),
+      val: totalUsersDisplay,
       subtitle: `${users.filter((u) => u.status === 'Active').length} active platform accounts`,
     },
     {
       title: 'Active Users',
-      val: String(users.filter((u) => u.status === 'Active').length).padStart(2, '0'),
+      val: activeUsersDisplay,
       subtitle: `${Math.round((users.filter((u) => u.status === 'Active').length / (users.length || 1)) * 100)}% of platform accounts`,
     },
     {
       title: 'Total Projects',
-      val: String(projectsList.length).padStart(2, '0'),
+      val: totalProjectsDisplay,
       subtitle: `${projectsList.filter((p) => p.status !== 'Draft').length} active · ${projectsList.filter((p) => p.status === 'Draft').length} draft`,
     },
     {

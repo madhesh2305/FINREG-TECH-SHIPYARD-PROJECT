@@ -218,51 +218,39 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
       ownerEmail: creatorEmail,
     };
 
-    let createdProject;
     try {
-      createdProject = await createProject(payload);
-    } catch (err) {
-      console.warn('[DashboardView] POST /projects failed, fallback to local state:', err);
-      createdProject = {
-        id: `PRJ-00${Math.floor(Math.random() * 900) + 100}`,
-        ...payload,
-        status: 'Draft',
-        statusColor: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
-        dotColor: 'bg-slate-400',
-        lastUpdated: 'Just now',
-        owner: creatorName,
+      const createdProject = await createProject(payload);
+      const newEntry = {
+        id: createdProject.id || `PRJ-00${allProjects.length + 1}`,
+        name: createdProject.name || payload.name,
+        type: createdProject.type || payload.type,
+        status: createdProject.status || 'Draft',
+        statusColor: createdProject.statusColor || 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
+        dotColor: createdProject.dotColor || 'bg-slate-400',
+        lastUpdated: createdProject.lastUpdated || 'Just now',
+        owner: createdProject.owner || creatorName,
         ownerEmail: creatorEmail,
-        created: 'Today',
+        progress: 0,
+        isNew: true,
+        description: createdProject.description || payload.description,
+        created: createdProject.created || 'Today',
+        jurisdiction: createdProject.jurisdiction || payload.jurisdiction,
       };
+
+      setAllProjects([newEntry, ...allProjects]);
+      setToastMessage(`Project "${newProjectName}" created successfully!`);
+
+      // Reset Form
+      setCreateProjectStep(1);
+      setNewProjectName('');
+      setNewProjectType('');
+      setNewProjectDescription('');
+      setNewProjectJurisdiction('');
+      setNewProjectDomain('');
+      setActiveTab('My Projects');
+    } catch (err) {
+      setToastMessage(`Project creation failed: ${err.message}`);
     }
-
-    const newEntry = {
-      id: createdProject.id || `PRJ-00${allProjects.length + 1}`,
-      name: createdProject.name || payload.name,
-      type: createdProject.type || payload.type,
-      status: createdProject.status || 'Draft',
-      statusColor: createdProject.statusColor || 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
-      dotColor: createdProject.dotColor || 'bg-slate-400',
-      lastUpdated: createdProject.lastUpdated || 'Just now',
-      owner: createdProject.owner || creatorName,
-      ownerEmail: creatorEmail,
-      progress: 0,
-      isNew: true,
-      description: createdProject.description || payload.description,
-      created: createdProject.created || 'Today',
-      jurisdiction: createdProject.jurisdiction || payload.jurisdiction,
-    };
-
-    setAllProjects([newEntry, ...allProjects]);
-    setToastMessage(`Project "${newProjectName}" created successfully!`);
-
-    // Reset Form
-    setCreateProjectStep(1);
-    setNewProjectName('');
-    setNewProjectType('');
-    setNewProjectDescription('');
-    setNewProjectJurisdiction('');
-    setNewProjectDomain('');
 
     // Automatically navigate to My Projects View
     setTimeout(() => {

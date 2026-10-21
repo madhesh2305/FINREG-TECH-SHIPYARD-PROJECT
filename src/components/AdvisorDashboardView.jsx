@@ -20,6 +20,7 @@ import {
   Filter
 } from 'lucide-react';
 import { logoutUser, getCurrentUser } from '../services/authService';
+import { submitProjectAdvice, getProjectAdvice } from '../services/advisorService';
 import { ADVISOR_PROFILES } from './AdvisorExpertiseView';
 
 const ADVISOR_REVIEWS_STORAGE_KEY = 'finreg_advisor_reviews';
@@ -127,7 +128,7 @@ export default function AdvisorDashboardView({
   }, [reviewsList]);
 
   // Handle Advice Submission with persistent save and authoritative status (DEF-11, DEF-12)
-  const handleSubmitAdvice = () => {
+  const handleSubmitAdvice = async () => {
     if (!advisorComments.trim() && !recommendation.trim()) {
       showToast('Please provide comments or recommendations before submitting.');
       return;
@@ -141,10 +142,10 @@ export default function AdvisorDashboardView({
       id: `ADV-REV-${Date.now()}`,
       project: targetProjName,
       projectId: targetProjId,
-      requirement: 'Risk-sensitive customer due diligence',
-      reqCode: 'ADV-001',
-      source: 'FCA Handbook · SYSC 6.3.8',
-      authority: 'Financial Conduct Authority',
+      requirement: selectedRequirement?.title || selectedRequirement?.requirement || 'Risk-sensitive customer due diligence',
+      reqCode: selectedRequirement?.code || 'ADV-001',
+      source: selectedRequirement?.source || 'FCA Handbook · SYSC 6.3.8',
+      authority: selectedRequirement?.authority || 'Financial Conduct Authority',
       adviceSubmitted: advisorComments.trim(),
       recommendation: recommendation.trim(),
       comments: advisorComments.trim(),
@@ -161,6 +162,23 @@ export default function AdvisorDashboardView({
       advisorRole: currentExpertise.name,
       advisorEmail: userEmail,
     };
+
+    // Dispatch to live PostgreSQL backend via POST /api/v1/projects/{projectId}/advice
+    try {
+      const apiPayload = {
+        comments: advisorComments.trim(),
+        recommendation: recommendation.trim(),
+        reference_attachment: referenceAttachment.trim(),
+        requirement_id: selectedRequirement?.id || selectedRequirement?.code || 'ADV-001',
+        advisor_role: currentExpertise.name,
+      };
+      const res = await submitProjectAdvice(targetProjId, apiPayload);
+      if (res && res.id) {
+        newReview.id = res.id;
+      }
+    } catch (err) {
+      console.warn('[AdvisorDashboardView] Live POST /advice failed:', err.message);
+    }
 
     const updated = [newReview, ...reviewsList];
     setReviewsList(updated);

@@ -37,12 +37,11 @@ export function getLocalProjects() {
 export async function getProjects() {
   try {
     const data = await apiCall('/projects', 'GET');
-    if (Array.isArray(data) && data.length > 0) return data;
+    if (Array.isArray(data)) return data;
   } catch (err) {
-    console.warn('[projectService] GET /projects failed. Reading persisted and fixture projects.');
+    console.warn('[projectService] GET /projects failed:', err.message);
   }
-  const local = getLocalProjects();
-  return local.length > 0 ? [...local, ...MOCK_PROJECTS] : MOCK_PROJECTS;
+  return [];
 }
 
 /**
@@ -52,7 +51,7 @@ export async function getProjectSummary() {
   try {
     return await apiCall('/projects/summary', 'GET');
   } catch (err) {
-    console.warn('[projectService] GET /projects/summary failed. Computing fallback summary.');
+    console.warn('[projectService] GET /projects/summary failed:', err.message);
     const projects = await getProjects();
     return {
       total: projects.length,
@@ -65,60 +64,17 @@ export async function getProjectSummary() {
 
 /**
  * Fetches single project details via GET /projects/{projectId}
+ * Strictly avoids falling back to other users' projects (prevents BOLA / IDOR leak)
  */
 export async function getProjectDetails(projectId) {
-  try {
-    const data = await apiCall(`/projects/${projectId}`, 'GET');
-    if (data) return data;
-  } catch (err) {
-    console.warn(`[projectService] GET /projects/${projectId} failed. Checking local projects.`);
-  }
-  const all = [...getLocalProjects(), ...MOCK_PROJECTS];
-  return all.find((p) => p.id === projectId) || all[0];
+  return await apiCall(`/projects/${projectId}`, 'GET');
 }
 
 /**
  * Creates a new project via POST /projects
- * DEF-08: Explicitly derive owner identity from payload / authenticated principal rather than defaulting to fixture names
  */
 export async function createProject(projectPayload) {
-  const newProjectObj = {
-    id: `PRJ-00${Math.floor(Math.random() * 900) + 100}`,
-    name: projectPayload.name,
-    type: projectPayload.type || 'AML/CTF',
-    status: 'Draft',
-    statusColor: 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
-    dotColor: 'bg-slate-400',
-    lastUpdated: 'Just now',
-    owner: projectPayload.owner || 'Project Owner',
-    ownerEmail: projectPayload.ownerEmail || '',
-    progress: 0,
-    description: projectPayload.description || 'Newly created regulatory project.',
-    created: 'Today',
-    jurisdiction: projectPayload.jurisdiction || 'United Kingdom - FCA',
-    members: [],
-  };
-
-  try {
-    const res = await apiCall('/projects', 'POST', projectPayload);
-    if (res && res.id) {
-      newProjectObj.id = res.id;
-      if (res.owner) newProjectObj.owner = res.owner;
-    }
-  } catch (err) {
-    console.warn('[projectService] POST /projects failed. Persisting project to local storage.');
-  }
-
-  // Persist locally so new projects survive browser reloads and scoping checks
-  try {
-    const existing = getLocalProjects();
-    existing.unshift(newProjectObj);
-    localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(existing));
-  } catch (e) {
-    console.error('Failed to persist project locally:', e);
-  }
-
-  return newProjectObj;
+  return await apiCall('/projects', 'POST', projectPayload);
 }
 
 /**

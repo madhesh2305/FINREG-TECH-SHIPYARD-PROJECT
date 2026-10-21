@@ -14,8 +14,10 @@ export const clearToken = () => localStorage.removeItem('authToken');
  */
 export async function apiCall(endpoint, method = 'GET', body = null) {
   const token = getToken();
+  const isFormData = typeof FormData !== 'undefined' && body instanceof FormData;
+
   const headers = {
-    'Content-Type': 'application/json',
+    ...(isFormData ? {} : { 'Content-Type': 'application/json' }),
     ...(token && { Authorization: `Bearer ${token}` }),
   };
 
@@ -25,7 +27,7 @@ export async function apiCall(endpoint, method = 'GET', body = null) {
   };
 
   if (body) {
-    config.body = JSON.stringify(body);
+    config.body = isFormData ? body : JSON.stringify(body);
   }
 
   try {
@@ -35,11 +37,20 @@ export async function apiCall(endpoint, method = 'GET', body = null) {
       let errorMessage = `HTTP Error ${response.status}`;
       try {
         const errorData = await response.json();
-        errorMessage = errorData.detail || errorData.message || errorMessage;
+        if (Array.isArray(errorData.detail)) {
+          errorMessage = errorData.detail.map((d) => d.msg || JSON.stringify(d)).join(', ');
+        } else {
+          errorMessage = errorData.detail || errorData.message || errorMessage;
+        }
       } catch (e) {
         // Fallback to text
       }
       throw new Error(errorMessage);
+    }
+
+    // Handle 204 No Content or empty bodies
+    if (response.status === 204) {
+      return null;
     }
 
     return await response.json();

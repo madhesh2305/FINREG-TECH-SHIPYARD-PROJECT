@@ -1,15 +1,14 @@
 import { apiCall } from './api';
 
 /**
- * Updates builder profile info via PUT /user/profile
+ * Updates user profile info via PATCH /users/me
  */
 export async function updateUserProfile(profileData) {
-  try {
-    return await apiCall('/user/profile', 'PUT', profileData);
-  } catch (err) {
-    console.warn('[userService] PUT /user/profile failed.');
-    return { success: true, ...profileData };
-  }
+  const payload = {
+    full_name: profileData.full_name || profileData.name || '',
+    ...(profileData.organization && { organization: profileData.organization }),
+  };
+  return await apiCall('/users/me', 'PATCH', payload);
 }
 
 /**

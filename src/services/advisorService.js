@@ -31,13 +31,28 @@ export async function getProjectMembers(projectId) {
 }
 
 /**
+ * Submits authoritative advice for a project requirement via POST /projects/{projectId}/advice
+ */
+export async function submitProjectAdvice(projectId, advicePayload) {
+  return await apiCall(`/projects/${projectId}/advice`, 'POST', advicePayload);
+}
+
+/**
+ * Fetches authoritative advice submissions for a project via GET /projects/{projectId}/advice
+ */
+export async function getProjectAdvice(projectId) {
+  try {
+    const data = await apiCall(`/projects/${projectId}/advice`, 'GET');
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn(`[advisorService] GET /projects/${projectId}/advice failed:`, err.message);
+    return [];
+  }
+}
+
+/**
  * Sends an invitation via POST /projects/{projectId}/advisor-invitations
  */
 export async function sendAdvisorInvitation(projectId, payload) {
-  try {
-    return await apiCall(`/projects/${projectId}/advisor-invitations`, 'POST', payload);
-  } catch (err) {
-    console.warn(`[advisorService] POST /projects/${projectId}/advisor-invitations failed.`);
-    return { status: 'sent', invitationId: `inv_${Date.now()}` };
-  }
+  return await apiCall(`/projects/${projectId}/advisor-invitations`, 'POST', payload);
 }

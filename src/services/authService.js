@@ -49,7 +49,7 @@ export function getRegisteredUsers() {
 }
 
 /**
- * Persists a new user record (DEF-13)
+ * Persists a new user record via POST /auth/register
  */
 export async function registerUser({ name, email, password, organization = '', role = 'Builder' }) {
   const cleanEmail = (email || '').trim().toLowerCase();
@@ -61,58 +61,37 @@ export async function registerUser({ name, email, password, organization = '', r
     throw new Error('Please fill in all required fields (name, email, password).');
   }
 
-  // Check duplicate email
-  const allUsers = getRegisteredUsers();
-  if (allUsers.some((u) => u.email.toLowerCase() === cleanEmail)) {
-    throw new Error(`An account with email "${cleanEmail}" is already registered. Please sign in.`);
-  }
-
   // Normalize role to BUILDER | ADVISOR | ADMIN
   let normalizedRole = 'BUILDER';
   const roleLower = (role || '').toLowerCase();
   if (roleLower.includes('advisor')) normalizedRole = 'ADVISOR';
   else if (roleLower.includes('admin')) normalizedRole = 'ADMIN';
 
-  const newUser = {
-    id: `usr_${Date.now()}`,
-    name: cleanName,
+  // Persist directly to backend PostgreSQL database
+  const res = await apiCall('/auth/register', 'POST', {
+    full_name: cleanName,
     email: cleanEmail,
     password: cleanPassword,
+    role: normalizedRole,
+    organization: cleanOrg,
+  });
+
+  const createdUser = res?.user || {
+    id: res?.id || res?.user_id || `usr_${Date.now()}`,
+    name: cleanName,
+    full_name: cleanName,
+    email: cleanEmail,
     organization: cleanOrg || 'Independent',
     role: normalizedRole,
     platform_role: normalizedRole,
-    memberships: [],
     created_at: new Date().toISOString(),
   };
 
-  // Attempt backend persistence first
-  try {
-    await apiCall('/auth/register', 'POST', {
-      name: cleanName,
-      email: cleanEmail,
-      password: cleanPassword,
-      role: normalizedRole,
-      organization: cleanOrg,
-    });
-  } catch (err) {
-    console.warn('[authService] Backend register unreachable. Persisting locally:', err.message);
-  }
-
-  // Persist locally so registration survives reloads and mock environments
-  try {
-    const raw = localStorage.getItem(REGISTERED_USERS_KEY);
-    const existing = raw ? JSON.parse(raw) : [];
-    existing.push(newUser);
-    localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(existing));
-  } catch (e) {
-    console.error('Failed to persist registered user locally:', e);
-  }
-
-  return { success: true, user: newUser };
+  return { success: true, user: createdUser };
 }
 
 /**
- * Authenticates user credentials via POST /auth/login or verified store (DEF-01, DEF-07)
+ * Authenticates user credentials via POST /auth/login
  */
 export async function loginUser(email, password) {
   const cleanEmail = (email || '').trim().toLowerCase();
@@ -122,43 +101,41 @@ export async function loginUser(email, password) {
     throw new Error('Email address and password are required.');
   }
 
-  // 1. Attempt live backend authentication
-  try {
-    const data = await apiCall('/auth/login', 'POST', { email: cleanEmail, password: cleanPassword });
-    if (data && (data.access_token || data.token)) {
-      const token = data.access_token || data.token;
-      setToken(token);
-      let user = data.user;
-      if (!user) {
-        user = await getCurrentUser();
-      }
-      if (user) {
-        localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
-      }
-      return { access_token: token, user };
-    }
-  } catch (err) {
-    console.warn('[authService] Live backend login unreachable. Checking verified accounts store:', err.message);
+  // Live backend authentication via PostgreSQL / JWT
+  const data = await apiCall('/auth/login', 'POST', {
+    email: cleanEmail,
+    password: cleanPassword,
+  });
+
+  if (!data || (!data.access_token && !data.token)) {
+    throw new Error('Authentication succeeded but no access token was returned.');
   }
 
-  // 2. Fallback to registered users repository
-  const users = getRegisteredUsers();
-  const matchedUser = users.find(
-    (u) => u.email.toLowerCase() === cleanEmail && u.password === cleanPassword
-  );
+  const token = data.access_token || data.token;
+  setToken(token);
 
-  if (!matchedUser) {
-    throw new Error('Invalid email or password. Please verify your credentials or register a new account.');
+  let user = data.user;
+  if (!user) {
+    user = await getCurrentUser();
   }
 
-  const mockToken = `jwt_token_${matchedUser.id}_${Date.now()}`;
-  setToken(mockToken);
-  localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(matchedUser));
-  return { access_token: mockToken, token_type: 'bearer', user: matchedUser };
+  if (user) {
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+  } else {
+    user = {
+      name: cleanEmail.split('@')[0],
+      email: cleanEmail,
+      role: 'BUILDER',
+      platform_role: 'BUILDER',
+    };
+    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+  }
+
+  return { access_token: token, token_type: 'bearer', user };
 }
 
 /**
- * Handles password reset request with accurate feedback (DEF-02)
+ * Handles password reset request via POST /auth/password-reset-request
  */
 export async function resetPassword(email) {
   const cleanEmail = (email || '').trim().toLowerCase();
@@ -166,29 +143,11 @@ export async function resetPassword(email) {
     throw new Error('Please enter a valid email address.');
   }
 
-  // Try live backend request
-  try {
-    await apiCall('/auth/forgot-password', 'POST', { email: cleanEmail });
-    return {
-      success: true,
-      message: `Password reset instructions have been sent to ${cleanEmail}. Please check your inbox.`,
-    };
-  } catch (err) {
-    console.warn('[authService] Live backend password reset unreachable:', err.message);
-  }
-
-  // Check if user exists in registered database
-  const users = getRegisteredUsers();
-  const exists = users.some((u) => u.email.toLowerCase() === cleanEmail);
-
-  if (!exists) {
-    // DEF-02: Do not claim an email was sent if the service failed or user does not exist
-    throw new Error(`No account found matching email "${cleanEmail}". Please verify the address or register.`);
-  }
+  await apiCall('/auth/password-reset-request', 'POST', { email: cleanEmail });
 
   return {
     success: true,
-    message: `Password reset instructions have been dispatched to ${cleanEmail}. Follow the link in your email to reset your credentials.`,
+    message: `Password reset instructions have been sent to ${cleanEmail}. Please check your inbox.`,
   };
 }
 
