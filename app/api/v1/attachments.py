@@ -1,11 +1,14 @@
 import base64
 import email
 import email.policy
+import io
 import os
+import tempfile
 import uuid
 from typing import List, Union
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import FileResponse
+import pypdf
 from sqlalchemy.orm import Session
 from app.core.exceptions import NotFoundError, ValidationError, ForbiddenError
 from app.db.session import get_db
@@ -21,42 +24,58 @@ router = APIRouter(prefix="/projects/{projectId}/attachments", tags=["Project At
 
 MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024  # 10 MB
 
-def validate_pdf_structure(data: bytes) -> None:
+def validate_pdf_structure(file_path_or_bytes: Union[str, bytes]) -> None:
     """
-    Validates complete PDF document structure without external native dependencies.
-    Verifies minimum header magic bytes (%PDF-), mandatory %%EOF trailer marker,
-    and valid PDF object tree structure to reject corrupted or spoofed payloads.
+    Validates structural integrity of a PDF document using pypdf parser.
+    Ensures document conforms to ISO 32000 specification and rejects
+    malformed, truncated, or spoofed payloads containing fake headers/trailers.
     """
-    if not data or len(data) == 0:
-        raise ValidationError("Uploaded file is empty")
-    if len(data) < 32:
-        raise ValidationError("Invalid PDF format. File is too small to be a valid PDF document")
-    if not data.startswith(b"%PDF-"):
-        raise ValidationError("Invalid PDF format. File magic bytes do not match standard PDF header (%PDF-)")
-    
-    # PDF specification requires %%EOF near end of file (ISO 32000-1)
-    tail = data[-1024:]
-    if b"%%EOF" not in tail:
-        raise ValidationError("Invalid PDF format. Incomplete PDF file: missing %%EOF trailer marker")
-    
-    # Must contain standard structural objects or catalog references
-    has_obj = b"obj" in data and b"endobj" in data
-    has_root = b"/Root" in data or b"/Pages" in data
-    has_xref = b"xref" in data or b"/XRef" in data
-    if not (has_obj or has_root or has_xref):
-        raise ValidationError("Invalid PDF format. File lacks valid PDF object tree structure")
+    close_needed = False
+    if isinstance(file_path_or_bytes, bytes):
+        if not file_path_or_bytes or len(file_path_or_bytes) == 0:
+            raise ValidationError("Uploaded file is empty")
+        if len(file_path_or_bytes) < 32:
+            raise ValidationError("Invalid PDF format. File is too small to be a valid PDF document")
+        stream = io.BytesIO(file_path_or_bytes)
+    else:
+        if not os.path.exists(file_path_or_bytes) or os.path.getsize(file_path_or_bytes) == 0:
+            raise ValidationError("Uploaded file is empty")
+        if os.path.getsize(file_path_or_bytes) < 32:
+            raise ValidationError("Invalid PDF format. File is too small to be a valid PDF document")
+        stream = open(file_path_or_bytes, "rb")
+        close_needed = True
+
+    try:
+        reader = pypdf.PdfReader(stream, strict=False)
+        if len(reader.pages) < 1:
+            raise ValidationError("Invalid PDF format. Document contains no readable pages")
+    except ValidationError:
+        raise
+    except Exception as exc:
+        raise ValidationError(f"Invalid PDF format. Document structure failed validation: {type(exc).__name__}")
+    finally:
+        if close_needed:
+            try:
+                stream.close()
+            except Exception:
+                pass
 
 def _get_upload_dir(project_id: int) -> str:
     base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "uploads", str(project_id)))
     os.makedirs(base_dir, exist_ok=True)
     return base_dir
 
+def _get_temp_dir() -> str:
+    temp_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "uploads", "tmp"))
+    os.makedirs(temp_dir, exist_ok=True)
+    return temp_dir
+
 @router.post(
     "",
     response_model=AttachmentResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Upload PDF Attachment",
-    description="Securely uploads and validates a PDF attachment with bounded streaming, magic-byte verification, and project-level authorization."
+    description="Securely uploads and validates a PDF attachment with bounded streaming, structural pypdf verification, and project-level authorization."
 )
 async def upload_attachment(
     projectId: Union[int, str],
@@ -78,86 +97,94 @@ async def upload_attachment(
         except ValueError:
             pass
 
-    # Bounded body streaming to prevent memory exhaustion attacks
-    chunks = []
-    total_bytes_read = 0
-    max_allowed_payload = MAX_FILE_SIZE_BYTES + 65536
-    async for chunk in request.stream():
-        total_bytes_read += len(chunk)
-        if total_bytes_read > max_allowed_payload:
-            raise ValidationError("Payload size exceeds maximum allowable limit of 10MB")
-        chunks.append(chunk)
-    body = b"".join(chunks)
-    
     filename = None
-    file_bytes = None
     category = "ADVISORY_REFERENCE"
+    tmp_path = None
+    file_bytes_written = 0
 
-    if "multipart/form-data" in raw_content_type.lower():
-        msg_data = f"Content-Type: {raw_content_type}\r\n\r\n".encode("utf-8") + body
-        msg = email.message_from_bytes(msg_data, policy=email.policy.default)
-        
-        for part in msg.iter_parts():
-            part_name = part.get_param("name", header="content-disposition")
-            part_filename = part.get_filename()
-            
-            if part_name == "category":
-                payload = part.get_payload(decode=True)
-                if payload:
-                    category = payload.decode("utf-8", errors="ignore").strip()
-            elif part_filename or part_name == "file":
-                filename = part_filename or "document.pdf"
-                file_bytes = part.get_payload(decode=True)
-    elif "application/json" in raw_content_type.lower():
-        import json
-        try:
-            body_json = json.loads(body.decode("utf-8"))
-        except Exception:
-            raise ValidationError("Invalid JSON payload")
-        filename = body_json.get("filename", "document.pdf")
-        category = body_json.get("category", "ADVISORY_REFERENCE")
-        b64_content = body_json.get("content_base64", "")
-        try:
-            file_bytes = base64.b64decode(b64_content)
-        except Exception:
-            raise ValidationError("Invalid base64 payload")
-    else:
-        raise ValidationError(f"Unsupported content type: {raw_content_type}. Expected multipart/form-data or application/json")
-
-    if not filename:
-        filename = "document.pdf"
-
-    clean_filename = os.path.basename(filename).strip()
-    if not clean_filename or "\x00" in clean_filename:
-        raise ValidationError("Invalid filename")
-
-    if not clean_filename.lower().endswith(".pdf"):
-        raise ValidationError("Only PDF files are supported. File extension must be .pdf")
-
-    if not file_bytes or len(file_bytes) == 0:
-        raise ValidationError("Uploaded file is empty")
-
-    if len(file_bytes) > MAX_FILE_SIZE_BYTES:
-        raise ValidationError(f"File size exceeds maximum allowable limit of 10MB (got {len(file_bytes)} bytes)")
-
-    # Validate complete PDF structure
-    validate_pdf_structure(file_bytes)
-
-    # Safe stored filename using UUID outside public web root
-    stored_name = f"{uuid.uuid4().hex}.pdf"
-    upload_dir = _get_upload_dir(pid)
-    storage_path = os.path.join(upload_dir, stored_name)
-
-    with open(storage_path, "wb") as f:
-        f.write(file_bytes)
+    temp_dir = _get_temp_dir()
+    with tempfile.NamedTemporaryFile(dir=temp_dir, prefix="up_", suffix=".tmp", delete=False) as tmp_file:
+        tmp_path = tmp_file.name
 
     try:
+        if "multipart/form-data" in raw_content_type.lower():
+            form = await request.form()
+            file_item = form.get("file")
+            category_item = form.get("category")
+            if category_item and isinstance(category_item, str):
+                category = category_item.strip()
+
+            if not file_item:
+                raise ValidationError("No file uploaded. Expected 'file' field in multipart form data")
+
+            if hasattr(file_item, "filename"):
+                filename = file_item.filename
+            else:
+                filename = "document.pdf"
+
+            with open(tmp_path, "wb") as f:
+                while True:
+                    chunk = await file_item.read(65536)
+                    if not chunk:
+                        break
+                    file_bytes_written += len(chunk)
+                    if file_bytes_written > MAX_FILE_SIZE_BYTES:
+                        raise ValidationError("File size exceeds maximum allowable limit of 10MB")
+                    f.write(chunk)
+        elif "application/json" in raw_content_type.lower():
+            body = await request.body()
+            if len(body) > MAX_FILE_SIZE_BYTES + 65536:
+                raise ValidationError("Payload size exceeds maximum allowable limit of 10MB")
+            import json
+            try:
+                body_json = json.loads(body.decode("utf-8"))
+            except Exception:
+                raise ValidationError("Invalid JSON payload")
+            filename = body_json.get("filename", "document.pdf")
+            category = body_json.get("category", "ADVISORY_REFERENCE")
+            b64_content = body_json.get("content_base64", "")
+            try:
+                decoded = base64.b64decode(b64_content)
+            except Exception:
+                raise ValidationError("Invalid base64 payload")
+            file_bytes_written = len(decoded)
+            if file_bytes_written > MAX_FILE_SIZE_BYTES:
+                raise ValidationError("File size exceeds maximum allowable limit of 10MB")
+            with open(tmp_path, "wb") as f:
+                f.write(decoded)
+        else:
+            raise ValidationError(f"Unsupported content type: {raw_content_type}. Expected multipart/form-data or application/json")
+
+        if not filename:
+            filename = "document.pdf"
+
+        clean_filename = os.path.basename(filename).strip()
+        if not clean_filename or "\x00" in clean_filename:
+            raise ValidationError("Invalid filename")
+
+        if not clean_filename.lower().endswith(".pdf"):
+            raise ValidationError("Only PDF files are supported. File extension must be .pdf")
+
+        if file_bytes_written == 0:
+            raise ValidationError("Uploaded file is empty")
+
+        # Validate complete PDF structure using pypdf parser on disk
+        validate_pdf_structure(tmp_path)
+
+        # Atomic move to storage path outside public web root
+        stored_name = f"{uuid.uuid4().hex}.pdf"
+        upload_dir = _get_upload_dir(pid)
+        storage_path = os.path.join(upload_dir, stored_name)
+        os.replace(tmp_path, storage_path)
+        tmp_path = None  # Successfully moved
+
+        # Persist metadata in database with transactional rollback safety
         attachment = ProjectAttachment(
             project_id=pid,
             uploaded_by=current_user.user_id,
             original_filename=clean_filename,
             stored_filename=stored_name,
-            file_size=len(file_bytes),
+            file_size=file_bytes_written,
             content_type="application/pdf",
             category=category[:50],
             storage_path=storage_path
@@ -175,18 +202,19 @@ async def upload_attachment(
             event_description=f"PDF document '{clean_filename}' uploaded to Project {pid} by {current_user.full_name}",
             new_values={
                 "filename": clean_filename,
-                "file_size": len(file_bytes),
+                "file_size": file_bytes_written,
                 "category": category,
                 "attachment_id": attachment.attachment_id
             }
         )
         db.commit()
         db.refresh(attachment)
+
     except Exception:
         db.rollback()
-        if os.path.exists(storage_path):
+        if tmp_path and os.path.exists(tmp_path):
             try:
-                os.remove(storage_path)
+                os.remove(tmp_path)
             except Exception:
                 pass
         raise

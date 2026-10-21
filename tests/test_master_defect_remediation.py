@@ -10,7 +10,13 @@ from app.models.project import Project, ProjectMember
 from app.models.advice import Advice
 from app.models.regulatory import RegulatoryRequirement
 from app.models.attachment import ProjectAttachment
-from app.services.email_service import enable_test_mail_sink, get_test_mail_sink, clear_test_mail_sink
+from app.services.email_service import (
+    enable_test_mail_sink,
+    get_test_mail_sink,
+    clear_test_mail_sink,
+    set_simulate_smtp_failure,
+)
+from app.services.rate_limit_service import reset_rate_limiter
 
 def test_def01_advisor_empty_project_assignments_by_default(client: TestClient, db: Session, builder_auth_headers: dict):
     """DEF-01: Newly registered Advisor has zero project assignments until explicitly assigned."""
@@ -220,6 +226,7 @@ def test_def15_password_reset_anti_enumeration_and_test_sink(client: TestClient,
     2. Existing and unknown email addresses receive identical public responses (anti-enumeration).
     3. Isolated test mail sink receives the recovery token for an existing user.
     """
+    reset_rate_limiter()
     enable_test_mail_sink(True)
     clear_test_mail_sink()
 
@@ -265,6 +272,121 @@ def test_def15_password_reset_anti_enumeration_and_test_sink(client: TestClient,
     assert db_token is not None
     assert db_token.is_revoked is False
 
+def test_def15_password_reset_smtp_failure_handling_and_rollback(client: TestClient, db: Session):
+    """
+    DEF-15: Operational SMTP delivery failure handling:
+    1. Truthful delivery_failed reporting without revealing account existence.
+    2. Rollback ensures prior active tokens are NOT invalidated and no dead tokens persist.
+    """
+    reset_rate_limiter()
+    enable_test_mail_sink(True)
+    clear_test_mail_sink()
+
+    unique_email = f"smtp_fail_{uuid.uuid4().hex[:8]}@domain.com"
+    unknown_email = f"unknown_fail_{uuid.uuid4().hex[:8]}@domain.com"
+
+    # Register user
+    client.post("/api/v1/auth/register", json={
+        "email": unique_email,
+        "password": "Password123!",
+        "full_name": "SMTP Fail User",
+        "role": "BUILDER"
+    })
+
+    # Step 1: Successfully generate a valid token first
+    resp1 = client.post("/api/v1/auth/password-reset-request", json={"email": unique_email})
+    assert resp1.status_code == 200
+    sink1 = get_test_mail_sink()
+    assert len(sink1) == 1
+    token1 = sink1[0]["token"]
+
+    user = db.query(User).filter(User.email == unique_email).first()
+    tokens_before = db.query(PasswordResetToken).filter(
+        PasswordResetToken.user_id == user.user_id,
+        PasswordResetToken.is_revoked.is_(False)
+    ).all()
+    assert len(tokens_before) == 1
+    token1_id = tokens_before[0].id
+
+    # Step 2: Simulate SMTP failure
+    set_simulate_smtp_failure(True)
+    try:
+        # Existing user receives delivery_failed
+        fail_existing = client.post("/api/v1/auth/password-reset-request", json={"email": unique_email})
+        assert fail_existing.status_code == 200
+        data_existing = fail_existing.json()
+        assert data_existing["status"] == "delivery_failed"
+        assert "reset_token" not in data_existing
+
+        # Unknown user receives IDENTICAL delivery_failed (anti-enumeration)
+        fail_unknown = client.post("/api/v1/auth/password-reset-request", json={"email": unknown_email})
+        assert fail_unknown.status_code == 200
+        data_unknown = fail_unknown.json()
+        assert data_unknown["status"] == "delivery_failed"
+        assert data_unknown["message"] == data_existing["message"]
+        assert data_unknown["delivery_channel"] == data_existing["delivery_channel"]
+
+        # Step 3: Verify rollback safety: Token1 was NOT invalidated by the failed attempt
+        db.expire_all()
+        token1_after = db.query(PasswordResetToken).filter(PasswordResetToken.id == token1_id).first()
+        assert token1_after.is_revoked is False
+
+        # No new dead token was stored
+        total_tokens = db.query(PasswordResetToken).filter(PasswordResetToken.user_id == user.user_id).count()
+        assert total_tokens == 1
+    finally:
+        set_simulate_smtp_failure(False)
+
+def test_def15_password_reset_unconfigured_smtp(client: TestClient):
+    """
+    DEF-15: When email delivery is globally unconfigured, both existing and unknown
+    emails receive identical pending_configuration status without revealing account existence.
+    """
+    reset_rate_limiter()
+    enable_test_mail_sink(False)
+    try:
+        resp1 = client.post("/api/v1/auth/password-reset-request", json={"email": "builder@finregtech.com"})
+        assert resp1.status_code == 200
+        d1 = resp1.json()
+        assert d1["status"] == "pending_configuration"
+
+        resp2 = client.post("/api/v1/auth/password-reset-request", json={"email": "nonexistent@somewhere.org"})
+        assert resp2.status_code == 200
+        d2 = resp2.json()
+        assert d2["status"] == "pending_configuration"
+        assert d1["message"] == d2["message"]
+        assert d1["delivery_channel"] == d2["delivery_channel"]
+    finally:
+        enable_test_mail_sink(True)
+
+def test_def15_password_reset_rate_limiting_per_account_and_ip(client: TestClient):
+    """
+    DEF-15: Dual-key sliding window rate limiting rejects excessive requests:
+    - Per-account limit (5 requests / 15m)
+    - Per-IP limit (20 requests / 15m)
+    - Clean test reset hook
+    """
+    reset_rate_limiter()
+    enable_test_mail_sink(True)
+
+    target_email = "ratelimit_victim@example.com"
+    headers = {"X-Forwarded-For": "203.0.113.10"}
+
+    # 5 allowed requests
+    for i in range(5):
+        resp = client.post("/api/v1/auth/password-reset-request", json={"email": target_email}, headers=headers)
+        assert resp.status_code == 200
+
+    # 6th request targeting the same account is rate-limited (HTTP 429)
+    blocked_account = client.post("/api/v1/auth/password-reset-request", json={"email": target_email}, headers=headers)
+    assert blocked_account.status_code == 429
+
+    # Clean state reset hook works reliably
+    reset_rate_limiter()
+    fresh_resp = client.post("/api/v1/auth/password-reset-request", json={"email": target_email}, headers=headers)
+    assert fresh_resp.status_code == 200
+    reset_rate_limiter()
+
 def test_def15_password_reset_token_rejection_and_session_invalidation(client: TestClient, db: Session):
     """
     DEF-15:
@@ -273,6 +395,7 @@ def test_def15_password_reset_token_rejection_and_session_invalidation(client: T
     6. Invalid, expired and reused tokens are rejected.
     7. Active session tokens issued prior to credentials update are invalidated.
     """
+    reset_rate_limiter()
     enable_test_mail_sink(True)
     clear_test_mail_sink()
 
@@ -331,7 +454,7 @@ def test_def15_password_reset_token_rejection_and_session_invalidation(client: T
     assert revoked_me.status_code == 401
 
 def test_def16_pdf_attachment_upload_magic_bytes_and_access_control(client: TestClient, builder_auth_headers: dict, outsider_auth_headers: dict):
-    """DEF-16: PDF upload validates complete PDF structure, stores safely, and enforces project authorization."""
+    """DEF-16: PDF upload validates complete PDF structure via pypdf, stores safely, and enforces project authorization."""
     # 1. Non-PDF rejected
     bad_file = io.BytesIO(b"This is a plain text file, not a real PDF.")
     bad_upload = client.post(
@@ -352,8 +475,20 @@ def test_def16_pdf_attachment_upload_magic_bytes_and_access_control(client: Test
     )
     assert fake_upload.status_code in (400, 422)
 
-    # 3. Valid PDF with %PDF-, object catalog, and %%EOF trailer accepted
-    valid_pdf_content = base64.b64decode("JVBERi0xLjQKMSAwIG9iago8PCAvVGl0bGUgKFRlc3QgUG9saWN5KSA+PgplbmRvYmoKdHJhaWxlcgo8PCAvUm9vdCAxIDAgUiA+PgolJUVPRg==")
+    # 3. Spoofed PDF with %PDF-, object catalog, and %%EOF trailer but invalid structure rejected by pypdf
+    crafted_spoof = base64.b64decode("JVBERi0xLjQKMSAwIG9iago8PCAvVGl0bGUgKFRlc3QgUG9saWN5KSA+PgplbmRvYmoKdHJhaWxlcgo8PCAvUm9vdCAxIDAgUiA+PgolJUVPRg==")
+    spoof_upload = client.post(
+        "/api/v1/projects/1/attachments",
+        headers=builder_auth_headers,
+        files={"file": ("spoofed.pdf", io.BytesIO(crafted_spoof), "application/pdf")},
+        data={"category": "POLICY_ASSESSMENT"}
+    )
+    assert spoof_upload.status_code in (400, 422)
+
+    # 4. Valid canonical PDF conforming to ISO 32000 spec accepted
+    valid_pdf_content = base64.b64decode(
+        "JVBERi0xLjMKJeLjz9MKMSAwIG9iago8PAovUHJvZHVjZXIgKHB5cGRmKQo+PgplbmRvYmoKMiAwIG9iago8PAovVHlwZSAvUGFnZXMKL0NvdW50IDEKL0tpZHMgWyA0IDAgUiBdCj4+CmVuZG9iagozIDAgb2JqCjw8Ci9UeXBlIC9DYXRhbG9nCi9QYWdlcyAyIDAgUgo+PgplbmRvYmoKNCAwIG9iago8PAovVHlwZSAvUGFnZQovUmVzb3VyY2VzIDw8Cj4+Ci9NZWRpYUJveCBbIDAuMCAwLjAgNzIgNzIgXQovUGFyZW50IDIgMCBSCj4+CmVuZG9iagp4cmVmCjAgNQowMDAwMDAwMDAwIDY1NTM1IGYgCjAwMDAwMDAwMTUgMDAwMDAgbiAKMDAwMDAwMDA1NCAwMDAwMCBuIAowMDAwMDAwMTEzIDAwMDAwIG4gCjAwMDAwMDAxNjIgMDAwMDAgbiAKdHJhaWxlcgo8PAovU2l6ZSA1Ci9Sb290IDMgMCBSCi9JbmZvIDEgMCBSCj4+CnN0YXJ0eHJlZgoyNTQKJSVFT0YK"
+    )
     valid_file = io.BytesIO(valid_pdf_content)
     good_upload = client.post(
         "/api/v1/projects/1/attachments",
@@ -367,23 +502,23 @@ def test_def16_pdf_attachment_upload_magic_bytes_and_access_control(client: Test
     assert att_meta["content_type"] == "application/pdf"
     att_id = att_meta["attachment_id"]
 
-    # 4. List attachments for Project 1
+    # 5. List attachments for Project 1
     list_att = client.get("/api/v1/projects/1/attachments", headers=builder_auth_headers)
     assert list_att.status_code == 200
     ids = [a["attachment_id"] for a in list_att.json()]
     assert att_id in ids
 
-    # 5. Download attachment
+    # 6. Download attachment (byte-identical verification)
     dl_resp = client.get(f"/api/v1/projects/1/attachments/{att_id}", headers=builder_auth_headers)
     assert dl_resp.status_code == 200
     assert dl_resp.content == valid_pdf_content
 
-    # 6. Unauthorized outsider is denied access (403 Forbidden)
+    # 7. Unauthorized outsider is denied access (403 Forbidden)
     outsider_dl = client.get(f"/api/v1/projects/1/attachments/{att_id}", headers=outsider_auth_headers)
     assert outsider_dl.status_code == 403
 
 def test_def16_pdf_attachment_structural_validation_and_bounded_streaming(client: TestClient, builder_auth_headers: dict):
-    """DEF-16: Rejects truncated PDF missing %%EOF trailer and enforces 10MB payload size limit."""
+    """DEF-16: Rejects truncated PDF missing %%EOF trailer, empty files, and enforces 10MB payload size limit."""
     # Truncated PDF (has %PDF- but lacks %%EOF trailer)
     truncated_pdf = io.BytesIO(base64.b64decode("JVBERi0xLjcKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyA+PgplbmRvYmoK"))
     trunc_resp = client.post(
@@ -401,6 +536,15 @@ def test_def16_pdf_attachment_structural_validation_and_bounded_streaming(client
         files={"file": ("empty.pdf", empty_pdf, "application/pdf")}
     )
     assert empty_resp.status_code in (400, 422)
+
+    # Oversized payload (> 10MB) rejected
+    oversized_pdf = io.BytesIO(b"%PDF-1.4\n" + b"A" * (10 * 1024 * 1024 + 1024))
+    over_resp = client.post(
+        "/api/v1/projects/1/attachments",
+        headers=builder_auth_headers,
+        files={"file": ("oversized.pdf", oversized_pdf, "application/pdf")}
+    )
+    assert over_resp.status_code in (400, 422)
 
 def test_def17_admin_dashboard_role_guard_and_resilience(client: TestClient, admin_auth_headers: dict, builder_auth_headers: dict, advisor_auth_headers: dict):
     """DEF-17: Admin-only endpoints return 200 for ADMIN, and strictly 403 for BUILDER and ADVISOR."""

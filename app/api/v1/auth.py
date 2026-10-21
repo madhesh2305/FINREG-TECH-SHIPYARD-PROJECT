@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Header, status
+from fastapi import APIRouter, Depends, Header, Request, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.identity import User
@@ -86,9 +86,14 @@ def change_password_endpoint(
 )
 def password_reset_endpoint(
     request: PasswordResetRequest,
+    http_request: Request,
     db: Session = Depends(get_db)
 ):
-    return request_password_reset(db=db, request=request)
+    client_ip = http_request.client.host if http_request.client else "127.0.0.1"
+    forwarded = http_request.headers.get("x-forwarded-for")
+    if forwarded:
+        client_ip = forwarded.split(",")[0].strip()
+    return request_password_reset(db=db, request=request, client_ip=client_ip)
 
 @router.post(
     "/password-reset-confirm",

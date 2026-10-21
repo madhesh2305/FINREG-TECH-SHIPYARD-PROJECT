@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 # In-memory test mail sink for automated tests
 _TEST_MAIL_SINK: List[Dict[str, Any]] = []
 _TEST_MAIL_SINK_ENABLED: bool = False
+_SIMULATE_SMTP_FAILURE: bool = False
 
 def enable_test_mail_sink(enabled: bool = True) -> None:
     """Enables or disables the isolated test mail sink."""
@@ -29,6 +30,14 @@ def clear_test_mail_sink() -> None:
     """Empties the test mail sink."""
     _TEST_MAIL_SINK.clear()
 
+def set_simulate_smtp_failure(simulate: bool = True) -> None:
+    """Configures simulated SMTP dispatch failure for regression testing."""
+    global _SIMULATE_SMTP_FAILURE
+    _SIMULATE_SMTP_FAILURE = simulate
+
+def is_smtp_failure_simulated() -> bool:
+    return _SIMULATE_SMTP_FAILURE
+
 def is_email_configured() -> bool:
     """
     Checks if email delivery is configured in the current environment.
@@ -41,17 +50,32 @@ def is_email_configured() -> bool:
     smtp_port = os.getenv("SMTP_PORT")
     return bool(smtp_host and smtp_port)
 
+def is_email_service_available() -> bool:
+    """
+    Evaluates whether email service is currently operational.
+    Returns False if email delivery is unconfigured or experiencing transport failures.
+    """
+    if not is_email_configured():
+        return False
+    if _SIMULATE_SMTP_FAILURE:
+        return False
+    return True
+
 def send_password_reset_email(
     to_email: str,
     reset_token: str,
     user_name: Optional[str] = None
 ) -> bool:
     """
-    Dispatches a password reset email containing the secret single-use reset token.
-    If test mail sink is enabled, delivers message to the sink.
+    Dispatches a password reset email containing the single-use recovery token.
+    If test mail sink is enabled, delivers message to the isolated sink.
     If SMTP is configured, delivers via SMTP.
-    If unconfigured, records delivery failure safely without logging the token.
+    If unconfigured or if dispatch fails, logs failure safely without leaking credentials or tokens.
     """
+    if _SIMULATE_SMTP_FAILURE:
+        logger.error("Operational test: simulated SMTP delivery failure triggered.")
+        return False
+
     subject = "FinRegTech ShipYard - Password Recovery Request"
     body_text = (
         f"Hello {user_name or 'User'},\n\n"
@@ -79,7 +103,6 @@ def send_password_reset_email(
     smtp_password = os.getenv("SMTP_PASSWORD")
 
     if not smtp_host or not smtp_port:
-        # Unconfigured delivery channel
         return False
 
     try:
@@ -103,5 +126,5 @@ def send_password_reset_email(
         server.quit()
         return True
     except Exception as exc:
-        logger.warning("SMTP dispatch failed: %s", exc)
+        logger.error("Operational SMTP delivery failed: %s (Type: %s)", type(exc).__name__, exc)
         return False
