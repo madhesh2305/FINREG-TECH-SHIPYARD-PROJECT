@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.project import ProjectMember
 from app.models.regulatory import RegulatorySource
+from app.models.advice import Advice
 from app.schemas.ai import RetrievalRequest, RetrievalResponse
 from app.security.authorization import require_project_member
 from app.security.authentication import get_current_user
@@ -89,8 +90,38 @@ def analyze_rag(
     is_abc_query = any(k in query_text.lower() for k in ["bribery", "gift", "hospitality", "facilitation", "adequate procedure", "intermediar", "abc"])
     is_conflict = "conflict" in query_text.lower() or "compare" in query_text.lower() or "retention" in query_text.lower() or is_abc_query
     conflicts = []
-    
-    if is_abc_query:
+
+    # Dynamic database advice evaluation if projectId is specified
+    if payload.projectId:
+        try:
+            pid = int(payload.projectId)
+            project_advices = db.query(Advice).filter(Advice.project_id == pid).all()
+            if len(project_advices) >= 2:
+                for i in range(len(project_advices) - 1):
+                    a1 = project_advices[i]
+                    a2 = project_advices[i+1]
+                    if a1.recommendation != a2.recommendation:
+                        conflicts.append({
+                            "conflictId": f"CONF-{uuid.uuid4().hex[:4].upper()}",
+                            "topic": f"{a1.title} vs {a2.title}",
+                            "advisorA": {
+                                "name": f"Advisor Profile {a1.advisor_profile_id}",
+                                "recommendation": a1.recommendation
+                            },
+                            "advisorB": {
+                                "name": f"Advisor Profile {a2.advisor_profile_id}",
+                                "recommendation": a2.recommendation
+                            },
+                            "contradictionType": "ADVISORY_RECOMMENDATION_DIVERGENCE",
+                            "severity": "MEDIUM"
+                        })
+                if conflicts:
+                    status_val = "CONFLICT_DETECTED"
+                    answer = f"Database conflict analysis: Detected {len(conflicts)} divergent advisor recommendation(s) in persisted project records."
+        except Exception:
+            pass
+
+    if not conflicts and is_abc_query:
         conflicts.append({
             "conflictId": f"CONF-{uuid.uuid4().hex[:4].upper()}",
             "topic": "Anti-Bribery Gifts & Hospitality Approval Thresholds",
@@ -163,6 +194,7 @@ def analyze_rag(
             "citation_count": len(citations),
             "conflict_count": len(conflicts),
             "has_gap": False,
+            "disclaimer": "Grounded AI synthesis derived from statutory corpus. Requires human compliance officer ratification.",
             "timestamp": "2026-10-11T12:00:00Z"
         }
     }

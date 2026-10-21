@@ -53,6 +53,21 @@ def test_rag_analyze_conflict(client: TestClient, builder_auth_headers: dict):
     assert len(data["conflicts"]) > 0
     assert len(data["citations"]) > 0
     assert len(data["provenance"]) > 0
+    assert "disclaimer" in data["metadata"]
+
+def test_rag_analyze_project_scoped_query(client: TestClient, builder_auth_headers: dict):
+    payload = {
+        "query": "Customer onboarding identity verification procedures",
+        "projectId": 1
+    }
+    response = client.post("/api/v1/rag/analyze", json=payload, headers=builder_auth_headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["schema_version"] == "1.0"
+    assert "status" in data
+    assert "citations" in data
+    assert "metadata" in data
+    assert "disclaimer" in data["metadata"]
 
 def test_project_readiness_calculation(client: TestClient, builder_auth_headers: dict):
     response = client.get("/api/v1/projects/1/readiness", headers=builder_auth_headers)
