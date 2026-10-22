@@ -81,12 +81,7 @@ export async function createProject(projectPayload) {
  * Updates an existing project via PATCH /projects/{projectId}
  */
 export async function updateProject(projectId, updatePayload) {
-  try {
-    return await apiCall(`/projects/${projectId}`, 'PATCH', updatePayload);
-  } catch (err) {
-    console.warn(`[projectService] PATCH /projects/${projectId} failed.`);
-    return updatePayload;
-  }
+  return await apiCall(`/projects/${projectId}`, 'PATCH', updatePayload);
 }
 
 /**
@@ -97,7 +92,20 @@ export async function getProjectRequirements(projectId) {
     const data = await apiCall(`/projects/${projectId}/requirements`, 'GET');
     return Array.isArray(data) ? data : [];
   } catch (err) {
-    console.warn(`[projectService] GET /projects/${projectId}/requirements failed.`);
+    console.warn(`[projectService] GET /projects/${projectId}/requirements failed:`, err.message);
     return [];
+  }
+}
+
+/**
+ * Fetches real project audit readiness score & breakdown
+ * GET /projects/{projectId}/readiness
+ */
+export async function getProjectReadiness(projectId) {
+  try {
+    return await apiCall(`/projects/${projectId}/readiness`, 'GET');
+  } catch (err) {
+    console.warn(`[projectService] GET /projects/${projectId}/readiness failed:`, err.message);
+    return null;
   }
 }

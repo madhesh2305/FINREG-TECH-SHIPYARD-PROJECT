@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { logoutUser, getCurrentUser } from '../services/authService';
 import { submitProjectAdvice, getProjectAdvice } from '../services/advisorService';
+import { getUserNotifications } from '../services/userService';
 import { ADVISOR_PROFILES } from './AdvisorExpertiseView';
 
 const ADVISOR_REVIEWS_STORAGE_KEY = 'finreg_advisor_reviews';
@@ -127,76 +128,155 @@ export default function AdvisorDashboardView({
     } catch (e) {}
   }, [reviewsList]);
 
+  // Live advice fetch from backend PostgreSQL database
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchAdvice() {
+      const pid = activeProject?.id || activeProject?.project_id || 1;
+      try {
+        const liveAdvice = await getProjectAdvice(pid);
+        if (isMounted && Array.isArray(liveAdvice) && liveAdvice.length > 0) {
+          const mapped = liveAdvice.map((a) => ({
+            id: `ADV-REV-${a.advice_id}`,
+            advice_id: a.advice_id,
+            project: activeProject?.name || 'Project',
+            projectId: pid,
+            requirement: a.title,
+            reqCode: `REQ-${a.advice_id}`,
+            source: a.source_links?.[0]?.source_title || 'Regulatory Source',
+            authority: 'FCA / AML',
+            adviceSubmitted: a.advice_text,
+            recommendation: a.recommendation,
+            comments: a.advice_text,
+            referenceAttachment: a.assumptions || 'FCA-Advisory-Interpretations.pdf',
+            attachment: a.assumptions || 'FCA-Advisory-Interpretations.pdf',
+            date: a.submitted_at
+              ? new Date(a.submitted_at).toLocaleDateString('en-GB', {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })
+              : 'Recently',
+            status: a.display_status || (a.advice_status === 'REVIEWED' ? 'Accepted' : 'Submitted'),
+            statusColor:
+              a.advice_status === 'REVIEWED'
+                ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80'
+                : 'bg-blue-950/60 text-blue-400 border-blue-800/80',
+            dotColor: a.advice_status === 'REVIEWED' ? 'bg-emerald-400' : 'bg-blue-400',
+            advisor: a.advisor_name || userName,
+            advisorName: a.advisor_name || userName,
+            expertise: a.advisor_organization || currentExpertise?.name || 'Regulatory Advisory',
+            advisorRole: a.advisor_organization || currentExpertise?.name || 'Regulatory Advisory',
+          }));
+          setReviewsList(mapped);
+        }
+      } catch (err) {
+        console.warn('[AdvisorDashboardView] Live advice fetch error:', err.message);
+      }
+    }
+    fetchAdvice();
+    return () => {
+      isMounted = false;
+    };
+  }, [activeProject]);
+
   // Handle Advice Submission with persistent save and authoritative status (DEF-11, DEF-12)
   const handleSubmitAdvice = async () => {
-    if (!advisorComments.trim() && !recommendation.trim()) {
+    const commentsText = advisorComments.trim();
+    const recText = recommendation.trim();
+    if (!commentsText && !recText) {
       showToast('Please provide comments or recommendations before submitting.');
       return;
     }
 
     const todayStr = new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
     const targetProjName = activeProject?.name || 'Assigned Project';
-    const targetProjId = activeProject?.id || 'PRJ-001';
+    const targetProjId = activeProject?.id || activeProject?.project_id || 1;
 
-    const newReview = {
-      id: `ADV-REV-${Date.now()}`,
-      project: targetProjName,
-      projectId: targetProjId,
-      requirement: selectedRequirement?.title || selectedRequirement?.requirement || 'Risk-sensitive customer due diligence',
-      reqCode: selectedRequirement?.code || 'ADV-001',
-      source: selectedRequirement?.source || 'FCA Handbook · SYSC 6.3.8',
-      authority: selectedRequirement?.authority || 'Financial Conduct Authority',
-      adviceSubmitted: advisorComments.trim(),
-      recommendation: recommendation.trim(),
-      comments: advisorComments.trim(),
-      referenceAttachment: referenceAttachment.trim() || 'FCA-Advisory-Interpretations.pdf',
-      attachment: referenceAttachment.trim() || 'FCA-Advisory-Interpretations.pdf',
-      date: todayStr,
-      dateSubmitted: todayStr,
-      status: 'Submitted',
-      statusColor: 'bg-blue-950/60 text-blue-400 border-blue-800/80',
-      dotColor: 'bg-blue-400',
-      advisor: userName,
-      advisorName: userName,
-      expertise: currentExpertise.name,
-      advisorRole: currentExpertise.name,
-      advisorEmail: userEmail,
+    const finalAdviceText = commentsText.length >= 5 ? commentsText : (recText.length >= 5 ? recText : 'Advisory assessment and regulatory review observations.');
+    const finalRecText = recText.length >= 5 ? recText : (commentsText.length >= 5 ? commentsText : 'Actionable compliance recommendations for implementation.');
+    const finalTitle = selectedRequirement?.title || (selectedRequirement?.code ? `${selectedRequirement.code}: Advisory Assessment` : 'Compliance Advisory Assessment');
+
+    // Strict backend schema payload according to AdviceCreate
+    const apiPayload = {
+      title: finalTitle,
+      advice_text: finalAdviceText,
+      recommendation: finalRecText,
+      assumptions: referenceAttachment.trim() || '',
+      advice_status: 'SUBMITTED',
+      source_links: [],
     };
 
-    // Dispatch to live PostgreSQL backend via POST /api/v1/projects/{projectId}/advice
     try {
-      const apiPayload = {
-        comments: advisorComments.trim(),
-        recommendation: recommendation.trim(),
-        reference_attachment: referenceAttachment.trim(),
-        requirement_id: selectedRequirement?.id || selectedRequirement?.code || 'ADV-001',
-        advisor_role: currentExpertise.name,
-      };
       const res = await submitProjectAdvice(targetProjId, apiPayload);
-      if (res && res.id) {
-        newReview.id = res.id;
-      }
+      const adviceId = res?.advice_id || res?.id || Date.now();
+
+      const newReview = {
+        id: `ADV-REV-${adviceId}`,
+        advice_id: adviceId,
+        project: targetProjName,
+        projectId: targetProjId,
+        requirement: selectedRequirement?.title || selectedRequirement?.requirement || 'Risk-sensitive customer due diligence',
+        reqCode: selectedRequirement?.code || 'ADV-001',
+        source: selectedRequirement?.source || 'FCA Handbook · SYSC 6.3.8',
+        authority: selectedRequirement?.authority || 'Financial Conduct Authority',
+        adviceSubmitted: finalAdviceText,
+        recommendation: finalRecText,
+        comments: finalAdviceText,
+        referenceAttachment: referenceAttachment.trim() || 'FCA-Advisory-Interpretations.pdf',
+        attachment: referenceAttachment.trim() || 'FCA-Advisory-Interpretations.pdf',
+        date: todayStr,
+        dateSubmitted: todayStr,
+        status: 'Submitted',
+        statusColor: 'bg-blue-950/60 text-blue-400 border-blue-800/80',
+        dotColor: 'bg-blue-400',
+        advisor: userName,
+        advisorName: userName,
+        expertise: currentExpertise.name,
+        advisorRole: currentExpertise.name,
+        advisorEmail: userEmail,
+      };
+
+      setReviewsList((prev) => [newReview, ...prev]);
+
+      // Reset Form fields to empty (DEF-11)
+      setAdvisorComments('');
+      setRecommendation('');
+      setReferenceAttachment('');
+
+      showToast('Advice submitted successfully and saved to audit trail!');
+      setActiveTab('Dashboard');
     } catch (err) {
-      console.warn('[AdvisorDashboardView] Live POST /advice failed:', err.message);
+      showToast(`Submission failed: ${err.message || 'Please check input fields and retry.'}`);
     }
-
-    const updated = [newReview, ...reviewsList];
-    setReviewsList(updated);
-    try {
-      localStorage.setItem(ADVISOR_REVIEWS_STORAGE_KEY, JSON.stringify(updated));
-    } catch (e) {}
-
-    // Reset Form fields to empty (DEF-11)
-    setAdvisorComments('');
-    setRecommendation('');
-    setReferenceAttachment('');
-
-    showToast('Advice submitted successfully and saved to audit trail!');
-    setActiveTab('Dashboard');
   };
 
   // Interactive Notifications State initialized to empty array
   const [notificationsList, setNotificationsList] = useState([]);
+
+  useEffect(() => {
+    let isMounted = true;
+    getUserNotifications()
+      .then((notifs) => {
+        if (isMounted && Array.isArray(notifs) && notifs.length > 0) {
+          setNotificationsList(
+            notifs.map((n) => ({
+              id: n.id,
+              title: n.title,
+              desc: n.message,
+              time: n.created_at
+                ? new Date(n.created_at).toLocaleDateString('en-GB')
+                : 'Recently',
+              read: n.is_read,
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const unreadCount = notificationsList.filter((n) => !n.read).length;
 

@@ -1,12 +1,55 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Check, ChevronDown, Calendar } from 'lucide-react';
+import { recordDecision, getProjectDecisions } from '../services/decisionService';
 
-export default function AdviceDecisionsView({ isDarkMode }) {
+export default function AdviceDecisionsView({ isDarkMode, activeProject }) {
   const [selectedRecord, setSelectedRecord] = useState(null);
   const [toastMsg, setToastMsg] = useState(null);
 
+  const targetProjectId = activeProject?.id || activeProject?.project_id || 1;
+
   // Decision Records initialized to empty array (ready for live backend records)
   const [records, setRecords] = useState([]);
+
+  // Live decisions fetch from backend PostgreSQL database
+  useEffect(() => {
+    let isMounted = true;
+    async function fetchDecisions() {
+      try {
+        const liveDecisions = await getProjectDecisions(targetProjectId);
+        if (isMounted && Array.isArray(liveDecisions) && liveDecisions.length > 0) {
+          const mapped = liveDecisions.map((d) => {
+            const isClosed = d.decision_type === 'ACCEPT' || d.decision_type === 'REJECT';
+            return {
+              id: `DEC-${d.decision_id}`,
+              decision_id: d.decision_id,
+              requirement: d.decision_rationale
+                ? d.decision_rationale.slice(0, 40) + '...'
+                : 'Compliance Decision',
+              citation: 'Binding Governance Decision',
+              advisor: d.decider_name || 'Project Owner',
+              adviceStatus: 'ACCEPTED',
+              adviceStatusType: 'emerald',
+              decisionStatus: isClosed ? 'Closed' : 'Open',
+              decisionStatusType: isClosed ? 'closed' : 'open',
+              decisionRationale: d.decision_rationale,
+              followUpAction: d.follow_up_action || '',
+              actionOwner: d.decider_name || 'Project Owner',
+              dueDate: d.created_at ? new Date(d.created_at).toLocaleDateString('en-GB') : '',
+              lastUpdated: d.created_at ? new Date(d.created_at).toLocaleDateString('en-GB') : 'Recently',
+            };
+          });
+          setRecords(mapped);
+        }
+      } catch (err) {
+        console.warn('[AdviceDecisionsView] Failed to fetch live decisions:', err.message);
+      }
+    }
+    fetchDecisions();
+    return () => {
+      isMounted = false;
+    };
+  }, [targetProjectId, activeProject]);
 
   // Form states for the detail view
   const [formData, setFormData] = useState({
@@ -29,35 +72,56 @@ export default function AdviceDecisionsView({ isDarkMode }) {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleRecordDecision = (e) => {
+  const handleRecordDecision = async (e) => {
     if (e) e.preventDefault();
     if (!selectedRecord) return;
 
-    const newDecisionStatus = formData.builderDecision;
-    const newDecisionType =
-      newDecisionStatus === 'Open' ? 'open' : 'closed';
+    if (!formData.decisionRationale.trim() || formData.decisionRationale.trim().length < 5) {
+      setToastMsg('Decision rationale must be at least 5 characters long.');
+      setTimeout(() => setToastMsg(null), 3000);
+      return;
+    }
 
-    setRecords((prev) =>
-      prev.map((r) =>
-        r.id === selectedRecord.id
-          ? {
-              ...r,
-              decisionStatus: newDecisionStatus,
-              decisionStatusType: newDecisionType,
-              decisionRationale: formData.decisionRationale,
-              followUpAction: formData.followUpAction,
-              actionOwner: formData.actionOwner,
-              dueDate: formData.dueDate,
-            }
-          : r
-      )
-    );
+    let decisionType = 'ACCEPT';
+    const statusLower = formData.builderDecision.toLowerCase();
+    if (statusLower.includes('review')) decisionType = 'REVIEW_REQUIRED';
+    else if (statusLower.includes('defer') || statusLower.includes('follow')) decisionType = 'FOLLOW_UP_REQUIRED';
+    else if (statusLower.includes('reject')) decisionType = 'REJECT';
+    else decisionType = 'ACCEPT';
 
-    setToastMsg(`Decision recorded for ${selectedRecord.id} · ${selectedRecord.requirement}`);
-    setTimeout(() => setToastMsg(null), 3000);
+    try {
+      await recordDecision(targetProjectId, {
+        decision_type: decisionType,
+        decision_rationale: formData.decisionRationale.trim(),
+        follow_up_action: formData.followUpAction.trim() || null,
+      });
 
-    // Return to the decisions list
-    setSelectedRecord(null);
+      const newDecisionStatus = formData.builderDecision;
+      const newDecisionType = newDecisionStatus === 'Open' ? 'open' : 'closed';
+
+      setRecords((prev) =>
+        prev.map((r) =>
+          r.id === selectedRecord.id
+            ? {
+                ...r,
+                decisionStatus: newDecisionStatus,
+                decisionStatusType: newDecisionType,
+                decisionRationale: formData.decisionRationale,
+                followUpAction: formData.followUpAction,
+                actionOwner: formData.actionOwner,
+                dueDate: formData.dueDate,
+              }
+            : r
+        )
+      );
+
+      setToastMsg(`Decision recorded and ratified in PostgreSQL for ${selectedRecord.id}`);
+      setTimeout(() => setToastMsg(null), 3000);
+      setSelectedRecord(null);
+    } catch (err) {
+      setToastMsg(`Failed to record decision: ${err.message}`);
+      setTimeout(() => setToastMsg(null), 4000);
+    }
   };
 
   // IF DETAIL VIEW IS SELECTED, RENDER FULL VIEW MATCHING media_1791739235781_5c0cd34f.png & media_1791739252730_5be21ee1.png

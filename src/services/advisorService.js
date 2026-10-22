@@ -51,6 +51,13 @@ export async function getProjectAdvice(projectId) {
 }
 
 /**
+ * Updates advisory review or status transition via PATCH /projects/{projectId}/advice/{adviceId}
+ */
+export async function updateProjectAdvice(projectId, adviceId, payload) {
+  return await apiCall(`/projects/${projectId}/advice/${adviceId}`, 'PATCH', payload);
+}
+
+/**
  * Sends an invitation via POST /projects/{projectId}/advisor-invitations
  */
 export async function sendAdvisorInvitation(projectId, payload) {

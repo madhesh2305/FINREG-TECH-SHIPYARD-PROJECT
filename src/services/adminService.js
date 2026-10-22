@@ -24,3 +24,23 @@ export async function getAdminUsers() {
     return [];
   }
 }
+
+/**
+ * Updates a user account status (active/inactive) via PATCH /admin/users/{userId}/status
+ */
+export async function updateUserStatus(userId, isActive) {
+  return await apiCall(`/admin/users/${userId}/status`, 'PATCH', { is_active: isActive });
+}
+
+/**
+ * Retrieves platform-wide audit events via GET /admin/audit-events
+ */
+export async function getAdminAuditEvents(limit = 100) {
+  try {
+    const data = await apiCall(`/admin/audit-events?limit=${limit}`, 'GET');
+    return Array.isArray(data) ? data : [];
+  } catch (err) {
+    console.warn('[adminService] GET /admin/audit-events failed:', err.message);
+    return [];
+  }
+}

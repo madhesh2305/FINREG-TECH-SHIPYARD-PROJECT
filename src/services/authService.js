@@ -76,18 +76,25 @@ export async function registerUser({ name, email, password, organization = '', r
     organization: cleanOrg,
   });
 
-  const createdUser = res?.user || {
-    id: res?.id || res?.user_id || `usr_${Date.now()}`,
-    name: cleanName,
-    full_name: cleanName,
-    email: cleanEmail,
+  if (res && res.access_token) {
+    setToken(res.access_token);
+  }
+
+  const createdUser = {
+    id: res?.user_id || res?.id,
+    user_id: res?.user_id || res?.id,
+    name: res?.full_name || cleanName,
+    full_name: res?.full_name || cleanName,
+    email: res?.email || cleanEmail,
     organization: cleanOrg || 'Independent',
-    role: normalizedRole,
-    platform_role: normalizedRole,
+    role: res?.platform_role || normalizedRole,
+    platform_role: res?.platform_role || normalizedRole,
     created_at: new Date().toISOString(),
   };
 
-  return { success: true, user: createdUser };
+  localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(createdUser));
+
+  return { success: true, user: createdUser, access_token: res?.access_token };
 }
 
 /**
@@ -115,19 +122,23 @@ export async function loginUser(email, password) {
   setToken(token);
 
   let user = data.user;
+  if (!user && data.user_id) {
+    user = {
+      id: data.user_id,
+      user_id: data.user_id,
+      name: data.full_name || cleanEmail.split('@')[0],
+      full_name: data.full_name || cleanEmail.split('@')[0],
+      email: data.email || cleanEmail,
+      role: data.platform_role || 'BUILDER',
+      platform_role: data.platform_role || 'BUILDER',
+    };
+  }
+
   if (!user) {
     user = await getCurrentUser();
   }
 
   if (user) {
-    localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
-  } else {
-    user = {
-      name: cleanEmail.split('@')[0],
-      email: cleanEmail,
-      role: 'BUILDER',
-      platform_role: 'BUILDER',
-    };
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
   }
 
@@ -143,11 +154,12 @@ export async function resetPassword(email) {
     throw new Error('Please enter a valid email address.');
   }
 
-  await apiCall('/auth/password-reset-request', 'POST', { email: cleanEmail });
+  const res = await apiCall('/auth/password-reset-request', 'POST', { email: cleanEmail });
 
   return {
     success: true,
-    message: `Password reset instructions have been sent to ${cleanEmail}. Please check your inbox.`,
+    message: res?.message || `Password reset instructions have been sent to ${cleanEmail}. Please check your inbox.`,
+    ...res,
   };
 }
 
@@ -183,6 +195,7 @@ export async function getCurrentUser() {
  * Signs out the current user and clears session token & stored user state (DEF-03)
  */
 export function logoutUser() {
+  apiCall('/auth/logout', 'POST').catch(() => {});
   clearToken();
   try {
     localStorage.removeItem(CURRENT_USER_KEY);

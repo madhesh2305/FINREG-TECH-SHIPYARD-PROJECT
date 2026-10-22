@@ -1,13 +1,41 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowRight } from 'lucide-react';
+import { getProjectReadiness } from '../services/projectService';
 
-export default function ReadinessView({ isDarkMode, onOpenRelatedItem, items = [] }) {
-  // Empty default to be populated dynamically by backend / database
-  const readinessItems = items;
+export default function ReadinessView({ isDarkMode, onOpenRelatedItem, items = [], activeProject }) {
+  const [readinessData, setReadinessData] = useState(null);
+  const targetProjectId = activeProject?.id || activeProject?.project_id || 1;
 
-  const completedCount = readinessItems.filter(
-    (i) => i.statusType === 'emerald' || (i.status && i.status.toLowerCase() === 'completed')
-  ).length;
+  useEffect(() => {
+    let isMounted = true;
+    getProjectReadiness(targetProjectId)
+      .then((data) => {
+        if (isMounted && data) {
+          setReadinessData(data);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      isMounted = false;
+    };
+  }, [targetProjectId, activeProject]);
+
+  // Derived readiness items from live backend breakdown or props
+  const readinessItems =
+    items.length > 0
+      ? items
+      : readinessData?.breakdown?.map((b, idx) => ({
+          code: `READ-00${idx + 1}`,
+          title: `${b.category}: ${b.metric}`,
+          status: b.status === 'PASS' ? 'Completed' : b.status === 'ACTION_REQUIRED' ? 'Blocked' : 'Requires Review',
+          statusType: b.status === 'PASS' ? 'emerald' : b.status === 'ACTION_REQUIRED' ? 'rose' : 'amber',
+        })) || [];
+
+  const completedCount = readinessData?.completed_requirements !== undefined
+    ? readinessData.completed_requirements
+    : readinessItems.filter(
+        (i) => i.statusType === 'emerald' || (i.status && i.status.toLowerCase() === 'completed')
+      ).length;
 
   const openCount = readinessItems.filter(
     (i) => i.statusType === 'blue' || (i.status && i.status.toLowerCase() === 'open')
@@ -21,8 +49,16 @@ export default function ReadinessView({ isDarkMode, onOpenRelatedItem, items = [
     (i) => i.statusType === 'amber' || (i.status && i.status.toLowerCase().includes('review'))
   ).length;
 
-  const totalCount = readinessItems.length;
-  const progressPercent = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  const totalCount = readinessData?.total_requirements !== undefined
+    ? readinessData.total_requirements
+    : readinessItems.length;
+
+  const progressPercent =
+    readinessData?.readiness_percentage !== undefined
+      ? readinessData.readiness_percentage
+      : totalCount > 0
+      ? Math.round((completedCount / totalCount) * 100)
+      : 0;
 
   return (
     <div className="space-y-6 animate-fadeIn text-left relative">
