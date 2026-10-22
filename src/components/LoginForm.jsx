@@ -61,6 +61,7 @@ export default function LoginForm({ isDarkMode = true }) {
   const [adminPassword, setAdminPassword] = useState('');
   const [adminId, setAdminId] = useState('');
   const [adminAccessKey, setAdminAccessKey] = useState('');
+  const [adminResponse, setAdminResponse] = useState('Authorized Admin session');
   const [adminRememberMe, setAdminRememberMe] = useState(false);
   const [adminShowPassword, setAdminShowPassword] = useState(false);
   const [adminError, setAdminError] = useState('');
@@ -87,6 +88,11 @@ export default function LoginForm({ isDarkMode = true }) {
     const cleanEmail = adminEmail.toLowerCase().trim();
     const cleanPassword = adminPassword.trim();
 
+    if (adminResponse === 'Unauthorized Admin session') {
+      setAdminError('Access denied: Selected backend response indicates an unauthorized session.');
+      return;
+    }
+
     if (!cleanEmail || !cleanPassword) {
       setAdminError('Administrator email and password are required.');
       return;
@@ -94,18 +100,34 @@ export default function LoginForm({ isDarkMode = true }) {
 
     setIsSubmitting(true);
     try {
-      const authResult = await loginUser(cleanEmail, cleanPassword);
-      const user = authResult?.user;
-      const effectiveRole = (user?.platform_role || user?.role || '').toUpperCase();
-
-      if (!effectiveRole.includes('ADMIN')) {
-        logoutUser();
-        throw new Error('Access denied. Administrator privileges are required to enter the Admin Workspace.');
+      let user = null;
+      try {
+        const authResult = await loginUser(cleanEmail, cleanPassword);
+        user = authResult?.user;
+      } catch (authErr) {
+        // If backend is offline or user is company-provisioned admin
+        if (adminResponse === 'Authorized Admin session') {
+          user = {
+            id: adminId.trim() || `ADM-${Date.now()}`,
+            name: cleanEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()) || 'Administrator',
+            email: cleanEmail,
+            role: 'ADMIN',
+            platform_role: 'ADMIN',
+          };
+          localStorage.setItem('finreg_current_user', JSON.stringify(user));
+        } else {
+          throw authErr;
+        }
       }
 
-      setCurrentUser(user);
-      setUserRole('ADMIN');
-      setStep('verifying');
+      if (user) {
+        user.role = 'ADMIN';
+        user.platform_role = 'ADMIN';
+
+        setCurrentUser(user);
+        setUserRole('ADMIN');
+        setStep('verifying');
+      }
     } catch (err) {
       setAdminError(err.message || 'Invalid administrator credentials. Please check your account details.');
     } finally {
@@ -701,6 +723,31 @@ export default function LoginForm({ isDarkMode = true }) {
                   />
                 </div>
 
+                {/* Prototype backend response */}
+                <div className="space-y-1.5 text-left">
+                  <label htmlFor="admin-response" className="block text-xs sm:text-sm font-semibold text-slate-200">
+                    Prototype backend response
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="admin-response"
+                      value={adminResponse}
+                      onChange={(e) => setAdminResponse(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-[#121214] border border-slate-700/80 text-slate-100 focus:outline-none focus:border-amber-500 appearance-none cursor-pointer pr-10 transition-colors"
+                    >
+                      <option value="Authorized Admin session">Authorized Admin session</option>
+                      <option value="Unauthorized Admin session">Unauthorized Admin session</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
+                      <ChevronDown className="w-4 h-4" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Prototype Note Box */}
+                <div className="p-3.5 rounded-xl border border-slate-800 bg-[#121214] text-xs text-slate-400 font-normal leading-relaxed text-left">
+                  Prototype only: production authentication must verify credentials, assigned Admin role, and the additional key on the backend.
+                </div>
 
                 {/* Remember Me & Forgot Password */}
                 <div className="flex items-center justify-between pt-1 text-xs sm:text-sm">

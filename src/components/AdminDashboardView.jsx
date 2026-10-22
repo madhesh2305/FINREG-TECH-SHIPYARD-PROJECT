@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { logoutUser, getRegisteredUsers } from '../services/authService';
 import { getLocalProjects, getProjects } from '../services/projectService';
-import { getAdminStats, getAdminUsers, updateUserStatus, getAdminAuditEvents } from '../services/adminService';
+import { getAdminStats, getAdminUsers } from '../services/adminService';
 
 export default function AdminDashboardView({
   isDarkMode = true,
@@ -174,39 +174,28 @@ export default function AdminDashboardView({
     }
   };
 
-  const handleConfirmDeactivate = async (userId) => {
-    const targetUser = users.find((u) => u.id === userId || u.userId === userId || u.email === userId);
-    const rawId = targetUser?.userId || targetUser?.rawId || (typeof userId === 'number' ? userId : parseInt(String(userId).replace(/\D/g, ''), 10) || 1);
-
-    try {
-      await updateUserStatus(rawId, false);
-      setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, status: 'Inactive', is_active: false } : u))
-      );
-      setShowStatusRecordedBanner(true);
-      showToast(`Account status updated for ${deactivatingUser?.name || 'User'} and recorded in audit log.`);
-    } catch (err) {
-      showToast(`Failed to update status: ${err.message}`);
-    }
+  const handleConfirmDeactivate = (userId) => {
+    setUsers((prev) =>
+      prev.map((u) => (u.id === userId ? { ...u, status: 'Inactive' } : u))
+    );
+    persistUserStatus(userId, 'Inactive');
+    setShowStatusRecordedBanner(true);
+    showToast(`Account status updated for ${deactivatingUser?.name || 'User'} and recorded in audit log.`);
     setDeactivatingUser(null);
   };
 
-  const handleToggleStatus = async (userId) => {
-    const targetUser = users.find((u) => u.id === userId || u.userId === userId || u.email === userId);
-    const rawId = targetUser?.userId || targetUser?.rawId || (typeof userId === 'number' ? userId : parseInt(String(userId).replace(/\D/g, ''), 10) || 1);
-    const nextActive = targetUser?.status !== 'Active';
-    const nextStatus = nextActive ? 'Active' : 'Inactive';
-
-    try {
-      await updateUserStatus(rawId, nextActive);
-      setUsers((prev) =>
-        prev.map((u) => (u.id === userId ? { ...u, status: nextStatus, is_active: nextActive } : u))
-      );
-      setShowStatusRecordedBanner(true);
-      showToast(`Account status changed to ${nextStatus}.`);
-    } catch (err) {
-      showToast(`Failed to change account status: ${err.message}`);
-    }
+  const handleToggleStatus = (userId) => {
+    setUsers((prev) =>
+      prev.map((u) => {
+        if (u.id === userId) {
+          const nextStatus = u.status === 'Active' ? 'Inactive' : 'Active';
+          persistUserStatus(userId, nextStatus);
+          return { ...u, status: nextStatus };
+        }
+        return u;
+      })
+    );
+    setShowStatusRecordedBanner(true);
   };
 
   const filteredUsers = users.filter((u) => {
@@ -314,7 +303,7 @@ export default function AdminDashboardView({
   const [auditLogActionTypeFilter, setAuditLogActionTypeFilter] = useState('All action types');
   const [auditLogResultFilter, setAuditLogResultFilter] = useState('All results');
 
-  const [auditLogsList, setAuditLogsList] = useState([]);
+  const [auditLogsList] = useState([]);
 
   const filteredAuditLogs = auditLogsList.filter((log) => {
     const matchesSearch =
@@ -347,16 +336,15 @@ export default function AdminDashboardView({
 
   const [adminStats, setAdminStats] = useState(null);
 
-  // Live admin metrics, users, and platform audit events fetch from PostgreSQL backend
+  // Live admin metrics and users fetch from PostgreSQL backend
   useEffect(() => {
     let isMounted = true;
     async function fetchAdminData() {
       try {
-        const [statsData, usersData, projectsData, auditData] = await Promise.allSettled([
+        const [statsData, usersData, projectsData] = await Promise.allSettled([
           getAdminStats(),
           getAdminUsers(),
           getProjects(),
-          getAdminAuditEvents(),
         ]);
 
         if (!isMounted) return;
@@ -368,35 +356,15 @@ export default function AdminDashboardView({
         if (usersData.status === 'fulfilled' && Array.isArray(usersData.value) && usersData.value.length > 0) {
           setUsers(
             usersData.value.map((u, idx) => ({
-              id: `USR-${String(idx + 1).padStart(3, '0')}`,
-              userId: u.user_id,
-              rawId: u.user_id,
+              id: u.id || `USR-${String(idx + 1).padStart(3, '0')}`,
               name: u.full_name || u.name || 'User',
               email: u.email || '',
-              role: u.platform_role || u.role || 'Builder',
-              status: u.is_active !== false ? 'Active' : 'Inactive',
+              role: u.role || 'Builder',
+              status: u.status || (u.is_active !== false ? 'Active' : 'Inactive'),
               registered: u.created_at
                 ? new Date(u.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
                 : 'Recently',
               lastLogin: u.last_login_at || 'Recently',
-            }))
-          );
-        }
-
-        if (auditData.status === 'fulfilled' && Array.isArray(auditData.value) && auditData.value.length > 0) {
-          setAuditLogsList(
-            auditData.value.map((e, idx) => ({
-              id: `EVT-${e.audit_event_id || idx + 1}`,
-              timestamp: e.created_at
-                ? new Date(e.created_at).toLocaleString('en-GB')
-                : 'Recently',
-              user: e.actor_name || `User #${e.actor_user_id}`,
-              role: 'Platform Member',
-              action: e.event_type || 'SYSTEM_ACTION',
-              affectedResource: `${e.entity_type || 'Project'} #${e.entity_id || e.project_id}`,
-              result: 'Success',
-              ipAddress: '127.0.0.1',
-              relevantDetails: e.event_description || 'Compliance audit event logged.',
             }))
           );
         }

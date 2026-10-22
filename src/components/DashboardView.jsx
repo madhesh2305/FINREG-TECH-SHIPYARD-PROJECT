@@ -2225,7 +2225,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
 
           {/* TAB: ADVISOR ADVICE VIEW (Matching uploaded image media_1791737929366_a3b12230.png) */}
           {activeTab === 'Advisor Advice' && (
-            <AdvisorAdviceView isDarkMode={isDarkMode} activeProject={selectedProject || allProjects[0] || null} />
+            <AdvisorAdviceView isDarkMode={isDarkMode} />
           )}
 
           {/* TAB: REGULATORY REQUIREMENTS / REGULATORY SUPPORT VIEW */}
@@ -2235,7 +2235,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
 
           {/* TAB: ADVICE & DECISIONS VIEW (Matching media_1791738876275_cf9f871c.png) */}
           {activeTab === 'Advice & Decisions' && (
-            <AdviceDecisionsView isDarkMode={isDarkMode} activeProject={selectedProject || allProjects[0] || null} />
+            <AdviceDecisionsView isDarkMode={isDarkMode} />
           )}
 
           {/* TAB: AI / RAG FINDINGS VIEW (Matching uploaded images) */}
@@ -2247,7 +2247,6 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
           {activeTab === 'Readiness' && (
             <ReadinessView
               isDarkMode={isDarkMode}
-              activeProject={selectedProject || allProjects[0] || null}
               onOpenRelatedItem={(item) => {
                 const reqId = (item && item.reqId) || (item && item.code && item.code.startsWith('REQ-') ? item.code : 'REQ-142');
                 setTargetRequirementId(reqId);
