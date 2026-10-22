@@ -56,6 +56,9 @@ export async function apiCall(endpoint, method = 'GET', body = null) {
     return await response.json();
   } catch (err) {
     // Re-throw network or API errors for component error handling
+    if (err.name === 'TypeError' && (err.message === 'Failed to fetch' || err.message?.includes('fetch'))) {
+      throw new Error(`Cannot connect to backend API at ${BASE_URL}. Please ensure the backend server is running on port 8000.`);
+    }
     console.warn(`[API Client Warning] Call to ${endpoint} failed:`, err.message);
     throw err;
   }
