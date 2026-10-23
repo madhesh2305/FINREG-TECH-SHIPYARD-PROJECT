@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { getProjects, getProjectDetails, createProject } from '../services/projectService';
+import React, { useState, useEffect, useRef } from 'react';
+import { getProjects, getProjectDetails, createProject, getProjectAttachments, uploadProjectAttachment } from '../services/projectService';
 import { getCurrentUser, logoutUser } from '../services/authService';
 import { getAdvisors } from '../services/advisorService';
 import AdvisorsExpertsView from './AdvisorsExpertsView';
@@ -133,34 +133,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   const [toastMessage, setToastMessage] = useState(null);
 
   // Projects list initialized to empty array (ready for live backend API data)
-  const SEEDED_BUILDER_PROJECTS = [];
-
-  // Helper to load projects scoped to authenticated user
-  const loadScopedProjects = () => {
-    try {
-      const email = (currentUser?.email || '').toLowerCase().trim();
-      const name = (currentUser?.name || '').toLowerCase().trim();
-      const raw = localStorage.getItem('finreg_projects');
-      const local = raw ? JSON.parse(raw) : [];
-
-      if (!email && !name) return local;
-
-      // Scoping: match if project ownerEmail matches currentUser email OR owner name matches
-      const userProjects = local.filter((p) => {
-        const pEmail = (p.ownerEmail || '').toLowerCase().trim();
-        const pOwner = (p.owner || '').toLowerCase().trim();
-        const matchesEmail = email && pEmail && pEmail === email;
-        const matchesName = name && pOwner && pOwner === name;
-        return matchesEmail || matchesName;
-      });
-
-      return userProjects.length > 0 ? userProjects : local;
-    } catch (e) {
-      return [];
-    }
-  };
-
-  const [allProjects, setAllProjects] = useState(loadScopedProjects);
+  const [allProjects, setAllProjects] = useState([]);
 
   // Load user & live projects from backend API on mount
   useEffect(() => {
@@ -168,18 +141,12 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     async function loadBackendData() {
       try {
         const liveProjects = await getProjects();
-        if (isMounted && Array.isArray(liveProjects) && liveProjects.length > 0) {
-          const email = (currentUser?.email || '').toLowerCase().trim();
-          const name = (currentUser?.name || '').toLowerCase().trim();
-          const scoped = liveProjects.filter(
-            (p) =>
-              (p.ownerEmail && p.ownerEmail.toLowerCase() === email) ||
-              (p.owner && p.owner.toLowerCase() === name)
-          );
-          if (scoped.length > 0) setAllProjects(scoped);
+        if (isMounted) {
+          setAllProjects(Array.isArray(liveProjects) ? liveProjects : []);
         }
       } catch (err) {
-        console.warn('[DashboardView] API load warning, using local scoped projects:', err);
+        console.warn('[DashboardView] API load warning:', err.message);
+        if (isMounted) setAllProjects([]);
       }
     }
     loadBackendData();
@@ -194,10 +161,64 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     setProjectSubTab('Overview');
     setActiveTab('Project Details');
     try {
-      const details = await getProjectDetails(project.id);
+      const details = await getProjectDetails(project.id || project.project_id);
       if (details) setSelectedProject(details);
     } catch (err) {
       console.warn('[DashboardView] getProjectDetails warning:', err);
+      setToastMessage(`Unable to access project details: ${err.message || 'Access restricted'}`);
+      setTimeout(() => setToastMessage(null), 4000);
+    }
+  };
+
+  // Real Project Attachments (PDF uploads via backend /projects/{projectId}/attachments)
+  const [projectAttachments, setProjectAttachments] = useState([]);
+  const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadAttachments() {
+      const targetProj = selectedProject || allProjects[0];
+      const pid = targetProj?.id || targetProj?.project_id;
+      if (!pid) {
+        if (isMounted) setProjectAttachments([]);
+        return;
+      }
+      try {
+        const list = await getProjectAttachments(pid);
+        if (isMounted) setProjectAttachments(Array.isArray(list) ? list : []);
+      } catch (e) {
+        if (isMounted) setProjectAttachments([]);
+      }
+    }
+    loadAttachments();
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedProject, allProjects, projectSubTab]);
+
+  const handleDocUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const targetProj = selectedProject || allProjects[0];
+    const pid = targetProj?.id || targetProj?.project_id;
+    if (!pid) {
+      setToastMessage('Please select a project before uploading documents.');
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+    setIsUploadingDoc(true);
+    try {
+      await uploadProjectAttachment(pid, file, 'ADVISORY_REFERENCE');
+      setToastMessage(`Document "${file.name}" uploaded successfully!`);
+      const updated = await getProjectAttachments(pid);
+      setProjectAttachments(Array.isArray(updated) ? updated : []);
+    } catch (err) {
+      setToastMessage(`Upload failed: ${err.message}`);
+    } finally {
+      setIsUploadingDoc(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      setTimeout(() => setToastMessage(null), 4000);
     }
   };
 
@@ -2143,35 +2164,70 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
               {/* Sub-Tab 3: DOCUMENTS TAB CONTENT (Matching media_1791213224180.png) */}
               {projectSubTab === 'Documents' && (
                 <div className="rounded-2xl border border-slate-800 bg-[#161619] p-6 sm:p-8 space-y-6 shadow-lg animate-fadeIn text-left pt-4">
-                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100 mb-6">
-                    Documents
-                  </h2>
+                  <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+                    <div>
+                      <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100">
+                        Project Documents &amp; Evidence
+                      </h2>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Authoritative PDF attachments, advisory references, and regulatory evidence files.
+                      </p>
+                    </div>
+                    <div>
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        ref={fileInputRef}
+                        onChange={handleDocUpload}
+                        className="hidden"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={isUploadingDoc}
+                        className="px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-xs sm:text-sm font-bold flex items-center gap-2 transition-all shadow-md active:scale-95 disabled:opacity-50 cursor-pointer"
+                      >
+                        <PlusCircle className="w-4 h-4" />
+                        <span>{isUploadingDoc ? 'Uploading PDF...' : 'Upload PDF Document'}</span>
+                      </button>
+                    </div>
+                  </div>
 
                   <div className="divide-y divide-slate-800/80">
-                    {Array.isArray(currentProject?.documents) && currentProject.documents.length > 0 ? (
-                      currentProject.documents.map((doc, idx) => (
-                        <div key={idx} className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                    {projectAttachments.length > 0 ? (
+                      projectAttachments.map((doc, idx) => (
+                        <div key={doc.attachment_id || idx} className="py-4 sm:py-5 flex items-center justify-between gap-4">
                           <div className="flex items-center gap-4 sm:gap-6">
-                            <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
-                              {doc.type || 'DOCUMENT'}
+                            <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-24 sm:w-28 shrink-0">
+                              {doc.category || 'PDF DOC'}
                             </span>
-                            <span className="font-bold text-slate-100 text-sm sm:text-base">
-                              {doc.name || doc.title}
-                            </span>
+                            <div>
+                              <span className="font-bold text-slate-100 text-sm sm:text-base block">
+                                {doc.original_filename || doc.name || 'Document'}
+                              </span>
+                              <span className="text-[11px] text-slate-500 font-mono">
+                                {doc.file_size ? `${(doc.file_size / 1024).toFixed(1)} KB · ` : ''}{doc.created_at ? new Date(doc.created_at).toLocaleDateString('en-GB') : 'Verified attachment'}
+                              </span>
+                            </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => setToastMessage(`Opening ${doc.name || doc.title}...`)}
-                            className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                          <a
+                            href={`http://localhost:8000/api/v1/projects/${currentProject?.id || currentProject?.project_id || 1}/attachments/${doc.attachment_id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-slate-400 hover:text-amber-300 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
                           >
-                            <span>View</span>
+                            <span>Download</span>
                             <ArrowRight className="w-4 h-4" />
-                          </button>
+                          </a>
                         </div>
                       ))
                     ) : (
-                      <div className="py-8 text-center text-slate-500 text-sm">
-                        No documents uploaded for this project yet. Uploaded policies, evidence matrices, and source files will appear here.
+                      <div className="py-12 text-center text-slate-500 text-sm">
+                        <Folder className="w-10 h-10 text-slate-600 mx-auto mb-3" />
+                        <p className="font-semibold text-slate-300">No documents uploaded for this project yet</p>
+                        <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                          Upload compliance policies, regulatory reference sheets, or advisory matrices in PDF format above.
+                        </p>
                       </div>
                     )}
                   </div>
@@ -2225,7 +2281,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
 
           {/* TAB: ADVISOR ADVICE VIEW (Matching uploaded image media_1791737929366_a3b12230.png) */}
           {activeTab === 'Advisor Advice' && (
-            <AdvisorAdviceView isDarkMode={isDarkMode} />
+            <AdvisorAdviceView isDarkMode={isDarkMode} activeProject={currentProject} />
           )}
 
           {/* TAB: REGULATORY REQUIREMENTS / REGULATORY SUPPORT VIEW */}
@@ -2235,7 +2291,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
 
           {/* TAB: ADVICE & DECISIONS VIEW (Matching media_1791738876275_cf9f871c.png) */}
           {activeTab === 'Advice & Decisions' && (
-            <AdviceDecisionsView isDarkMode={isDarkMode} />
+            <AdviceDecisionsView isDarkMode={isDarkMode} activeProject={currentProject} />
           )}
 
           {/* TAB: AI / RAG FINDINGS VIEW (Matching uploaded images) */}

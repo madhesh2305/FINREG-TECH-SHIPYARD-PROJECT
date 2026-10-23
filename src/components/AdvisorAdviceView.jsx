@@ -1,87 +1,75 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Check, CheckCircle2 } from 'lucide-react';
+import { getProjectAdvice, updateProjectAdvice } from '../services/advisorService';
 
-const ADVISOR_REVIEWS_STORAGE_KEY = 'finreg_advisor_reviews';
-
-// Advisor Advice list initialized to empty array (ready for live backend advice data)
-const DEFAULT_ADVICE = [];
-
-export default function AdvisorAdviceView({ isDarkMode }) {
+export default function AdvisorAdviceView({ isDarkMode, activeProject }) {
   const [selectedAdvice, setSelectedAdvice] = useState(null);
   const [toastMsg, setToastMsg] = useState(null);
-
-  // Dynamic advice loading from local storage / API with strict mock data purging
-  const loadDynamicAdvice = () => {
-    try {
-      const raw = localStorage.getItem(ADVISOR_REVIEWS_STORAGE_KEY);
-      const saved = raw ? JSON.parse(raw) : [];
-      if (Array.isArray(saved) && saved.length > 0) {
-        // Exclude all mock / prototype entries (including REV-001, REV-002, KYC Onboarding, and fallback items)
-        const clean = saved.filter(
-          (r) =>
-            r &&
-            typeof r === 'object' &&
-            r.id &&
-            r.id.startsWith('ADV-REV-') &&
-            !r.id.startsWith('REV-') &&
-            !r.id.startsWith('ADV-00') &&
-            !r.id.includes('MOCK') &&
-            r.project !== 'ABC Shield' &&
-            r.project !== 'KYC Onboarding Controls' &&
-            !r.advisor?.includes('Maya Chen') &&
-            !r.requirement?.toLowerCase().includes('identity verification') &&
-            !r.requirement?.toLowerCase().includes('cdd evidence') &&
-            !r.adviceSubmitted?.toLowerCase().includes('contractual agreement') &&
-            r.date !== '09 Oct 2026' &&
-            r.date !== '12 Oct 2026' &&
-            r.date !== '14 Oct 2026'
-        );
-
-        // Permanently purge any lingering mock records from localStorage
-        try {
-          localStorage.setItem(ADVISOR_REVIEWS_STORAGE_KEY, JSON.stringify(clean));
-        } catch (e) {}
-
-        return clean.map((r, idx) => ({
-          id: r.id || `ADV-SUB-${idx + 1}`,
-          advisor: r.advisor || r.advisorName || 'Advisor',
-          expertise: r.expertise || r.advisorRole || 'Regulatory Advisory',
-          requirement: r.requirement || 'Requirement Review',
-          project: r.project || r.projectName || 'Project',
-          source: r.source || 'Regulatory Standard',
-          authority: r.authority || 'Supervisory Authority',
-          adviceSummary: (r.adviceSubmitted || r.recommendation || '').slice(0, 42) + '...',
-          recommendation: r.recommendation || r.adviceSubmitted || '',
-          comments: r.adviceSubmitted || r.comments || '',
-          attachment: r.referenceAttachment || r.attachment || 'Advisory-Notes.pdf',
-          dateSubmitted: r.date || r.dateSubmitted || 'Recently',
-          status: r.status === 'Submitted' ? 'Pending Review' : (r.status || 'Pending Review'),
-          statusBadge: r.status === 'Accepted'
-            ? 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400'
-            : 'border-amber-800/80 bg-amber-950/60 text-amber-400',
-          dotColor: r.status === 'Accepted' ? 'bg-emerald-500' : 'bg-amber-500',
-        }));
-      }
-    } catch (e) {}
-    return [];
-  };
-
-  const [adviceList, setAdviceList] = useState(loadDynamicAdvice);
+  const [adviceList, setAdviceList] = useState([]);
 
   useEffect(() => {
-    // Purge mock records and re-sync on mount
-    setAdviceList(loadDynamicAdvice());
-
-    const handleStorageChange = () => {
-      setAdviceList(loadDynamicAdvice());
+    let isMounted = true;
+    async function loadAdvice() {
+      const pid = activeProject?.id || activeProject?.project_id || 1;
+      try {
+        const data = await getProjectAdvice(pid);
+        if (isMounted) {
+          if (Array.isArray(data)) {
+            setAdviceList(
+              data.map((r, idx) => ({
+                id: `ADV-${r.advice_id || idx + 1}`,
+                advice_id: r.advice_id,
+                advisor: r.advisor_name || 'Advisor',
+                expertise: r.advisor_organization || 'Regulatory Advisory',
+                requirement: r.title || 'Requirement Review',
+                project: activeProject?.name || `Project ${r.project_id}`,
+                source: r.source_links?.[0]?.source_title || 'Regulatory Standard',
+                authority: 'Supervisory Authority',
+                adviceSummary: (r.advice_text || r.recommendation || '').slice(0, 42) + '...',
+                recommendation: r.recommendation || '',
+                comments: r.advice_text || '',
+                attachment: r.assumptions || 'Advisory-Notes.pdf',
+                dateSubmitted: r.submitted_at
+                  ? new Date(r.submitted_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                  : 'Recently',
+                status: r.display_status || (r.advice_status === 'REVIEWED' ? 'Accepted' : 'Pending Review'),
+                statusBadge:
+                  r.advice_status === 'REVIEWED'
+                    ? 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400'
+                    : 'border-amber-800/80 bg-amber-950/60 text-amber-400',
+                dotColor: r.advice_status === 'REVIEWED' ? 'bg-emerald-500' : 'bg-amber-500',
+              }))
+            );
+          } else {
+            setAdviceList([]);
+          }
+        }
+      } catch (err) {
+        console.warn('[AdvisorAdviceView] Failed to fetch live advice:', err.message);
+        if (isMounted) setAdviceList([]);
+      }
+    }
+    loadAdvice();
+    return () => {
+      isMounted = false;
     };
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
-  }, []);
+  }, [activeProject]);
 
-  const handleUpdateStatus = (id, newStatus) => {
-    setAdviceList((prev) => {
-      const updated = prev.map((item) =>
+  const handleUpdateStatus = async (id, newStatus) => {
+    const targetItem = adviceList.find((a) => a.id === id);
+    const pid = activeProject?.id || activeProject?.project_id || 1;
+    const backendStatus = newStatus === 'Accepted' ? 'REVIEWED' : 'SUBMITTED';
+
+    if (targetItem?.advice_id) {
+      try {
+        await updateProjectAdvice(pid, targetItem.advice_id, { advice_status: backendStatus });
+      } catch (e) {
+        console.warn('[AdvisorAdviceView] Backend status update failed:', e.message);
+      }
+    }
+
+    setAdviceList((prev) =>
+      prev.map((item) =>
         item.id === id
           ? {
               ...item,
@@ -93,19 +81,8 @@ export default function AdvisorAdviceView({ isDarkMode }) {
               dotColor: newStatus === 'Accepted' ? 'bg-emerald-500' : 'bg-amber-500',
             }
           : item
-      );
-
-      try {
-        const raw = localStorage.getItem(ADVISOR_REVIEWS_STORAGE_KEY);
-        if (raw) {
-          const list = JSON.parse(raw);
-          const next = list.map((r) => (r.id === id ? { ...r, status: newStatus } : r));
-          localStorage.setItem(ADVISOR_REVIEWS_STORAGE_KEY, JSON.stringify(next));
-        }
-      } catch (e) {}
-
-      return updated;
-    });
+      )
+    );
 
     if (selectedAdvice && selectedAdvice.id === id) {
       setSelectedAdvice((prev) => ({
@@ -120,6 +97,7 @@ export default function AdvisorAdviceView({ isDarkMode }) {
     }
 
     setToastMsg(`Status updated to "${newStatus}" for ${id}`);
+    setTimeout(() => setToastMsg(null), 3000);
   };
 
   // IF AN ADVICE IS SELECTED, RENDER FULL ADVICE DETAILS VIEW MATCHING media_1791738592058_78459760.png & media_1791738603315_95574266.png

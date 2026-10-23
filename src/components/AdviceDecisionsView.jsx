@@ -96,26 +96,34 @@ export default function AdviceDecisionsView({ isDarkMode, activeProject }) {
         follow_up_action: formData.followUpAction.trim() || null,
       });
 
-      const newDecisionStatus = formData.builderDecision;
-      const newDecisionType = newDecisionStatus === 'Open' ? 'open' : 'closed';
+      // Refresh data from live backend to ensure PostgreSQL persistence
+      const liveDecisions = await getProjectDecisions(targetProjectId);
+      if (Array.isArray(liveDecisions)) {
+        const mapped = liveDecisions.map((d) => {
+          const isClosed = d.decision_type === 'ACCEPT' || d.decision_type === 'REJECT';
+          return {
+            id: `DEC-${d.decision_id}`,
+            decision_id: d.decision_id,
+            requirement: d.decision_rationale
+              ? d.decision_rationale.slice(0, 40) + '...'
+              : 'Compliance Decision',
+            citation: 'Binding Governance Decision',
+            advisor: d.decider_name || 'Project Owner',
+            adviceStatus: 'ACCEPTED',
+            adviceStatusType: 'emerald',
+            decisionStatus: isClosed ? 'Closed' : 'Open',
+            decisionStatusType: isClosed ? 'closed' : 'open',
+            decisionRationale: d.decision_rationale,
+            followUpAction: d.follow_up_action || '',
+            actionOwner: d.decider_name || 'Project Owner',
+            dueDate: d.created_at ? new Date(d.created_at).toLocaleDateString('en-GB') : '',
+            lastUpdated: d.created_at ? new Date(d.created_at).toLocaleDateString('en-GB') : 'Recently',
+          };
+        });
+        setRecords(mapped);
+      }
 
-      setRecords((prev) =>
-        prev.map((r) =>
-          r.id === selectedRecord.id
-            ? {
-                ...r,
-                decisionStatus: newDecisionStatus,
-                decisionStatusType: newDecisionType,
-                decisionRationale: formData.decisionRationale,
-                followUpAction: formData.followUpAction,
-                actionOwner: formData.actionOwner,
-                dueDate: formData.dueDate,
-              }
-            : r
-        )
-      );
-
-      setToastMsg(`Decision recorded and ratified in PostgreSQL for ${selectedRecord.id}`);
+      setToastMsg(`Decision ratified and persisted in PostgreSQL database!`);
       setTimeout(() => setToastMsg(null), 3000);
       setSelectedRecord(null);
     } catch (err) {

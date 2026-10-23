@@ -1,111 +1,94 @@
 import { apiCall } from './api';
 
-// Projects List initialized to empty array (ready for live backend API data)
-const MOCK_PROJECTS = [];
-
 export const PROJECTS_STORAGE_KEY = 'finreg_projects';
 
-/**
- * Retrieves persisted custom projects from local storage
- */
-export function getLocalProjects() {
-  try {
-    const raw = localStorage.getItem(PROJECTS_STORAGE_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    const clean = parsed.filter(
-      (p) =>
-        p &&
-        p.id !== 'PRJ-001' &&
-        p.name !== 'ABC Shield' &&
-        p.name !== 'KYC Onboarding Controls' &&
-        !p.id?.includes('MOCK')
-    );
-    try {
-      localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(clean));
-    } catch (e) {}
-    return clean;
-  } catch (e) {
-    return [];
-  }
-}
+// Purge legacy custom projects storage to prevent stale cross-user project caching
+try {
+  localStorage.removeItem(PROJECTS_STORAGE_KEY);
+} catch (e) {}
 
 /**
- * Fetches all user projects via GET /projects
+ * Returns empty array - mock project storage is strictly deprecated.
  */
-export async function getProjects() {
-  try {
-    const data = await apiCall('/projects', 'GET');
-    if (Array.isArray(data)) return data;
-  } catch (err) {
-    console.warn('[projectService] GET /projects failed:', err.message);
-  }
+export function getLocalProjects() {
   return [];
 }
 
 /**
- * Fetches summary metrics via GET /projects/summary
+ * Fetches all authorized user projects via live backend API: GET /projects
  */
-export async function getProjectSummary() {
-  try {
-    return await apiCall('/projects/summary', 'GET');
-  } catch (err) {
-    console.warn('[projectService] GET /projects/summary failed:', err.message);
-    const projects = await getProjects();
-    return {
-      total: projects.length,
-      inProgress: projects.filter((p) => p.status === 'In Progress').length,
-      underReview: projects.filter((p) => p.status === 'Under Review').length,
-      completed: projects.filter((p) => p.status === 'Completed').length,
-    };
-  }
+export async function getProjects() {
+  const data = await apiCall('/projects', 'GET');
+  return Array.isArray(data) ? data : [];
 }
 
 /**
- * Fetches single project details via GET /projects/{projectId}
- * Strictly avoids falling back to other users' projects (prevents BOLA / IDOR leak)
+ * Fetches summary metrics via live backend API: GET /projects/summary
+ */
+export async function getProjectSummary() {
+  return await apiCall('/projects/summary', 'GET');
+}
+
+/**
+ * Fetches single project details via live backend API: GET /projects/{projectId}
+ * Strictly enforces project-level authorization (returns 403 / 404 on unassigned projects).
  */
 export async function getProjectDetails(projectId) {
   return await apiCall(`/projects/${projectId}`, 'GET');
 }
 
 /**
- * Creates a new project via POST /projects
+ * Creates a new project via live backend API: POST /projects
  */
 export async function createProject(projectPayload) {
   return await apiCall('/projects', 'POST', projectPayload);
 }
 
 /**
- * Updates an existing project via PATCH /projects/{projectId}
+ * Updates an existing project via live backend API: PATCH /projects/{projectId}
  */
 export async function updateProject(projectId, updatePayload) {
   return await apiCall(`/projects/${projectId}`, 'PATCH', updatePayload);
 }
 
 /**
- * Fetches project requirements via GET /projects/{projectId}/requirements
+ * Fetches project requirements via live backend API: GET /projects/{projectId}/requirements
  */
 export async function getProjectRequirements(projectId) {
-  try {
-    const data = await apiCall(`/projects/${projectId}/requirements`, 'GET');
-    return Array.isArray(data) ? data : [];
-  } catch (err) {
-    console.warn(`[projectService] GET /projects/${projectId}/requirements failed:`, err.message);
-    return [];
-  }
+  const data = await apiCall(`/projects/${projectId}/requirements`, 'GET');
+  return Array.isArray(data) ? data : [];
 }
 
 /**
- * Fetches real project audit readiness score & breakdown
- * GET /projects/{projectId}/readiness
+ * Fetches real project audit readiness score & breakdown: GET /projects/{projectId}/readiness
  */
 export async function getProjectReadiness(projectId) {
-  try {
-    return await apiCall(`/projects/${projectId}/readiness`, 'GET');
-  } catch (err) {
-    console.warn(`[projectService] GET /projects/${projectId}/readiness failed:`, err.message);
-    return null;
+  return await apiCall(`/projects/${projectId}/readiness`, 'GET');
+}
+
+/**
+ * Fetches project document attachments: GET /projects/{projectId}/attachments
+ */
+export async function getProjectAttachments(projectId) {
+  const data = await apiCall(`/projects/${projectId}/attachments`, 'GET');
+  return Array.isArray(data) ? data : [];
+}
+
+/**
+ * Uploads a verified PDF attachment: POST /projects/{projectId}/attachments
+ * Validates multipart/form-data boundary and PDF structure.
+ */
+export async function uploadProjectAttachment(projectId, file, category = 'ADVISORY_REFERENCE') {
+  if (!file) {
+    throw new Error('No file selected for upload.');
   }
+  if (!file.name.toLowerCase().endsWith('.pdf')) {
+    throw new Error('Only PDF documents (.pdf) are supported.');
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+  formData.append('category', category);
+
+  return await apiCall(`/projects/${projectId}/attachments`, 'POST', formData);
 }

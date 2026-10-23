@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Check, ArrowLeft, UserX } from 'lucide-react';
-import { sendAdvisorInvitation } from '../services/advisorService';
-import { getRegisteredUsers } from '../services/authService';
+import { sendAdvisorInvitation, getAdvisors } from '../services/advisorService';
 
 // Master advisors list initialized to empty array (ready for live registered advisors / backend data)
 const DEFAULT_ADVISORS = [];
@@ -31,47 +30,49 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
   );
   const [isSubmittingInvite, setIsSubmittingInvite] = useState(false);
 
-  // Helper to load registered advisors from live registered user store
-  const loadMergedAdvisors = () => {
-    try {
-      const rawAssignments = localStorage.getItem('finreg_advisor_assignments');
-      const assignments = rawAssignments ? JSON.parse(rawAssignments) : [];
-      const invitedIds = new Set(assignments.map((a) => a.advisorId));
-
-      const registeredUsers = getRegisteredUsers();
-      const registeredAdvisors = registeredUsers
-        .filter((u) => {
-          const role = (u.platform_role || u.role || '').toUpperCase();
-          return role.includes('ADVISOR');
-        })
-        .map((u) => ({
-          id: u.id,
-          name: u.name,
-          avatar: u.name.split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase() || 'AD',
-          specialty: u.specialty || 'Regulatory Compliance & Advisory',
-          firm: u.organization || 'Independent Advisory',
-          jurisdiction: u.jurisdiction || 'UK / EU',
-          status: 'Available',
-          statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
-          dotColor: 'bg-emerald-500',
-          isInvited: invitedIds.has(u.id),
-          bio: u.bio || 'Registered compliance advisor specializing in regulatory risk, governance, and supervisory obligations.',
-          organization: u.organization || 'Independent Advisory',
-          areasOfSupport: ['Policy design', 'Control validation', 'Regulatory interpretation', 'Board assurance'],
-          email: u.email,
-        }));
-
-      return registeredAdvisors;
-    } catch (e) {
-      return [];
-    }
-  };
-
-  // Master Advisors List with live registered advisor binding (DEF-07)
-  const [advisors, setAdvisors] = useState(loadMergedAdvisors);
+  // Master Advisors List loaded live from backend GET /advisors
+  const [advisors, setAdvisors] = useState([]);
 
   useEffect(() => {
-    setAdvisors(loadMergedAdvisors());
+    let isMounted = true;
+    async function fetchLiveAdvisors() {
+      try {
+        const live = await getAdvisors();
+        if (isMounted && Array.isArray(live)) {
+          setAdvisors(
+            live.map((u) => ({
+              id: u.advisor_profile_id || u.user_id,
+              user_id: u.user_id,
+              name: u.full_name || 'Advisor',
+              avatar: (u.full_name || 'AD')
+                .split(' ')
+                .filter(Boolean)
+                .map((n) => n[0])
+                .join('')
+                .slice(0, 2)
+                .toUpperCase(),
+              specialty: u.specialization || u.professional_title || 'Regulatory Compliance & Advisory',
+              firm: u.organization_name || 'Independent Advisory',
+              jurisdiction: 'UK / EU',
+              status: 'Available',
+              statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
+              dotColor: 'bg-emerald-500',
+              isInvited: false,
+              bio: u.bio || 'Registered compliance advisor specializing in regulatory risk and governance.',
+              organization: u.organization_name || 'Independent Advisory',
+              areasOfSupport: ['Policy design', 'Control validation', 'Regulatory interpretation', 'Board assurance'],
+              email: u.email,
+            }))
+          );
+        }
+      } catch (err) {
+        console.warn('[AdvisorsExpertsView] Failed to fetch advisors:', err.message);
+      }
+    }
+    fetchLiveAdvisors();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   const invitedCount = advisors.filter((a) => a.isInvited).length;
@@ -110,60 +111,38 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
     setIsInviteModalOpen(true);
   };
 
-  // Submit Modal Invitation Form -> Permanently adds advisor to "My Invited Advisors" and assigns project (DEF-09)
+  // Submit Modal Invitation Form -> Sends invitation via live backend POST /projects/{projectId}/advisor-invitations
   const handleSendInvitation = async (e) => {
     e.preventDefault();
     if (!modalAdvisor) return;
 
     setIsSubmittingInvite(true);
     const targetProjectObj = projectOptions.find((p) => p.name === modalProject) || projectOptions[0];
-    const targetProjectId = targetProjectObj?.id || 'PRJ-001';
+    const targetProjectId = targetProjectObj?.id || targetProjectObj?.project_id || 1;
 
     try {
       await sendAdvisorInvitation(targetProjectId, {
-        advisorId: modalAdvisor.id,
-        advisorName: modalAdvisor.name,
-        project: modalProject,
-        role: modalRole,
-        message: modalMessage,
+        advisor_email: modalAdvisor.email,
+        access_level: modalRole?.toUpperCase().includes('READ') ? 'READ_ONLY' : 'CONTRIBUTOR',
+        invitation_notes: modalMessage,
       });
+
+      // Update local state to mark advisor as invited
+      setAdvisors((prevAdvisors) =>
+        prevAdvisors.map((a) => (a.id === modalAdvisor.id ? { ...a, isInvited: true } : a))
+      );
+
+      setToastMsg(`Invitation issued to ${modalAdvisor.name}! Persisted in PostgreSQL database.`);
+      setTimeout(() => setToastMsg(null), 3500);
+      setIsInviteModalOpen(false);
+      if (onInviteAdvisor) onInviteAdvisor(modalAdvisor);
     } catch (err) {
-      console.warn('sendAdvisorInvitation fallback executed:', err);
+      console.warn('sendAdvisorInvitation error:', err);
+      setToastMsg(`Failed to send invitation: ${err.message || 'API error'}`);
+      setTimeout(() => setToastMsg(null), 4000);
+    } finally {
+      setIsSubmittingInvite(false);
     }
-
-    // Persist assignment locally so advisor dashboard picks it up immediately (DEF-01, DEF-09)
-    try {
-      const raw = localStorage.getItem('finreg_advisor_assignments');
-      const assignments = raw ? JSON.parse(raw) : [];
-      const newAssignment = {
-        projectId: targetProjectId,
-        project: modalProject,
-        projectName: modalProject,
-        advisorId: modalAdvisor.id,
-        advisorName: modalAdvisor.name,
-        advisorEmail: modalAdvisor.email || '',
-        role: modalRole,
-        message: modalMessage,
-        invitedBy: 'Builder / Project Owner',
-        date: new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-      };
-      assignments.unshift(newAssignment);
-      localStorage.setItem('finreg_advisor_assignments', JSON.stringify(assignments));
-    } catch (e) {
-      console.error('Failed to persist advisor assignment:', e);
-    }
-
-    // Update local state to mark advisor as invited
-    setAdvisors((prevAdvisors) =>
-      prevAdvisors.map((a) => (a.id === modalAdvisor.id ? { ...a, isInvited: true } : a))
-    );
-
-    setIsSubmittingInvite(false);
-    setIsInviteModalOpen(false);
-
-    setToastMsg(`Invitation sent to ${modalAdvisor.name}! Saved under My Invited Advisors.`);
-    setTimeout(() => setToastMsg(null), 3000);
-    if (onInviteAdvisor) onInviteAdvisor(modalAdvisor);
   };
 
   // Cancel Invitation -> Removes advisor from "My Invited Advisors" and re-enables "Invite" button

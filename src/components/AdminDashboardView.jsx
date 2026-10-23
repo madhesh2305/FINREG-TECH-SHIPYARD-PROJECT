@@ -61,67 +61,9 @@ export default function AdminDashboardView({
     setTimeout(() => setToastMsg(null), 3000);
   };
 
-  // Baseline Admin Users initialized to empty array (ready for live backend users)
-  const DEFAULT_ADMIN_USERS = [];
-
-  // Helper to load live registered users
-  const loadInitialUsers = () => {
-    try {
-      const reg = getRegisteredUsers();
-      if (!Array.isArray(reg) || reg.length === 0) return [];
-
-      return reg.map((u, idx) => {
-        let displayRole = 'Builder';
-        const rawRole = (u.role || u.platform_role || '').toUpperCase();
-        if (rawRole.includes('ADVISOR')) displayRole = 'Advisor';
-        else if (rawRole.includes('ADMIN')) displayRole = 'Admin';
-        else displayRole = 'Builder';
-
-        return {
-          id: u.id && u.id.startsWith('USR-') ? u.id : `USR-${String(idx + 1).padStart(3, '0')}`,
-          name: u.name || 'User',
-          email: u.email || '',
-          role: displayRole,
-          status: u.status || 'Active',
-          registered: u.created_at
-            ? new Date(u.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-            : 'Recently',
-          lastLogin: u.last_login_at || 'Recently',
-        };
-      });
-    } catch (e) {
-      return [];
-    }
-  };
-
-  const [users, setUsers] = useState(loadInitialUsers);
-
-  // Projects Oversight list initialized to empty array
-  const DEFAULT_ADMIN_PROJECTS = [];
-
-  const loadInitialProjects = () => {
-    try {
-      const local = getLocalProjects();
-      if (!Array.isArray(local) || local.length === 0) return [];
-      return local.map((p) => ({
-        id: p.id,
-        name: p.name,
-        owner: p.owner || 'Project Owner',
-        status: p.status || 'In Progress',
-        statusColor: p.statusColor || 'bg-[#281d11] text-amber-400 border-amber-800/50',
-        dotColor: p.dotColor || 'bg-amber-400',
-        assignedAdvisors: '0 / 2',
-        creationDate: p.created || 'Recently',
-        lastActivity: p.lastUpdated || 'Recently',
-        readiness: 'Initial Review',
-        accessBoundary: 'Metadata visibility only; restricted content requires explicit authorization.',
-      }));
-    } catch (e) {
-      return [];
-    }
-  };
-
-  const [projectsList, setProjectsList] = useState(loadInitialProjects);
+  // Admin users and projects state loaded exclusively from backend
+  const [users, setUsers] = useState([]);
+  const [projectsList, setProjectsList] = useState([]);
 
   // Advisor Invitations list initialized to empty array
   const DEFAULT_ADMIN_INVITATIONS = [];
@@ -353,38 +295,45 @@ export default function AdminDashboardView({
           setAdminStats(statsData.value);
         }
 
-        if (usersData.status === 'fulfilled' && Array.isArray(usersData.value) && usersData.value.length > 0) {
+        if (usersData.status === 'fulfilled' && Array.isArray(usersData.value)) {
           setUsers(
             usersData.value.map((u, idx) => ({
-              id: u.id || `USR-${String(idx + 1).padStart(3, '0')}`,
-              name: u.full_name || u.name || 'User',
+              id: u.user_id ? `USR-${String(u.user_id).padStart(3, '0')}` : `USR-${String(idx + 1).padStart(3, '0')}`,
+              user_id: u.user_id,
+              name: u.full_name || 'User',
               email: u.email || '',
-              role: u.role || 'Builder',
-              status: u.status || (u.is_active !== false ? 'Active' : 'Inactive'),
+              role: u.platform_role ? u.platform_role.charAt(0).toUpperCase() + u.platform_role.slice(1).toLowerCase() : 'Builder',
+              status: u.is_active ? 'Active' : 'Inactive',
               registered: u.created_at
                 ? new Date(u.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
                 : 'Recently',
-              lastLogin: u.last_login_at || 'Recently',
+              lastLogin: u.updated_at
+                ? new Date(u.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                : 'Recently',
             }))
           );
+        } else if (usersData.status === 'rejected') {
+          setUsers([]);
         }
 
-        if (projectsData.status === 'fulfilled' && Array.isArray(projectsData.value) && projectsData.value.length > 0) {
+        if (projectsData.status === 'fulfilled' && Array.isArray(projectsData.value)) {
           setProjectsList(
             projectsData.value.map((p) => ({
-              id: p.id,
-              name: p.name,
-              owner: p.owner || 'Project Owner',
-              status: p.status || 'In Progress',
-              statusColor: p.statusColor || 'bg-[#281d11] text-amber-400 border-amber-800/50',
-              dotColor: p.dotColor || 'bg-amber-400',
-              assignedAdvisors: p.assignedAdvisors || '0 / 2',
-              creationDate: p.created || 'Recently',
-              lastActivity: p.lastUpdated || 'Recently',
-              readiness: p.readiness || 'Initial Review',
-              accessBoundary: 'Metadata visibility only; restricted content requires explicit authorization.',
+              id: p.id || p.project_id,
+              name: p.name || p.project_name,
+              owner: p.owner || p.owner_name || 'Project Owner',
+              status: p.status || 'Active',
+              statusColor: 'bg-[#281d11] text-amber-400 border-amber-800/50',
+              dotColor: 'bg-amber-400',
+              assignedAdvisors: 'Assigned',
+              creationDate: p.created_at ? new Date(p.created_at).toLocaleDateString('en-GB') : 'Recently',
+              lastActivity: p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-GB') : 'Recently',
+              readiness: 'Active Review',
+              accessBoundary: 'Platform isolation enforced.',
             }))
           );
+        } else if (projectsData.status === 'rejected') {
+          setProjectsList([]);
         }
       } catch (err) {
         console.warn('[AdminDashboardView] Live admin data fetch error:', err.message);

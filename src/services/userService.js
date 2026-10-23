@@ -1,13 +1,14 @@
 import { apiCall } from './api';
 
 /**
- * Updates user profile info via PATCH /users/me
+ * Updates user profile info via live backend API: PATCH /users/me
+ * Backend expects: { full_name: string }
  */
 export async function updateUserProfile(profileData) {
   const fullName = (profileData.full_name || profileData.name || '').trim();
   const res = await apiCall('/users/me', 'PATCH', { full_name: fullName });
 
-  // Sync updated name into current user storage
+  // Sync updated name into current user storage upon confirmed backend success
   try {
     const raw = localStorage.getItem('finreg_current_user');
     if (raw) {
@@ -28,14 +29,10 @@ export async function updateUserProfile(profileData) {
 
 /**
  * Updates notification preference toggles via PUT /user/notifications
+ * Strictly propagates backend response or error without simulating success.
  */
 export async function updateNotificationPreferences(preferences) {
-  try {
-    return await apiCall('/user/notifications', 'PUT', preferences);
-  } catch (err) {
-    console.warn('[userService] PUT /user/notifications failed.');
-    return { success: true, ...preferences };
-  }
+  return await apiCall('/user/notifications', 'PUT', preferences);
 }
 
 /**
@@ -43,11 +40,6 @@ export async function updateNotificationPreferences(preferences) {
  * GET /users/me/notifications
  */
 export async function getUserNotifications() {
-  try {
-    const data = await apiCall('/users/me/notifications', 'GET');
-    return Array.isArray(data) ? data : [];
-  } catch (err) {
-    console.warn('[userService] GET /users/me/notifications failed:', err.message);
-    return [];
-  }
+  const data = await apiCall('/users/me/notifications', 'GET');
+  return Array.isArray(data) ? data : [];
 }
