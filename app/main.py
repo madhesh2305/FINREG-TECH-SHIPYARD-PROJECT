@@ -77,7 +77,7 @@ def api_root():
         "api_v1_base": settings.API_V1_STR
     }
 
-# Health check with real database connectivity validation
+# Health check with real database and RAG microservice connectivity validation
 @app.get("/health", tags=["Health"], summary="System Health Check")
 def health_check():
     db_status = "connected"
@@ -89,6 +89,14 @@ def health_check():
     except Exception as e:
         db_status = f"unreachable: {str(e)}"
 
+    rag_health = {"status": "unreachable"}
+    try:
+        from app.services.rag_service import get_rag_service_client
+        rag_client = get_rag_service_client()
+        rag_health = rag_client.check_health()
+    except Exception as e:
+        rag_health = {"status": "error", "error": str(e)}
+
     return {
         "status": "healthy" if db_status == "connected" else "degraded",
         "service": settings.PROJECT_NAME,
@@ -97,7 +105,8 @@ def health_check():
         "database": {
             "dialect": "postgresql",
             "status": db_status
-        }
+        },
+        "rag_service": rag_health
     }
 
 # Include API v1 Router

@@ -43,3 +43,10 @@ class ValidationError(HTTPException):
             status_code=code,
             detail=detail
         )
+
+class ServiceUnavailableError(HTTPException):
+    def __init__(self, detail: str = "Service temporarily unavailable"):
+        super().__init__(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=detail
+        )

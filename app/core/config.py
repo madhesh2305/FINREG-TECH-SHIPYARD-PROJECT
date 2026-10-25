@@ -28,6 +28,10 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000"
     ]
 
+    # AI/RAG Microservice Integration
+    RAG_SERVICE_URL: str = "http://127.0.0.1:8001"
+    RAG_SERVICE_TIMEOUT_SECONDS: float = 35.0
+
     model_config = SettingsConfigDict(
         env_file=[_backend_env, ".env"],
         env_file_encoding="utf-8",
