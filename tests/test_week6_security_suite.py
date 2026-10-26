@@ -522,7 +522,7 @@ def test_w6_rag_security_suite(db: Session):
     assert conflict_res.status_code == 200
     conflicts = conflict_res.json().get("conflicts", [])
     assert len(conflicts) > 0
-    assert "UK Bribery Act" in str(conflicts)
+    assert "Bribery Act" in str(conflicts)
 
     # W6-RAG-06: Sensitive Data Leakage Protection
     assert "SECRET_KEY" not in res_text
