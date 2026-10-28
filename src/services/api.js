@@ -55,6 +55,13 @@ export async function apiCall(endpoint, method = 'GET', body = null) {
 
     return await response.json();
   } catch (err) {
+    if (err.name === 'TypeError' && err.message?.toLowerCase().includes('fetch')) {
+      const connectionError = new Error(
+        `Unable to reach backend server at ${BASE_URL}. Please ensure the backend server is running on port 8000.`
+      );
+      console.warn(`[API Client Warning] Call to ${endpoint} failed: Backend server offline.`);
+      throw connectionError;
+    }
     // Re-throw network or API errors for component error handling
     console.warn(`[API Client Warning] Call to ${endpoint} failed:`, err.message);
     throw err;
