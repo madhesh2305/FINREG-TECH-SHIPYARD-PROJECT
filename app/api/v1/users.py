@@ -92,9 +92,12 @@ def get_user_notifications(
         proj_name = proj.project_name if proj else f"Project {inv.project_id}"
         notifications.append({
             "id": f"inv-{inv.invitation_id}",
+            "invitation_id": inv.invitation_id,
             "type": "INVITATION",
             "title": f"Advisory Invitation: {proj_name}",
             "message": f"You were invited to project '{proj_name}' with {inv.access_level} access.",
+            "project_name": proj_name,
+            "access_level": inv.access_level,
             "status": inv.invitation_status,
             "project_id": inv.project_id,
             "created_at": inv.created_at.isoformat() if inv.created_at else None,
