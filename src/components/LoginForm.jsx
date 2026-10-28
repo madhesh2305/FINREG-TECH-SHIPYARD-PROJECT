@@ -631,7 +631,7 @@ export default function LoginForm({ isDarkMode = true }) {
                 {/* Role */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-slate-300">
-                    Role
+                    Assigned Workplace (Role)
                   </label>
                   <select
                     value={signupRole}

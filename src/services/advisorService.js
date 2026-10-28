@@ -62,3 +62,15 @@ export async function getProjectInvitations(projectId) {
     return [];
   }
 }
+
+/**
+ * Accepts an advisor invitation via POST /projects/{projectId}/advisor-invitations/{invitationId}/accept
+ */
+export async function acceptAdvisorInvitation(projectId, invitationId) {
+  try {
+    return await apiCall(`/projects/${projectId}/advisor-invitations/${invitationId}/accept`, 'POST');
+  } catch (err) {
+    console.error(`[advisorService] POST /projects/${projectId}/advisor-invitations/${invitationId}/accept failed:`, err);
+    throw err;
+  }
+}

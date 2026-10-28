@@ -8,7 +8,8 @@ import {
   getProjectDecisions,
   getProjectReadiness,
   getProjectRequirements,
-  createProjectRequirement
+  createProjectRequirement,
+  getProjectAttachments
 } from '../services/adviceService';
 import { getAuditEvents } from '../services/auditService';
 import { apiCall } from '../services/api';
@@ -1648,7 +1649,13 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                   <button
                     key={tab}
                     type="button"
-                    onClick={() => setProjectSubTab(tab)}
+                    onClick={() => {
+                      setProjectSubTab(tab);
+                      const pid = selectedProject?.project_id || selectedProject?.id;
+                      if (pid && (tab === 'Advice' || tab === 'Requirements' || tab === 'Overview')) {
+                        getProjectAdvice(pid).then(adv => setProjectAdviceList(Array.isArray(adv) ? adv : [])).catch(() => {});
+                      }
+                    }}
                     className={`py-3 transition-colors cursor-pointer border-b-2 -mb-px whitespace-nowrap ${
                       projectSubTab === tab
                         ? 'border-[#7c4a27] text-[#7c4a27] dark:border-amber-400 dark:text-amber-400'
@@ -1875,6 +1882,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                           <th className="py-3 px-3">Title</th>
                           <th className="py-3 px-3">Status</th>
                           <th className="py-3 px-3">Applicability</th>
+                          <th className="py-3 px-3">Advisor Advice</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800/60">
@@ -1884,20 +1892,38 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                           { requirement_code: 'REQ-ABC-011', requirement_title: 'Top-Level Commitment: Board-Approved Zero-Tolerance Anti-Corruption Culture', requirement_status: 'COMPLETED', applicability_status: 'APPLICABLE' },
                           { requirement_code: 'REQ-ABC-012', requirement_title: 'Due Diligence: Proportionate Screening of Third Parties and Intermediaries', requirement_status: 'IN_REVIEW', applicability_status: 'APPLICABLE' },
                           { requirement_code: 'REQ-ABC-016', requirement_title: 'Gifts and Hospitality Policy: Pre-Approval Thresholds and Central Register', requirement_status: 'COMPLETED', applicability_status: 'APPLICABLE' }
-                        ]).map((r, i) => (
-                          <tr key={r.requirement_id || i} className="hover:bg-slate-800/30">
-                            <td className="py-3 px-3 font-mono font-bold text-amber-400">{r.requirement_code}</td>
-                            <td className="py-3 px-3 font-medium text-slate-200">{r.requirement_title}</td>
-                            <td className="py-3 px-3">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                r.requirement_status === 'COMPLETED' ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800' : 'bg-amber-950/80 text-amber-400 border border-amber-800'
-                              }`}>
-                                {r.requirement_status}
-                              </span>
-                            </td>
-                            <td className="py-3 px-3 text-slate-400">{r.applicability_status}</td>
-                          </tr>
-                        ))}
+                        ]).map((r, i) => {
+                          const matchingAdv = projectAdviceList.length > 0 ? projectAdviceList[i % projectAdviceList.length] : null;
+                          return (
+                            <tr key={r.requirement_id || i} className="hover:bg-slate-800/30">
+                              <td className="py-3 px-3 font-mono font-bold text-amber-400">{r.requirement_code}</td>
+                              <td className="py-3 px-3 font-medium text-slate-200">{r.requirement_title}</td>
+                              <td className="py-3 px-3">
+                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                                  r.requirement_status === 'COMPLETED' ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800' : 'bg-amber-950/80 text-amber-400 border border-amber-800'
+                                }`}>
+                                  {r.requirement_status}
+                                </span>
+                              </td>
+                              <td className="py-3 px-3 text-slate-400">{r.applicability_status}</td>
+                              <td className="py-3 px-3">
+                                {matchingAdv ? (
+                                  <div className="space-y-0.5">
+                                    <div className="font-semibold text-slate-200 max-w-[240px] truncate" title={matchingAdv.recommendation || matchingAdv.title}>
+                                      {matchingAdv.recommendation || matchingAdv.title}
+                                    </div>
+                                    <div className="text-[10px] text-amber-400 flex items-center gap-1 font-mono">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                      <span>By {matchingAdv.advisor_name || 'Advisor'} ({matchingAdv.display_status || matchingAdv.advice_status || 'Submitted'})</span>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <span className="text-slate-500 italic text-[11px]">No advice submitted</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
