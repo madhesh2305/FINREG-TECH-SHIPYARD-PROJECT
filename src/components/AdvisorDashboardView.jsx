@@ -86,6 +86,98 @@ export default function AdvisorDashboardView({
     setTimeout(() => setToastMsg(null), 3500);
   };
 
+  // Seeded advisor projects initialized to empty array
+  const SEEDED_ADVISOR_PROJECTS = [];
+
+  // Load dynamically assigned projects for this specific advisor account
+  const [assignedProjectsFullList, setAssignedProjectsFullList] = useState(() => {
+    try {
+      const email = (currentUser?.email || '').toLowerCase();
+      const name = currentUser?.name || '';
+      const rawAssignments = localStorage.getItem('finreg_advisor_assignments');
+      const assignments = rawAssignments ? JSON.parse(rawAssignments) : [];
+
+      const myAssignments = assignments.filter((a) => {
+        const matchesEmail = email && a.advisorEmail && a.advisorEmail.toLowerCase() === email;
+        const matchesName = name && a.advisorName && a.advisorName.toLowerCase() === name.toLowerCase();
+        const matchesId = a.advisorId && (a.advisorId === currentUser?.id);
+        return matchesEmail || matchesName || matchesId;
+      });
+
+      if (myAssignments.length > 0) {
+        return myAssignments.map((a) => ({
+          id: a.projectId || 'PRJ-001',
+          name: a.project || a.projectName || 'Assigned Project',
+          company: a.company || 'Northbank Financial',
+          domain: a.role || currentExpertise?.domain || 'Regulatory Advisory',
+          nextAction: 'Review project requirements & provide compliance guidance',
+          type: a.projectType || 'AML / CTF',
+          status: 'In Progress',
+          statusColor: 'bg-amber-950/40 text-amber-400 border-amber-800/50',
+          dotColor: 'bg-amber-400',
+          owner: a.invitedBy || 'Project Owner',
+          lastUpdated: 'Recently assigned',
+        }));
+      }
+
+      return [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // Re-sync assignments whenever currentUser updates
+  useEffect(() => {
+    try {
+      const email = (currentUser?.email || userProfile?.email || '').toLowerCase();
+      const name = currentUser?.name || userProfile?.name || '';
+      const rawAssignments = localStorage.getItem('finreg_advisor_assignments');
+      const assignments = rawAssignments ? JSON.parse(rawAssignments) : [];
+
+      const myAssignments = assignments.filter((a) => {
+        const matchesEmail = email && a.advisorEmail && a.advisorEmail.toLowerCase() === email;
+        const matchesName = name && a.advisorName && a.advisorName.toLowerCase() === name.toLowerCase();
+        const matchesId = a.advisorId && (a.advisorId === currentUser?.id || a.advisorId === userProfile?.id);
+        return matchesEmail || matchesName || matchesId;
+      });
+
+      if (myAssignments.length > 0) {
+        setAssignedProjectsFullList(
+          myAssignments.map((a) => ({
+            id: a.projectId || 'PRJ-001',
+            name: a.project || a.projectName || 'Assigned Project',
+            company: a.company || 'Northbank Financial',
+            domain: a.role || currentExpertise?.domain || 'Regulatory Advisory',
+            nextAction: 'Review project requirements & provide compliance guidance',
+            type: a.projectType || 'AML / CTF',
+            status: 'In Progress',
+            statusColor: 'bg-amber-950/40 text-amber-400 border-amber-800/50',
+            dotColor: 'bg-amber-400',
+            owner: a.invitedBy || 'Project Owner',
+            lastUpdated: 'Recently assigned',
+          }))
+        );
+      } else {
+        setAssignedProjectsFullList([]);
+      }
+    } catch (e) {}
+  }, [currentUser, userProfile, currentExpertise]);
+
+  // Authoritative active project with safe fallback defaults
+  const activeProject =
+    assignedProjectsFullList.find((p) => p.id === selectedProject) ||
+    assignedProjectsFullList[0] || {
+      id: 'PRJ-001',
+      name: 'Regulatory Compliance Framework',
+      company: 'Northbank Financial',
+      domain: currentExpertise?.cleanDomain || 'Financial Crime Compliance',
+      status: 'In Progress',
+      statusColor: 'bg-amber-950/40 text-amber-400 border-amber-800/50',
+      dotColor: 'bg-amber-400',
+      owner: 'Project Owner',
+      lastUpdated: 'Recently assigned',
+    };
+
   // Real Reviews List loaded live from PostgreSQL backend
   const [reviewsList, setReviewsList] = useState([]);
 
@@ -196,83 +288,6 @@ export default function AdvisorDashboardView({
     setNotificationsList((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
-  // Seeded advisor projects initialized to empty array (ready for live backend project assignments)
-  const SEEDED_ADVISOR_PROJECTS = [];
-
-  // Load dynamically assigned projects for this specific advisor account
-  const [assignedProjectsFullList, setAssignedProjectsFullList] = useState(() => {
-    try {
-      const email = (currentUser?.email || '').toLowerCase();
-      const name = currentUser?.name || '';
-      const rawAssignments = localStorage.getItem('finreg_advisor_assignments');
-      const assignments = rawAssignments ? JSON.parse(rawAssignments) : [];
-
-      const myAssignments = assignments.filter((a) => {
-        const matchesEmail = email && a.advisorEmail && a.advisorEmail.toLowerCase() === email;
-        const matchesName = name && a.advisorName && a.advisorName.toLowerCase() === name.toLowerCase();
-        const matchesId = a.advisorId && (a.advisorId === currentUser?.id);
-        return matchesEmail || matchesName || matchesId;
-      });
-
-      if (myAssignments.length > 0) {
-        return myAssignments.map((a) => ({
-          id: a.projectId || 'PRJ-001',
-          name: a.project || a.projectName || 'Assigned Project',
-          company: a.company || 'Northbank Financial',
-          domain: a.role || currentExpertise?.domain || 'Regulatory Advisory',
-          nextAction: 'Review project requirements & provide compliance guidance',
-          type: a.projectType || 'AML / CTF',
-          status: 'In Progress',
-          statusColor: 'bg-amber-950/40 text-amber-400 border-amber-800/50',
-          dotColor: 'bg-amber-400',
-          owner: a.invitedBy || 'Project Owner',
-          lastUpdated: 'Recently assigned',
-        }));
-      }
-
-      return [];
-    } catch (e) {
-      return [];
-    }
-  });
-
-  // Re-sync assignments whenever currentUser updates
-  useEffect(() => {
-    try {
-      const email = (currentUser?.email || userProfile?.email || '').toLowerCase();
-      const name = currentUser?.name || userProfile?.name || '';
-      const rawAssignments = localStorage.getItem('finreg_advisor_assignments');
-      const assignments = rawAssignments ? JSON.parse(rawAssignments) : [];
-
-      const myAssignments = assignments.filter((a) => {
-        const matchesEmail = email && a.advisorEmail && a.advisorEmail.toLowerCase() === email;
-        const matchesName = name && a.advisorName && a.advisorName.toLowerCase() === name.toLowerCase();
-        const matchesId = a.advisorId && (a.advisorId === currentUser?.id || a.advisorId === userProfile?.id);
-        return matchesEmail || matchesName || matchesId;
-      });
-
-      if (myAssignments.length > 0) {
-        setAssignedProjectsFullList(
-          myAssignments.map((a) => ({
-            id: a.projectId || 'PRJ-001',
-            name: a.project || a.projectName || 'Assigned Project',
-            company: a.company || 'Northbank Financial',
-            domain: a.role || currentExpertise?.domain || 'Regulatory Advisory',
-            nextAction: 'Review project requirements & provide compliance guidance',
-            type: a.projectType || 'AML / CTF',
-            status: 'In Progress',
-            statusColor: 'bg-amber-950/40 text-amber-400 border-amber-800/50',
-            dotColor: 'bg-amber-400',
-            owner: a.invitedBy || 'Project Owner',
-            lastUpdated: 'Recently assigned',
-          }))
-        );
-      } else {
-        setAssignedProjectsFullList([]);
-      }
-    } catch (e) {}
-  }, [currentUser, userProfile, currentExpertise]);
-
   // 4 Metric Stat Cards matching media_1791949893756_6c538f7d.png
   const submittedCount = reviewsList.filter((r) => r.status === 'Submitted' || r.status === 'Accepted').length;
   const assignedCount = assignedProjectsFullList.length;
@@ -298,9 +313,6 @@ export default function AdvisorDashboardView({
       sub: 'Shown here instead of separate navigation',
     },
   ];
-
-  // Authoritative active project based on selectedProject ID (DEF-08, DEF-10)
-  const activeProject = assignedProjectsFullList.find((p) => p.id === selectedProject) || assignedProjectsFullList[0] || null;
 
   // Requirements List initialized to empty array (ready for live backend requirements)
   const requirementsList = [];
@@ -840,21 +852,21 @@ export default function AdvisorDashboardView({
                   </button>
 
                   <span className="text-xs font-mono text-slate-500 uppercase tracking-widest block mb-1">
-                    {activeProject.id}
+                    {activeProject?.id || 'PRJ-001'}
                   </span>
 
                   <div className="flex items-center justify-between gap-4">
                     <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-                      {activeProject.name}
+                      {activeProject?.name || 'Regulatory Compliance Framework'}
                     </h1>
-                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${activeProject.statusColor}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${activeProject.dotColor}`} />
-                      <span>{activeProject.status}</span>
+                    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${activeProject?.statusColor || 'bg-amber-950/40 text-amber-400 border-amber-800/50'}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${activeProject?.dotColor || 'bg-amber-400'}`} />
+                      <span>{activeProject?.status || 'In Progress'}</span>
                     </span>
                   </div>
 
                   <p className="text-xs sm:text-sm text-slate-400 mt-1 font-normal max-w-3xl">
-                    Permitted project overview for {currentExpertise.name}. Restricted documents and unrelated requirements are not shown.
+                    Permitted project overview for {currentExpertise?.name || 'Advisor'}. Restricted documents and unrelated requirements are not shown.
                   </p>
                 </div>
 
@@ -865,7 +877,7 @@ export default function AdvisorDashboardView({
                       COMPANY
                     </span>
                     <p className="text-sm font-semibold text-white">
-                      {activeProject.company}
+                      {activeProject?.company || 'Northbank Financial'}
                     </p>
                   </div>
                   <div>
