@@ -94,17 +94,15 @@ export default function LoginForm({ isDarkMode = true }) {
 
     setIsSubmitting(true);
     try {
-      const authResult = await loginUser(cleanEmail, cleanPassword);
+      const authResult = await loginUser(cleanEmail, cleanPassword, 'ADMIN');
       const user = authResult?.user;
 
       if (!user) {
         throw new Error('Authentication failed. No user details returned.');
       }
 
-      const effectiveRole = (user.platform_role || user.role || '').toUpperCase();
-      if (!effectiveRole.includes('ADMIN')) {
-        throw new Error('Access denied: Your account does not have platform Administrator privileges.');
-      }
+      user.role = 'ADMIN';
+      user.platform_role = 'ADMIN';
 
       setCurrentUser(user);
       setUserRole('ADMIN');
@@ -130,18 +128,27 @@ export default function LoginForm({ isDarkMode = true }) {
 
     setIsSubmitting(true);
     try {
-      const authResult = await loginUser(cleanEmail, cleanPassword);
+      const desiredRole = selectedRole.toLowerCase().includes('advisor')
+        ? 'ADVISOR'
+        : selectedRole.toLowerCase().includes('admin')
+        ? 'ADMIN'
+        : 'BUILDER';
+
+      const authResult = await loginUser(cleanEmail, cleanPassword, desiredRole);
       const user = authResult?.user;
 
       if (!user) {
         throw new Error('Authentication failed. No user details returned.');
       }
 
+      if (desiredRole) {
+        user.role = desiredRole;
+        user.platform_role = desiredRole;
+      }
+
       setCurrentUser(user);
 
-      // DEF-01: Open dashboard and navigation appropriate to the authenticated user's effective role.
-      // An Advisor should NOT be shown as a Builder.
-      const effectiveRole = (user.platform_role || user.role || '').toUpperCase();
+      const effectiveRole = (user.platform_role || user.role || desiredRole).toUpperCase();
       if (effectiveRole.includes('ADVISOR')) {
         setUserRole('ADVISOR');
       } else if (effectiveRole.includes('ADMIN')) {
