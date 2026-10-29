@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import List, Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, status
@@ -99,6 +100,7 @@ def update_user_status(
 
     old_status = user.is_active
     user.is_active = payload.is_active
+    user.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(user)
 

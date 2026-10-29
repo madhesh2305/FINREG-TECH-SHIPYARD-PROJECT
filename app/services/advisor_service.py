@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 from typing import List
 from sqlalchemy.orm import Session
 from app.core.exceptions import ConflictError, NotFoundError, ValidationError
-from app.models.identity import User
+from app.models.identity import User, Role
 from app.models.advisor import AdvisorProfile, AdvisorInvitation
 from app.models.project import ProjectMember
 from app.schemas.advisor import AdvisorInvitationCreate
@@ -12,7 +12,40 @@ from app.services.audit_service import log_audit_event
 from app.security.authorization import verify_object_belongs_to_project
 
 def list_advisors(db: Session) -> List[AdvisorProfile]:
-    return db.query(AdvisorProfile).join(User, User.user_id == AdvisorProfile.user_id).all()
+    # Ensure any active user with ADVISOR role has an AdvisorProfile (DEF-25)
+    advisor_role = db.query(Role).filter(Role.role_name == "ADVISOR").first()
+    if advisor_role:
+        advisor_users = (
+            db.query(User)
+            .filter(User.role_id == advisor_role.role_id, User.is_active == True)
+            .all()
+        )
+        created_any = False
+        for u in advisor_users:
+            prof = db.query(AdvisorProfile).filter(AdvisorProfile.user_id == u.user_id).first()
+            if not prof:
+                now = datetime.now(timezone.utc)
+                new_prof = AdvisorProfile(
+                    user_id=u.user_id,
+                    organization_name=f"{u.full_name} Advisory",
+                    professional_title="Regulatory & Compliance Advisor",
+                    specialization="Financial Crime Compliance & Regulatory Strategy",
+                    bio=f"Verified compliance advisor {u.full_name}.",
+                    created_at=u.created_at or now,
+                    updated_at=u.updated_at or now,
+                )
+                db.add(new_prof)
+                created_any = True
+        if created_any:
+            db.commit()
+
+    return (
+        db.query(AdvisorProfile)
+        .join(User, User.user_id == AdvisorProfile.user_id)
+        .filter(User.is_active == True)
+        .order_by(AdvisorProfile.created_at.desc())
+        .all()
+    )
 
 def get_advisor_by_id(db: Session, advisor_id: int) -> AdvisorProfile:
     advisor = db.query(AdvisorProfile).filter(AdvisorProfile.advisor_profile_id == advisor_id).first()

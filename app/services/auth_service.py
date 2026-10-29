@@ -44,7 +44,33 @@ def authenticate_user(db: Session, request: LoginRequest) -> TokenResponse:
     if not user.is_active:
         raise InactiveUserError("Your account has been deactivated. Please contact administrator.")
 
-    role_name = user.role.role_name if user.role else "USER"
+    # Determine authoritative role with strong ADVISOR preservation (DEF-23)
+    if user.role and user.role.role_name:
+        role_name = user.role.role_name.upper()
+    elif user.advisor_profile:
+        role_name = "ADVISOR"
+        adv_role = db.query(Role).filter(Role.role_name == "ADVISOR").first()
+        if adv_role:
+            user.role_id = adv_role.role_id
+            db.commit()
+    else:
+        role_name = "BUILDER"
+
+    # Ensure ADVISOR has AdvisorProfile (DEF-25)
+    if role_name == "ADVISOR" and not user.advisor_profile:
+        now = datetime.now(timezone.utc)
+        prof = AdvisorProfile(
+            user_id=user.user_id,
+            organization_name=f"{user.full_name} Advisory",
+            professional_title="Regulatory & Compliance Advisor",
+            specialization="Financial Crime Compliance & Regulatory Strategy",
+            bio=f"Verified compliance advisor {user.full_name}.",
+            created_at=user.created_at or now,
+            updated_at=user.updated_at or now,
+        )
+        db.add(prof)
+        db.commit()
+
     pwd_sig = hashlib.sha256(user.password_hash.encode("utf-8")).hexdigest()[:16]
     token = create_access_token(
         subject=user.user_id,

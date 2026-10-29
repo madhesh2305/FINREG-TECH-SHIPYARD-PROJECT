@@ -30,9 +30,9 @@ def _to_advisor_response(a: AdvisorProfile) -> AdvisorProfileResponse:
         user_id=a.user_id,
         full_name=a.user.full_name if a.user else "Unknown",
         email=a.user.email if a.user else "",
-        organization_name=a.organization_name,
-        professional_title=a.professional_title,
-        specialization=a.specialization,
+        organization_name=a.organization_name or "Independent Advisory",
+        professional_title=a.professional_title or "Regulatory & Compliance Advisor",
+        specialization=a.specialization or "Financial Crime Compliance & Regulatory Strategy",
         bio=a.bio or "",
         created_at=a.created_at,
         updated_at=a.updated_at

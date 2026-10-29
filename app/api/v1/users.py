@@ -32,7 +32,7 @@ def _build_user_context(user: User, db: Session) -> CurrentUserContext:
         full_name=user.full_name,
         email=user.email,
         is_active=user.is_active,
-        platform_role=user.role.role_name if user.role else "USER",
+        platform_role=user.role.role_name.upper() if (user.role and user.role.role_name) else ("ADVISOR" if user.advisor_profile else "BUILDER"),
         memberships=membership_contexts
     )
 
