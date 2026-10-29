@@ -24,12 +24,15 @@ export default function ReadinessView({ isDarkMode, onOpenRelatedItem, items = [
   const readinessItems =
     items.length > 0
       ? items
-      : readinessData?.breakdown?.map((b, idx) => ({
+      : Array.isArray(readinessData?.breakdown)
+      ? readinessData.breakdown.map((b, idx) => ({
           code: `READ-00${idx + 1}`,
           title: `${b.category}: ${b.metric}`,
           status: b.status === 'PASS' ? 'Completed' : b.status === 'ACTION_REQUIRED' ? 'Blocked' : 'Requires Review',
           statusType: b.status === 'PASS' ? 'emerald' : b.status === 'ACTION_REQUIRED' ? 'rose' : 'amber',
-        })) || [];
+        }))
+      : [];
+
 
   const completedCount = readinessData?.completed_requirements !== undefined
     ? readinessData.completed_requirements

@@ -2303,6 +2303,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
           {activeTab === 'Readiness' && (
             <ReadinessView
               isDarkMode={isDarkMode}
+              activeProject={selectedProject || (allProjects && allProjects[0]) || null}
               onOpenRelatedItem={(item) => {
                 const reqId = (item && item.reqId) || (item && item.code && item.code.startsWith('REQ-') ? item.code : 'REQ-142');
                 setTargetRequirementId(reqId);

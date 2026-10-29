@@ -156,10 +156,14 @@ export async function getProjectReadiness(projectId) {
   try {
     return await apiCall(`/projects/${projectId}/readiness`, 'GET');
   } catch (err) {
+    // Fallback: return structured data matching what ReadinessView expects
     return {
-      readiness_score: 82,
-      status: 'AUDIT_READY',
-      breakdown: { governance: 85, evidence: 80, controls: 82 },
+      readiness_score: 0,
+      readiness_percentage: 0,
+      total_requirements: 0,
+      completed_requirements: 0,
+      status: 'PENDING',
+      breakdown: [],
     };
   }
 }
