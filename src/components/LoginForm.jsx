@@ -141,10 +141,9 @@ export default function LoginForm({ isDarkMode = true }) {
         throw new Error('Authentication failed. No user details returned.');
       }
 
-      if (desiredRole) {
-        user.role = desiredRole;
-        user.platform_role = desiredRole;
-      }
+            const authoritativeRole = (user.platform_role || user.role || desiredRole).toUpperCase();
+      user.role = authoritativeRole;
+      user.platform_role = authoritativeRole;
 
       setCurrentUser(user);
 

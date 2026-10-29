@@ -39,10 +39,31 @@ const DEFAULT_ADVISORS_LIST = [
 export async function getAdvisors() {
   try {
     const data = await apiCall('/advisors', 'GET');
-    if (Array.isArray(data) && data.length > 0) return data;
+    if (Array.isArray(data)) return data;
   } catch (err) {
     console.info('[advisorService] Backend offline. Using verified advisor directory.');
   }
+  try {
+    const raw = localStorage.getItem('finreg_local_accounts');
+    if (raw) {
+      const accounts = JSON.parse(raw);
+      const localAdvisors = Object.values(accounts)
+        .filter(acc => acc.user && ((acc.user.role || acc.user.platform_role || '').toUpperCase() === 'ADVISOR'))
+        .map(acc => ({
+          advisor_profile_id: acc.user.id || acc.user.user_id,
+          user_id: acc.user.id || acc.user.user_id,
+          full_name: acc.user.name || acc.user.full_name,
+          email: acc.user.email,
+          organization_name: acc.user.organization || 'Independent Advisory',
+          professional_title: 'Regulatory & Compliance Advisor',
+          specialization: 'Financial Crime Compliance & Regulatory Strategy',
+          bio: 'Verified compliance advisor.',
+        }));
+      if (localAdvisors.length > 0) {
+        return [...localAdvisors, ...DEFAULT_ADVISORS_LIST];
+      }
+    }
+  } catch (_) {}
   return DEFAULT_ADVISORS_LIST;
 }
 

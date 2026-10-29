@@ -82,10 +82,14 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
   const filteredAdvisors = advisors.filter((adv) => {
     if (activeSubTab === 'My Invited Advisors' && !adv.isInvited) return false;
 
+    const q = (searchQuery || '').trim().toLowerCase();
     const matchesSearch =
-      adv.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      adv.specialty.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      adv.firm.toLowerCase().includes(searchQuery.toLowerCase());
+      !q ||
+      (adv.name || '').toLowerCase().includes(q) ||
+      (adv.email || '').toLowerCase().includes(q) ||
+      (adv.specialty || '').toLowerCase().includes(q) ||
+      (adv.firm || '').toLowerCase().includes(q) ||
+      (adv.organization || '').toLowerCase().includes(q);
 
     const matchesExpertise =
       expertiseFilter === 'All expertise' || adv.specialty === expertiseFilter;

@@ -2,9 +2,21 @@ import { apiCall } from './api';
 
 export const PROJECTS_STORAGE_KEY = 'finreg_projects';
 
+function getCurrentUserId() {
+  try {
+    const raw = localStorage.getItem('finreg_current_user') || localStorage.getItem('currentUser');
+    if (raw) {
+      const u = JSON.parse(raw);
+      return u.id || u.user_id || u.email || 'anon';
+    }
+  } catch (_) {}
+  return 'anon';
+}
+
 function getStoredLocalProjects() {
   try {
-    const raw = localStorage.getItem(PROJECTS_STORAGE_KEY);
+    const uid = getCurrentUserId();
+    const raw = localStorage.getItem(`${PROJECTS_STORAGE_KEY}_${uid}`);
     return raw ? JSON.parse(raw) : [];
   } catch (e) {
     return [];
@@ -13,7 +25,8 @@ function getStoredLocalProjects() {
 
 function saveStoredLocalProjects(list) {
   try {
-    localStorage.setItem(PROJECTS_STORAGE_KEY, JSON.stringify(list));
+    const uid = getCurrentUserId();
+    localStorage.setItem(`${PROJECTS_STORAGE_KEY}_${uid}`, JSON.stringify(list));
   } catch (e) {}
 }
 

@@ -252,6 +252,8 @@ export async function getCurrentUser() {
       clearToken();
       try {
         localStorage.removeItem(CURRENT_USER_KEY);
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('finreg_projects');
       } catch (e) {}
       return null;
     }
@@ -276,6 +278,8 @@ export async function logoutUser() {
   clearToken();
   try {
     localStorage.removeItem(CURRENT_USER_KEY);
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('finreg_projects');
   } catch (e) {}
 }
 
