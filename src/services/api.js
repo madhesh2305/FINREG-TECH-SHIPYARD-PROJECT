@@ -40,6 +40,31 @@ export async function apiCall(endpoint, method = 'GET', body = null) {
       } catch (e) {
         // Fallback to text
       }
+
+      // Handle inactive account or revoked session immediately (DEF-24)
+      const errLower = (errorMessage || '').toLowerCase();
+      const isDeactivatedOrUnauthorized =
+        response.status === 401 ||
+        (response.status === 403 &&
+          (errLower.includes('deactivated') ||
+            errLower.includes('inactive') ||
+            errLower.includes('revoked') ||
+            errLower.includes('session expired')));
+
+      if (isDeactivatedOrUnauthorized && typeof window !== 'undefined') {
+        clearToken();
+        try {
+          localStorage.removeItem('currentUser');
+          localStorage.removeItem('finreg_current_user');
+          localStorage.removeItem('finreg_projects');
+        } catch (_) {}
+        window.dispatchEvent(
+          new CustomEvent('auth:unauthorized', {
+            detail: { message: errorMessage, status: response.status },
+          })
+        );
+      }
+
       throw new Error(errorMessage);
     }
 

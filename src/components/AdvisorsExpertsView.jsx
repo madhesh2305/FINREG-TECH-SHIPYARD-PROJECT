@@ -33,7 +33,11 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, proje
     async function fetchLiveAdvisors() {
       try {
         const live = await getAdvisors();
-        if (isMounted && Array.isArray(live) && live.length > 0) {
+        if (isMounted && Array.isArray(live)) {
+          if (live.length === 0) {
+            setAdvisors([]);
+            return;
+          }
           const mapped = live.map((adv, idx) => ({
             id: adv.advisor_profile_id || adv.id || `ADV-${idx + 1}`,
             advisor_profile_id: adv.advisor_profile_id,

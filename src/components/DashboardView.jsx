@@ -153,6 +153,10 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
         ]);
         if (isMounted) {
           if (user) {
+            if (user.is_active === false) {
+              if (onSignOut) onSignOut();
+              return;
+            }
             setCurrentUser(user);
           }
           if (Array.isArray(liveProjects)) {
@@ -194,6 +198,19 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
       isMounted = false;
     };
   }, []);
+
+  // DEF-25: Dynamically refresh advisor list on opening Advisor views or Members tab
+  useEffect(() => {
+    if (activeTab === 'Advisors / Experts' || projectSubTab === 'Members & Advisors') {
+      getAdvisors()
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setRegisteredAdvisors(data);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [activeTab, projectSubTab]);
 
 
   // Open Project Details Page (fetches live details from API)

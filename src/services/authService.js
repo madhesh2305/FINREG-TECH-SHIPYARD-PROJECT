@@ -65,7 +65,12 @@ export async function getCurrentUser() {
   } catch (err) {
     console.warn('[authService] Token expired or invalid. Clearing session.');
     clearToken();
+    try {
     localStorage.removeItem('currentUser');
+    localStorage.removeItem('finreg_current_user');
+    localStorage.removeItem('finreg_projects');
+    localStorage.removeItem('finreg_local_accounts');
+  } catch (_) {}
     return null;
   }
 }
@@ -75,7 +80,12 @@ export async function getCurrentUser() {
  */
 export function logoutUser() {
   clearToken();
-  localStorage.removeItem('currentUser');
+  try {
+    localStorage.removeItem('currentUser');
+    localStorage.removeItem('finreg_current_user');
+    localStorage.removeItem('finreg_projects');
+    localStorage.removeItem('finreg_local_accounts');
+  } catch (_) {}
 }
 
 /**

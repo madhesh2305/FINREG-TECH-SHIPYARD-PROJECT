@@ -10,7 +10,7 @@ import DashboardView from './DashboardView';
 import AdvisorDashboardView from './AdvisorDashboardView';
 import AdminDashboardView from './AdminDashboardView';
 
-import { loginUser, registerUser, requestPasswordReset, confirmPasswordReset, logoutUser } from '../services/authService';
+import { loginUser, registerUser, requestPasswordReset, confirmPasswordReset, logoutUser, getCurrentUser } from '../services/authService';
 
 export default function LoginForm({ isDarkMode = true }) {
   // Persisted auth session detection (DEF-17: preserve Admin and role dashboard on refresh)
@@ -263,6 +263,51 @@ export default function LoginForm({ isDarkMode = true }) {
       return () => clearTimeout(timer);
     }
   }, [step]);
+
+  // DEF-24: React immediately to deactivation or session invalidation events across all child components
+  useEffect(() => {
+    const handleUnauthorized = (e) => {
+      logoutUser();
+      setCurrentUser(null);
+      setStep('login');
+      if (e.detail?.message) {
+        setLoginError(e.detail.message);
+      }
+    };
+    window.addEventListener('auth:unauthorized', handleUnauthorized);
+    return () => window.removeEventListener('auth:unauthorized', handleUnauthorized);
+  }, []);
+
+  // DEF-24 & DEF-23: Authoritative role validation on mount / session recovery
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    if (token) {
+      getCurrentUser()
+        .then((user) => {
+          if (!user || user.is_active === false) {
+            logoutUser();
+            setCurrentUser(null);
+            setStep('login');
+            setLoginError('Your account has been deactivated. Please contact administrator.');
+          } else {
+            setCurrentUser(user);
+            const role = (user.platform_role || user.role || '').toUpperCase();
+            if (role === 'ADVISOR') setUserRole('ADVISOR');
+            else if (role === 'ADMIN') setUserRole('ADMIN');
+            else setUserRole('BUILDER');
+          }
+        })
+        .catch((err) => {
+          const msg = (err.message || '').toLowerCase();
+          if (msg.includes('deactivated') || msg.includes('inactive')) {
+            logoutUser();
+            setCurrentUser(null);
+            setStep('login');
+            setLoginError('Your account has been deactivated. Please contact administrator.');
+          }
+        });
+    }
+  }, []);
 
   const isFormValid = email.trim().length > 0 && password.trim().length > 0;
 
