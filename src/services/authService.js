@@ -162,6 +162,9 @@ export async function loginUser(email, password, roleHint = 'BUILDER') {
     if (localAcc.password && localAcc.password !== cleanPassword) {
       throw new Error('Invalid email or password.');
     }
+    if (localAcc.user && (localAcc.user.is_active === false || localAcc.user.status === 'Inactive')) {
+      throw new Error('Your account has been deactivated. Please contact your administrator.');
+    }
     const token = `session_token_${Date.now()}`;
     setToken(token);
     const user = {

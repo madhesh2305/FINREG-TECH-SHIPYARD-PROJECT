@@ -32,7 +32,7 @@ import {
 } from 'lucide-react';
 import { logoutUser, getRegisteredUsers } from '../services/authService';
 import { getLocalProjects, getProjects } from '../services/projectService';
-import { getAdminStats, getAdminUsers } from '../services/adminService';
+import { getAdminStats, getAdminUsers, updateUserStatus } from '../services/adminService';
 
 export default function AdminDashboardView({
   isDarkMode = true,
@@ -103,41 +103,78 @@ export default function AdminDashboardView({
   const [deactivatingUser, setDeactivatingUser] = useState(null);
   const [showStatusRecordedBanner, setShowStatusRecordedBanner] = useState(true);
 
-  const persistUserStatus = (userId, newStatus) => {
+  const persistUserStatus = (identifier, newStatus) => {
     try {
+      const isActive = newStatus === 'Active';
       const raw = localStorage.getItem('finreg_registered_users');
       if (raw) {
         const parsed = JSON.parse(raw);
-        const updated = parsed.map((u) => (u.id === userId || u.email === userId ? { ...u, status: newStatus } : u));
+        const updated = parsed.map((u) => (u.id === identifier || u.email === identifier || u.user_id === identifier ? { ...u, status: newStatus, is_active: isActive } : u));
         localStorage.setItem('finreg_registered_users', JSON.stringify(updated));
+      }
+      const rawAccounts = localStorage.getItem('finreg_local_accounts');
+      if (rawAccounts) {
+        const accounts = JSON.parse(rawAccounts);
+        const emailKey = Object.keys(accounts).find(k => k.toLowerCase() === String(identifier).toLowerCase() || accounts[k].user?.user_id === identifier);
+        if (emailKey && accounts[emailKey]) {
+          accounts[emailKey].user.status = newStatus;
+          accounts[emailKey].user.is_active = isActive;
+          localStorage.setItem('finreg_local_accounts', JSON.stringify(accounts));
+        }
       }
     } catch (e) {
       // ignore
     }
   };
 
-  const handleConfirmDeactivate = (userId) => {
+  const handleConfirmDeactivate = async (userId) => {
+    const targetUser = deactivatingUser || users.find((u) => u.id === userId || u.user_id === userId);
+    const rawId = targetUser?.user_id || targetUser?.id || userId;
+    const email = targetUser?.email;
+
+    try {
+      if (rawId) {
+        await updateUserStatus(rawId, false);
+      }
+    } catch (err) {
+      console.warn('[AdminDashboardView] updateUserStatus backend error:', err);
+    }
+
     setUsers((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, status: 'Inactive' } : u))
+      prev.map((u) => (u.id === userId || u.user_id === rawId ? { ...u, status: 'Inactive', is_active: false } : u))
     );
-    persistUserStatus(userId, 'Inactive');
+    persistUserStatus(email || rawId, 'Inactive');
     setShowStatusRecordedBanner(true);
-    showToast(`Account status updated for ${deactivatingUser?.name || 'User'} and recorded in audit log.`);
+    showToast(`Account status updated for ${targetUser?.name || 'User'} and recorded in audit log.`);
     setDeactivatingUser(null);
   };
 
-  const handleToggleStatus = (userId) => {
+  const handleToggleStatus = async (userId) => {
+    const targetUser = users.find((u) => u.id === userId || u.user_id === userId);
+    if (!targetUser) return;
+    const rawId = targetUser.user_id || targetUser.id || userId;
+    const nextActive = targetUser.status !== 'Active';
+    const nextStatus = nextActive ? 'Active' : 'Inactive';
+
+    try {
+      if (rawId) {
+        await updateUserStatus(rawId, nextActive);
+      }
+    } catch (err) {
+      console.warn('[AdminDashboardView] updateUserStatus backend error:', err);
+    }
+
     setUsers((prev) =>
       prev.map((u) => {
-        if (u.id === userId) {
-          const nextStatus = u.status === 'Active' ? 'Inactive' : 'Active';
-          persistUserStatus(userId, nextStatus);
-          return { ...u, status: nextStatus };
+        if (u.id === userId || u.user_id === rawId) {
+          return { ...u, status: nextStatus, is_active: nextActive };
         }
         return u;
       })
     );
+    persistUserStatus(targetUser.email || rawId, nextStatus);
     setShowStatusRecordedBanner(true);
+    showToast(`Account status updated to ${nextStatus} for ${targetUser.name}`);
   };
 
   const filteredUsers = users.filter((u) => {

@@ -37,33 +37,75 @@ const DEFAULT_ADVISORS_LIST = [
  * Fetches expert advisors
  */
 export async function getAdvisors() {
+  let backendAdvisors = [];
   try {
     const data = await apiCall('/advisors', 'GET');
-    if (Array.isArray(data)) return data;
+    if (Array.isArray(data)) {
+      backendAdvisors = data;
+    }
   } catch (err) {
-    console.info('[advisorService] Backend offline. Using verified advisor directory.');
+    console.info('[advisorService] Backend offline or request failed:', err);
   }
+
+  let localAdvisors = [];
   try {
     const raw = localStorage.getItem('finreg_local_accounts');
+    const rawReg = localStorage.getItem('finreg_registered_users');
+    const allLocalUsers = [];
     if (raw) {
       const accounts = JSON.parse(raw);
-      const localAdvisors = Object.values(accounts)
-        .filter(acc => acc.user && ((acc.user.role || acc.user.platform_role || '').toUpperCase() === 'ADVISOR'))
-        .map(acc => ({
-          advisor_profile_id: acc.user.id || acc.user.user_id,
-          user_id: acc.user.id || acc.user.user_id,
-          full_name: acc.user.name || acc.user.full_name,
-          email: acc.user.email,
-          organization_name: acc.user.organization || 'Independent Advisory',
-          professional_title: 'Regulatory & Compliance Advisor',
-          specialization: 'Financial Crime Compliance & Regulatory Strategy',
-          bio: 'Verified compliance advisor.',
-        }));
-      if (localAdvisors.length > 0) {
-        return [...localAdvisors, ...DEFAULT_ADVISORS_LIST];
-      }
+      Object.values(accounts).forEach((acc) => {
+        if (acc && acc.user) allLocalUsers.push(acc.user);
+      });
     }
+    if (rawReg) {
+      const reg = JSON.parse(rawReg);
+      if (Array.isArray(reg)) allLocalUsers.push(...reg);
+    }
+
+    localAdvisors = allLocalUsers
+      .filter(
+        (acc) =>
+          acc &&
+          ((acc.role || acc.platform_role || '').toUpperCase() === 'ADVISOR') &&
+          acc.is_active !== false &&
+          acc.status !== 'Inactive'
+      )
+      .map((acc) => ({
+        advisor_profile_id: acc.id || acc.user_id,
+        user_id: acc.id || acc.user_id,
+        full_name: acc.name || acc.full_name,
+        email: acc.email,
+        organization_name: acc.organization || acc.organization_name || 'Independent Advisory',
+        professional_title: 'Regulatory & Compliance Advisor',
+        specialization: 'Financial Crime Compliance & Regulatory Strategy',
+        bio: acc.bio || `Verified compliance advisor ${acc.name || acc.full_name || ''}.`,
+      }));
   } catch (_) {}
+
+  // Merge backend and local advisors, prioritizing backend data and deduplicating by email
+  const seenEmails = new Set();
+  const merged = [];
+
+  for (const adv of backendAdvisors) {
+    const emailKey = (adv.email || '').toLowerCase().trim();
+    if (emailKey && !seenEmails.has(emailKey)) {
+      seenEmails.add(emailKey);
+      merged.push(adv);
+    } else if (!emailKey) {
+      merged.push(adv);
+    }
+  }
+
+  for (const adv of localAdvisors) {
+    const emailKey = (adv.email || '').toLowerCase().trim();
+    if (emailKey && !seenEmails.has(emailKey)) {
+      seenEmails.add(emailKey);
+      merged.push(adv);
+    }
+  }
+
+  if (merged.length > 0) return merged;
   return DEFAULT_ADVISORS_LIST;
 }
 
@@ -164,17 +206,19 @@ export async function updateProjectAdvice(projectId, adviceId, payload) {
  */
 export async function sendAdvisorInvitation(projectId, payload) {
   const email = payload.advisor_email || payload.advisorEmail || payload.email;
-  let accessLevel = payload.access_level || 'CONTRIBUTOR';
-  const roleUpper = (payload.role || '').toUpperCase();
-  if (roleUpper.includes('READ')) accessLevel = 'READ_ONLY';
-  else if (roleUpper.includes('FULL') || roleUpper.includes('LEGAL')) accessLevel = 'FULL_ADVISORY';
+  let accessLevel = 'REGULATORY';
+  const roleUpper = (payload.role || payload.access_level || '').toUpperCase();
+  if (roleUpper.includes('LEGAL')) accessLevel = 'LEGAL';
+  else if (roleUpper.includes('TECH')) accessLevel = 'TECH';
+  else if (roleUpper.includes('FUNDING') || roleUpper.includes('BUSINESS')) accessLevel = 'FUNDING_BUSINESS';
+  else if (roleUpper.includes('MARKETING')) accessLevel = 'MARKETING';
 
   const notes = payload.invitation_notes || payload.message || payload.notes;
 
   const backendPayload = {
     advisor_email: email,
     access_level: accessLevel,
-    invitation_notes: notes || undefined,
+    expiry_days: 7,
   };
 
   try {

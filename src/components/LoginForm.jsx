@@ -100,6 +100,9 @@ export default function LoginForm({ isDarkMode = true }) {
       if (!user) {
         throw new Error('Authentication failed. No user details returned.');
       }
+      if (user.is_active === false || user.status === 'Inactive') {
+        throw new Error('Your account has been deactivated. Please contact your administrator.');
+      }
 
       user.role = 'ADMIN';
       user.platform_role = 'ADMIN';
@@ -140,6 +143,9 @@ export default function LoginForm({ isDarkMode = true }) {
       if (!user) {
         throw new Error('Authentication failed. No user details returned.');
       }
+      if (user.is_active === false || user.status === 'Inactive') {
+        throw new Error('Your account has been deactivated. Please contact your administrator.');
+      }
 
             const authoritativeRole = (user.platform_role || user.role || desiredRole).toUpperCase();
       user.role = authoritativeRole;
@@ -158,7 +164,7 @@ export default function LoginForm({ isDarkMode = true }) {
 
       // DEF-02: Ensure login errors are completely cleared on successful authentication
       setLoginError('');
-      setStep('verifying');
+      setStep('dashboard');
     } catch (err) {
       setLoginError(err.message || 'Invalid email or password. Please verify your credentials or sign up.');
     } finally {
@@ -209,7 +215,7 @@ export default function LoginForm({ isDarkMode = true }) {
       else setUserRole('BUILDER');
 
       setTimeout(() => {
-        setStep('verifying');
+        setStep('dashboard');
       }, 1200);
     } catch (err) {
       // DEF-13: Report success only after confirmed record; show error when saving fails
@@ -246,12 +252,8 @@ export default function LoginForm({ isDarkMode = true }) {
   useEffect(() => {
     if (step === 'verifying') {
       const timer = setTimeout(() => {
-        if (userRole === 'ADVISOR') {
-          setStep('advisor-expertise');
-        } else {
-          setStep('dashboard');
-        }
-      }, 3500);
+        setStep('dashboard');
+      }, 1200);
       return () => clearTimeout(timer);
     }
   }, [step, userRole]);
@@ -867,15 +869,15 @@ export default function LoginForm({ isDarkMode = true }) {
                 {/* Role (DEF-01: Builder, Advisor, or Administrator) */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-slate-300">
-                    Assigned Workspace Role
+                    Prototype assigned account role / Assigned role
                   </label>
                   <select
                     value={signupRole}
                     onChange={(e) => setSignupRole(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 focus:outline-none focus:border-[#96562c] cursor-pointer transition-all"
                   >
-                    <option value="Builder">Builder / Project Owner</option>
                     <option value="Advisor">Advisor</option>
+                    <option value="Builder">Builder / Project Owner</option>
                     <option value="Administrator">Administrator</option>
                   </select>
                 </div>
@@ -916,11 +918,7 @@ export default function LoginForm({ isDarkMode = true }) {
               isDarkMode={isDarkMode}
               userRole={userRole}
               onProceed={() => {
-                if (userRole === 'ADVISOR') {
-                  setStep('advisor-expertise');
-                } else {
-                  setStep('dashboard');
-                }
+                setStep('dashboard');
               }}
             />
           )}

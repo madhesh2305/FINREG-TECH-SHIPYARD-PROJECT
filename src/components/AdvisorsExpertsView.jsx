@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Check, ArrowLeft, UserX } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Search, Check, ArrowLeft, UserX, RefreshCw } from 'lucide-react';
 import { sendAdvisorInvitation, getAdvisors } from '../services/advisorService';
 
 // Master advisors list initialized to empty array (ready for live registered advisors / backend data)
@@ -13,6 +13,7 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
   const [availabilityFilter, setAvailabilityFilter] = useState('Any availability');
   const [activeCardId, setActiveCardId] = useState(null);
   const [toastMsg, setToastMsg] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Available projects for the invite dropdown
   const projectOptions = availableProjects.length > 0 ? availableProjects : [];
@@ -33,47 +34,47 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
   // Master Advisors List loaded live from backend GET /advisors
   const [advisors, setAdvisors] = useState([]);
 
-  useEffect(() => {
-    let isMounted = true;
-    async function fetchLiveAdvisors() {
-      try {
-        const live = await getAdvisors();
-        if (isMounted && Array.isArray(live)) {
-          setAdvisors(
-            live.map((u) => ({
-              id: u.advisor_profile_id || u.user_id,
-              user_id: u.user_id,
-              name: u.full_name || 'Advisor',
-              avatar: (u.full_name || 'AD')
-                .split(' ')
-                .filter(Boolean)
-                .map((n) => n[0])
-                .join('')
-                .slice(0, 2)
-                .toUpperCase(),
-              specialty: u.specialization || u.professional_title || 'Regulatory Compliance & Advisory',
-              firm: u.organization_name || 'Independent Advisory',
-              jurisdiction: 'UK / EU',
-              status: 'Available',
-              statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
-              dotColor: 'bg-emerald-500',
-              isInvited: false,
-              bio: u.bio || 'Registered compliance advisor specializing in regulatory risk and governance.',
-              organization: u.organization_name || 'Independent Advisory',
-              areasOfSupport: ['Policy design', 'Control validation', 'Regulatory interpretation', 'Board assurance'],
-              email: u.email,
-            }))
-          );
-        }
-      } catch (err) {
-        console.warn('[AdvisorsExpertsView] Failed to fetch advisors:', err.message);
+  const fetchLiveAdvisors = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const live = await getAdvisors();
+      if (Array.isArray(live)) {
+        setAdvisors(
+          live.map((u) => ({
+            id: u.advisor_profile_id || u.user_id,
+            user_id: u.user_id,
+            name: u.full_name || 'Advisor',
+            avatar: (u.full_name || 'AD')
+              .split(' ')
+              .filter(Boolean)
+              .map((n) => n[0])
+              .join('')
+              .slice(0, 2)
+              .toUpperCase(),
+            specialty: u.specialization || u.professional_title || 'Regulatory Compliance & Advisory',
+            firm: u.organization_name || 'Independent Advisory',
+            jurisdiction: 'UK / EU',
+            status: 'Available',
+            statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
+            dotColor: 'bg-emerald-500',
+            isInvited: false,
+            bio: u.bio || 'Registered compliance advisor specializing in regulatory risk and governance.',
+            organization: u.organization_name || 'Independent Advisory',
+            areasOfSupport: ['Policy design', 'Control validation', 'Regulatory interpretation', 'Board assurance'],
+            email: u.email,
+          }))
+        );
       }
+    } catch (err) {
+      console.warn('[AdvisorsExpertsView] Failed to fetch advisors:', err.message);
+    } finally {
+      setIsRefreshing(false);
     }
-    fetchLiveAdvisors();
-    return () => {
-      isMounted = false;
-    };
   }, []);
+
+  useEffect(() => {
+    fetchLiveAdvisors();
+  }, [fetchLiveAdvisors, activeSubTab]);
 
   const invitedCount = advisors.filter((a) => a.isInvited).length;
   const isLimitReached = invitedCount >= 2;
@@ -446,9 +447,21 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
           </p>
         </div>
 
-        {/* Top Right Advisor Limit Pill */}
-        <div className="self-start px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-stone-100 dark:bg-[#161619] text-xs font-medium text-slate-600 dark:text-slate-400">
-          Advisor limit: <span className="font-bold text-slate-900 dark:text-slate-200">{invitedCount} / 2</span>
+        {/* Top Right Advisor Limit Pill & Refresh */}
+        <div className="flex items-center gap-2 self-start">
+          <button
+            type="button"
+            onClick={fetchLiveAdvisors}
+            disabled={isRefreshing}
+            className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-[#161619] hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+            title="Refresh Advisor Directory"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-amber-400' : ''}`} />
+            <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+          </button>
+          <div className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-stone-100 dark:bg-[#161619] text-xs font-medium text-slate-600 dark:text-slate-400">
+            Advisor limit: <span className="font-bold text-slate-900 dark:text-slate-200">{invitedCount} / 2</span>
+          </div>
         </div>
       </div>
 
