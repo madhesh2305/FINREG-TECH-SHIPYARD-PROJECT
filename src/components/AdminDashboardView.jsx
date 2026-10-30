@@ -99,10 +99,11 @@ export default function AdminDashboardView({ isDarkMode = true, onSignOut }) {
 
   const handleToggleStatus = async (user) => {
     try {
-      const updated = await updateUserStatus(user.user_id, !user.is_active);
+      const uid = user.user_id || user.id;
+      const updated = await updateUserStatus(uid, !user.is_active);
       setUsersState((prev) => ({
         ...prev,
-        data: prev.data.map((u) => (u.user_id === user.user_id ? { ...u, is_active: updated.is_active } : u)),
+        data: prev.data.map((u) => ((u.user_id === user.user_id || u.id === user.id) ? { ...u, is_active: updated.is_active } : u)),
       }));
       showToast(`User ${user.email} status updated to ${updated.is_active ? 'ACTIVE' : 'DEACTIVATED'}`);
     } catch (err) {

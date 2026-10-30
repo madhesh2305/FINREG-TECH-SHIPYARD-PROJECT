@@ -138,11 +138,13 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   });
   const [registeredAdvisors, setRegisteredAdvisors] = useState([]);
 
-  // Load user & live projects & notifications from backend API on mount
+  // Load user & live projects & notifications from backend API on mount or user change
   useEffect(() => {
     let isMounted = true;
     async function loadBackendData() {
       setIsLoadingProjects(true);
+      setAllProjects([]);
+      setSelectedProject(null);
       try {
         const [liveProjects, user, liveNotifs, summaryData, advisorsData] = await Promise.all([
           getProjects().catch(() => []),
@@ -197,7 +199,14 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [propUser?.user_id, propUser?.email]);
+
+  // DEF-22: Synchronize local currentUser state when propUser changes
+  useEffect(() => {
+    if (propUser) {
+      setCurrentUser(propUser);
+    }
+  }, [propUser?.user_id, propUser?.email]);
 
   // DEF-25: Dynamically refresh advisor list on opening Advisor views or Members tab
   useEffect(() => {

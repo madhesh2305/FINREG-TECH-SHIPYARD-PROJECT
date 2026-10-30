@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Search, Check, ArrowLeft, UserX } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Search, Check, ArrowLeft, UserX, RefreshCw } from 'lucide-react';
 import { getAdvisors, sendAdvisorInvitation } from '../services/advisorService';
 
 export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, projects = [] }) {
@@ -10,6 +10,7 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, proje
   const [availabilityFilter, setAvailabilityFilter] = useState('Any availability');
   const [activeCardId, setActiveCardId] = useState(null);
   const [toastMsg, setToastMsg] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Selected Profile State for Profile View (matching uploaded image media_1790742446620.png)
   const [profileAdvisor, setProfileAdvisor] = useState(null);
@@ -28,47 +29,47 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, proje
   const [advisors, setAdvisors] = useState([]);
 
   // Fetch live advisors from real PostgreSQL database via GET /advisors
-  useEffect(() => {
-    let isMounted = true;
-    async function fetchLiveAdvisors() {
-      try {
-        const live = await getAdvisors();
-        if (isMounted && Array.isArray(live)) {
-          if (live.length === 0) {
-            setAdvisors([]);
-            return;
-          }
-          const mapped = live.map((adv, idx) => ({
-            id: adv.advisor_profile_id || adv.id || `ADV-${idx + 1}`,
-            advisor_profile_id: adv.advisor_profile_id,
-            user_id: adv.user_id,
-            name: adv.full_name || 'Verified Advisor',
-            email: adv.email,
-            avatar: adv.full_name
-              ? adv.full_name.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase()
-              : 'AD',
-            specialty: adv.specialization || adv.professional_title || 'Financial Crime & Regulatory Strategy',
-            firm: adv.organization_name || 'Independent Advisory',
-            jurisdiction: 'UK / EU',
-            status: 'Available',
-            statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
-            dotColor: 'bg-emerald-500',
-            isInvited: false,
-            bio: adv.bio || `${adv.full_name} is a verified FCC specialist.`,
-            organization: adv.organization_name || 'Independent Advisory',
-            areasOfSupport: ['AML/CTF Frameworks', 'Regulatory interpretation', 'Control validation', 'FCA Sign-off'],
-          }));
-          setAdvisors(mapped);
+  const fetchLiveAdvisors = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const live = await getAdvisors();
+      if (Array.isArray(live)) {
+        if (live.length === 0) {
+          setAdvisors([]);
+          return;
         }
-      } catch (err) {
-        console.warn('[AdvisorsExpertsView] Failed to fetch live advisors:', err);
+        const mapped = live.map((adv, idx) => ({
+          id: adv.advisor_profile_id || adv.id || `ADV-${idx + 1}`,
+          advisor_profile_id: adv.advisor_profile_id,
+          user_id: adv.user_id,
+          name: adv.full_name || 'Verified Advisor',
+          email: adv.email,
+          avatar: adv.full_name
+            ? adv.full_name.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase()
+            : 'AD',
+          specialty: adv.specialization || adv.professional_title || 'Financial Crime & Regulatory Strategy',
+          firm: adv.organization_name || 'Independent Advisory',
+          jurisdiction: 'UK / EU',
+          status: 'Available',
+          statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
+          dotColor: 'bg-emerald-500',
+          isInvited: false,
+          bio: adv.bio || `${adv.full_name} is a verified FCC specialist.`,
+          organization: adv.organization_name || 'Independent Advisory',
+          areasOfSupport: ['AML/CTF Frameworks', 'Regulatory interpretation', 'Control validation', 'FCA Sign-off'],
+        }));
+        setAdvisors(mapped);
       }
+    } catch (err) {
+      console.warn('[AdvisorsExpertsView] Failed to fetch live advisors:', err);
+    } finally {
+      setIsRefreshing(false);
     }
-    fetchLiveAdvisors();
-    return () => {
-      isMounted = false;
-    };
   }, []);
+
+  useEffect(() => {
+    fetchLiveAdvisors();
+  }, [fetchLiveAdvisors, activeSubTab]);
 
   const invitedCount = advisors.filter((a) => a.isInvited).length;
   const isLimitReached = invitedCount >= 2;
@@ -432,9 +433,21 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, proje
           </p>
         </div>
 
-        {/* Top Right Advisor Limit Pill */}
-        <div className="self-start px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-stone-100 dark:bg-[#161619] text-xs font-medium text-slate-600 dark:text-slate-400">
-          Advisor limit: <span className="font-bold text-slate-900 dark:text-slate-200">{invitedCount} / 2</span>
+        {/* Top Right Advisor Limit Pill & Refresh */}
+        <div className="flex items-center gap-2 self-start">
+          <button
+            type="button"
+            onClick={fetchLiveAdvisors}
+            disabled={isRefreshing}
+            className="px-3 py-1.5 rounded-xl border border-slate-300 dark:border-slate-800 bg-white dark:bg-[#161619] hover:bg-slate-100 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+            title="Refresh Advisor Directory"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-amber-400' : ''}`} />
+            <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+          </button>
+          <div className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-stone-100 dark:bg-[#161619] text-xs font-medium text-slate-600 dark:text-slate-400">
+            Advisor limit: <span className="font-bold text-slate-900 dark:text-slate-200">{invitedCount} / 2</span>
+          </div>
         </div>
       </div>
 

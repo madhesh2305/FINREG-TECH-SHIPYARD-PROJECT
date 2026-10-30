@@ -80,6 +80,7 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut, currentUse
   // Load live notifications, projects, summary, and advice from backend
   const loadAdvisorData = async () => {
     setIsLoadingProjects(true);
+    setAssignedProjects([]);
     try {
       const [projects, notifs, summary] = await Promise.all([
         getProjects().catch(() => []),
@@ -200,9 +201,14 @@ export default function AdvisorDashboardView({ isDarkMode, onSignOut, currentUse
     }
   };
 
+  // Synchronize with propUser
+  useEffect(() => {
+    if (propUser) setCurrentUser(propUser);
+  }, [propUser?.user_id, propUser?.email]);
+
   useEffect(() => {
     loadAdvisorData();
-  }, []);
+  }, [currentUser?.user_id, currentUser?.email]);
 
   const handleAcceptInvitation = async (projectId, invitationId) => {
     if (!projectId || !invitationId) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Lock, Eye, EyeOff, BarChart3 } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, BarChart3, ChevronDown } from 'lucide-react';
 import Navbar from './Navbar';
 import FlashPage from './FlashPage';
 import LandingPage from './LandingPage';
@@ -53,6 +53,7 @@ export default function LoginForm({ isDarkMode = true }) {
   const [rememberMe, setRememberMe] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [selectedRole, setSelectedRole] = useState('Advisor');
 
   // DEF-15: Forgot password and full reset lifecycle states
   const [isForgotModalOpen, setIsForgotModalOpen] = useState(false);
@@ -107,18 +108,27 @@ export default function LoginForm({ isDarkMode = true }) {
     setIsSubmitting(true);
     try {
       const data = await loginUser(cleanEmail, cleanPassword);
+      if (data && data.is_active === false) {
+        throw new Error('Your account has been deactivated. Please contact administrator.');
+      }
       setCurrentUser(data);
-      const role = (data?.platform_role || '').toUpperCase();
-      if (role === 'ADVISOR') {
+      const backendRole = (data?.platform_role || '').toUpperCase();
+      const chosenRole = (selectedRole || '').toUpperCase().includes('ADVISOR')
+        ? 'ADVISOR'
+        : (selectedRole || '').toUpperCase().includes('ADMIN')
+        ? 'ADMIN'
+        : 'BUILDER';
+      const role = backendRole || chosenRole;
+      if (role.includes('ADVISOR') || chosenRole === 'ADVISOR') {
         setUserRole('ADVISOR');
-      } else if (role === 'ADMIN') {
+      } else if (role.includes('ADMIN')) {
         setUserRole('ADMIN');
       } else {
         setUserRole('BUILDER');
       }
       setLoginError('');
       resetSignupForm();
-      setStep('verifying');
+      setStep('dashboard');
     } catch (err) {
       setLoginError(err.message || 'Invalid email or password');
     } finally {
@@ -129,9 +139,15 @@ export default function LoginForm({ isDarkMode = true }) {
   const handleSignOut = () => {
     logoutUser();
     setCurrentUser(null);
+    setUserRole(null);
     resetSignupForm();
     setLoginError('');
     setStep('login');
+    try {
+      localStorage.removeItem('currentUser');
+      localStorage.removeItem('finreg_current_user');
+      localStorage.removeItem('finreg_projects');
+    } catch (_) {}
   };
 
   const handleForgotSubmit = async (e) => {
@@ -245,7 +261,7 @@ export default function LoginForm({ isDarkMode = true }) {
       setUserRole(normalizedRole);
       resetSignupForm();
       setLoginError('');
-      setStep('verifying');
+      setStep('dashboard');
     } catch (err) {
       setSignupError(err.message || 'Registration failed. Please try again.');
     } finally {
@@ -346,6 +362,7 @@ export default function LoginForm({ isDarkMode = true }) {
     if (userRole === 'ADVISOR') {
       return (
         <AdvisorDashboardView
+          key={currentUser?.user_id || currentUser?.id || currentUser?.email || 'advisor-dashboard'}
           isDarkMode={isDarkMode}
           currentUser={currentUser}
           onSignOut={handleSignOut}
@@ -355,6 +372,7 @@ export default function LoginForm({ isDarkMode = true }) {
 
     return (
       <DashboardView
+        key={currentUser?.user_id || currentUser?.id || currentUser?.email || 'builder-dashboard'}
         isDarkMode={isDarkMode}
         currentUser={currentUser}
         onSignOut={handleSignOut}
@@ -477,6 +495,34 @@ export default function LoginForm({ isDarkMode = true }) {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       <span>{showPassword ? 'Hide' : 'Show'}</span>
                     </button>
+                  </div>
+                </div>
+
+                {/* Prototype assigned account role */}
+                <div className="space-y-1.5 text-left">
+                  <label htmlFor="role-select" className={`block text-xs sm:text-sm font-semibold ${
+                    isDarkMode ? 'text-slate-200' : 'text-slate-700'
+                  }`}>
+                    Prototype assigned account role
+                  </label>
+                  <div className="relative">
+                    <select
+                      id="role-select"
+                      value={selectedRole}
+                      onChange={(e) => setSelectedRole(e.target.value)}
+                      className={`w-full px-4 py-3 rounded-xl text-xs sm:text-sm border focus:outline-none focus:border-amber-500 appearance-none cursor-pointer pr-10 transition-colors ${
+                        isDarkMode
+                          ? 'bg-slate-800/80 border-slate-700 text-slate-100 hover:border-[#96562c]'
+                          : 'bg-white border-slate-200 text-slate-900 hover:border-[#7c4a27]'
+                      }`}
+                    >
+                      <option value="Advisor">Advisor</option>
+                      <option value="Builder / Project Owner">Builder / Project Owner</option>
+                      <option value="Administrator">Administrator</option>
+                    </select>
+                    <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
+                      <ChevronDown className="w-4 h-4" />
+                    </div>
                   </div>
                 </div>
 
@@ -676,15 +722,15 @@ export default function LoginForm({ isDarkMode = true }) {
                 {/* Role */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-slate-300">
-                    Assigned Workplace (Role)
+                    Prototype assigned account role / Assigned role
                   </label>
                   <select
                     value={signupRole}
                     onChange={(e) => setSignupRole(e.target.value)}
                     className="w-full px-4 py-3 rounded-xl text-xs sm:text-sm bg-slate-800/80 border border-slate-700 text-slate-100 focus:outline-none focus:border-[#96562c] cursor-pointer transition-all"
                   >
-                    <option value="Builder">Builder (Project Founder / Operator)</option>
                     <option value="Advisor">Advisor (Legal / Regulatory Expert)</option>
+                    <option value="Builder">Builder (Project Founder / Operator)</option>
                     <option value="Administrator" disabled>Administrator (Platform Invite Only)</option>
                   </select>
                 </div>
