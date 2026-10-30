@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import List, Optional, Union
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
@@ -85,12 +85,25 @@ def list_admin_users(
     description="Activates or deactivates a user account. Restricted to ADMIN."
 )
 def update_user_status(
-    userId: int,
+    userId: Union[int, str],
     payload: UserStatusUpdate,
     current_user: User = Depends(require_platform_role("ADMIN")),
     db: Session = Depends(get_db)
 ):
-    user = db.query(User).filter(User.user_id == userId).first()
+    target_id = None
+    if isinstance(userId, int) or (isinstance(userId, str) and str(userId).isdigit()):
+        target_id = int(userId)
+    elif isinstance(userId, str) and "USR-" in userId.upper():
+        digits = "".join(filter(str.isdigit, userId))
+        if digits:
+            target_id = int(digits)
+
+    user = None
+    if target_id is not None:
+        user = db.query(User).filter(User.user_id == target_id).first()
+    if not user:
+        user = db.query(User).filter(User.email.ilike(str(userId).strip())).first()
+
     if not user:
         raise NotFoundError("User", userId)
     

@@ -147,8 +147,30 @@ def register_user(db: Session, request: RegisterRequest) -> TokenResponse:
         db.add(profile)
         db.flush()
 
-    # DEF-01: Newly created advisors begin with an empty assigned project list.
-    # Projects are assigned exclusively via explicit invitation or direct project owner assignment.
+    # DEF-01: Connect any pre-existing explicit invitations for this advisor email
+    if role_name == 'ADVISOR':
+        from app.models.advisor import AdvisorInvitation
+        from app.models.project import ProjectMember
+        from app.services.advisor_service import ROLE_TO_DEFAULT_SCOPE
+        pending_invs = db.query(AdvisorInvitation).filter(
+            AdvisorInvitation.advisor_email.ilike(clean_email),
+            AdvisorInvitation.invitation_status == 'PENDING'
+        ).all()
+        for pinv in pending_invs:
+            existing_pm = db.query(ProjectMember).filter(
+                ProjectMember.project_id == pinv.project_id,
+                ProjectMember.user_id == new_user.user_id
+            ).first()
+            if not existing_pm:
+                db.add(ProjectMember(
+                    project_id=pinv.project_id,
+                    user_id=new_user.user_id,
+                    service_role=pinv.access_level,
+                    service_scope=ROLE_TO_DEFAULT_SCOPE.get(pinv.access_level, 'REGULATORY_ADVICE_SUPPORT'),
+                    member_status='ACTIVE',
+                    joined_at=now
+                ))
+        db.flush()
 
     # Audit log
     log_audit_event(

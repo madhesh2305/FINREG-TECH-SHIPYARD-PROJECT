@@ -76,14 +76,30 @@ def create_project(db: Session, request: ProjectCreate, creator: User) -> Projec
     return project
 
 def list_user_projects(db: Session, user: User, status: Optional[str] = None, search: Optional[str] = None) -> List[Project]:
-    """Return projects accessible to the user via active project membership."""
-    query = (
-        db.query(Project)
-        .join(ProjectMember, ProjectMember.project_id == Project.project_id)
+    """Return projects accessible to the user via active project membership or advisor invitation."""
+    from app.models.advisor import AdvisorInvitation
+
+    member_project_ids = (
+        db.query(ProjectMember.project_id)
         .filter(
             ProjectMember.user_id == user.user_id,
             ProjectMember.member_status == "ACTIVE"
         )
+    )
+
+    invited_project_ids = (
+        db.query(AdvisorInvitation.project_id)
+        .filter(
+            AdvisorInvitation.advisor_email.ilike(user.email.strip()),
+            AdvisorInvitation.invitation_status.in_(["PENDING", "ACCEPTED"])
+        )
+    )
+
+    combined_ids = member_project_ids.union(invited_project_ids).subquery()
+
+    query = (
+        db.query(Project)
+        .filter(Project.project_id.in_(db.query(combined_ids)))
     )
 
     if status:

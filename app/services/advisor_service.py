@@ -13,11 +13,12 @@ from app.security.authorization import verify_object_belongs_to_project
 
 def list_advisors(db: Session) -> List[AdvisorProfile]:
     # Ensure any active user with ADVISOR role has an AdvisorProfile (DEF-25)
-    advisor_role = db.query(Role).filter(Role.role_name == "ADVISOR").first()
-    if advisor_role:
+    advisor_roles = db.query(Role).filter(Role.role_name.ilike("ADVISOR")).all()
+    role_ids = [r.role_id for r in advisor_roles]
+    if role_ids:
         advisor_users = (
             db.query(User)
-            .filter(User.role_id == advisor_role.role_id, User.is_active == True)
+            .filter(User.role_id.in_(role_ids), User.is_active == True)
             .all()
         )
         created_any = False
@@ -42,7 +43,8 @@ def list_advisors(db: Session) -> List[AdvisorProfile]:
     return (
         db.query(AdvisorProfile)
         .join(User, User.user_id == AdvisorProfile.user_id)
-        .filter(User.is_active == True)
+        .join(Role, Role.role_id == User.role_id)
+        .filter(Role.role_name.ilike("ADVISOR"), User.is_active == True)
         .order_by(AdvisorProfile.created_at.desc())
         .all()
     )
@@ -64,21 +66,55 @@ def create_advisor_invitation(db: Session, project_id: int, request: AdvisorInvi
     if existing:
         raise ConflictError(f"A pending invitation already exists for {request.advisor_email}")
 
+    now = datetime.now(timezone.utc)
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.now(timezone.utc) + timedelta(days=request.expiry_days)
+    expires_at = now + timedelta(days=request.expiry_days)
+
+    raw_access = (request.access_level or "REGULATORY").upper().strip()
+    if raw_access not in ("OWNER", "LEGAL", "REGULATORY", "TECH", "FUNDING_BUSINESS", "MARKETING"):
+        if "LEGAL" in raw_access: canonical_access = "LEGAL"
+        elif "TECH" in raw_access: canonical_access = "TECH"
+        elif "FUNDING" in raw_access or "BUSINESS" in raw_access: canonical_access = "FUNDING_BUSINESS"
+        elif "MARKETING" in raw_access: canonical_access = "MARKETING"
+        else: canonical_access = "REGULATORY"
+    else:
+        canonical_access = raw_access
 
     invitation = AdvisorInvitation(
         project_id=project_id,
         invited_by=actor.user_id,
         advisor_email=request.advisor_email,
-        access_level=request.access_level,
+        access_level=canonical_access,
         invitation_status="PENDING",
         invitation_token=token,
         expires_at=expires_at,
-        created_at=datetime.now(timezone.utc)
+        created_at=now
     )
     db.add(invitation)
     db.flush()
+
+    # Automatically activate/create project membership for the invited advisor
+    target_user = db.query(User).filter(User.email.ilike(request.advisor_email.strip())).first()
+    if target_user:
+        existing_mem = db.query(ProjectMember).filter(
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id == target_user.user_id
+        ).first()
+        if existing_mem:
+            existing_mem.member_status = "ACTIVE"
+            existing_mem.service_role = canonical_access
+            existing_mem.service_scope = ROLE_TO_DEFAULT_SCOPE.get(canonical_access, "REGULATORY_ADVICE_SUPPORT")
+            existing_mem.joined_at = now
+        else:
+            db.add(ProjectMember(
+                project_id=project_id,
+                user_id=target_user.user_id,
+                service_role=canonical_access,
+                service_scope=ROLE_TO_DEFAULT_SCOPE.get(canonical_access, "REGULATORY_ADVICE_SUPPORT"),
+                member_status="ACTIVE",
+                joined_at=now
+            ))
+        db.flush()
 
     log_audit_event(
         db=db,
@@ -147,6 +183,17 @@ def revoke_advisor_invitation(db: Session, project_id: int, invitation_id: int, 
     old_status = invitation.invitation_status
     invitation.invitation_status = "REVOKED"
     invitation.revoked_at = datetime.now(timezone.utc)
+
+    # Revoke project membership for the advisor
+    target_user = db.query(User).filter(User.email.ilike(invitation.advisor_email.strip())).first()
+    if target_user:
+        existing_mem = db.query(ProjectMember).filter(
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id == target_user.user_id
+        ).first()
+        if existing_mem:
+            existing_mem.member_status = "REVOKED"
+            db.flush()
 
     log_audit_event(
         db=db,

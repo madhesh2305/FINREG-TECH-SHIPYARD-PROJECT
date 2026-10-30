@@ -84,7 +84,7 @@ def get_user_notifications(
 
     # 1. Any invitations for this user's email
     invitations = db.query(AdvisorInvitation).filter(
-        AdvisorInvitation.advisor_email == current_user.email
+        AdvisorInvitation.advisor_email.ilike(current_user.email.strip())
     ).order_by(AdvisorInvitation.created_at.desc()).limit(10).all()
 
     for inv in invitations:

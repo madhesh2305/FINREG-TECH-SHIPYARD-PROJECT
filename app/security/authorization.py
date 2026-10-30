@@ -52,7 +52,28 @@ class ProjectAccessGuard:
         ).first()
 
         if not membership:
-            raise ForbiddenError("You are not an active member of this project")
+            # Check if user has an active or pending advisor invitation for this project
+            from app.models.advisor import AdvisorInvitation
+            invitation = db.query(AdvisorInvitation).filter(
+                AdvisorInvitation.project_id == project.project_id,
+                AdvisorInvitation.advisor_email.ilike(current_user.email.strip()),
+                AdvisorInvitation.invitation_status.in_(["PENDING", "ACCEPTED"])
+            ).first()
+
+            if invitation:
+                # Lazily ensure active ProjectMember
+                membership = ProjectMember(
+                    project_id=project.project_id,
+                    user_id=current_user.user_id,
+                    service_role=invitation.access_level,
+                    service_scope="REGULATORY_ADVICE_SUPPORT",
+                    member_status="ACTIVE"
+                )
+                db.add(membership)
+                db.commit()
+                db.refresh(membership)
+            else:
+                raise ForbiddenError("You are not an active member of this project")
 
         # Step 3: Service role check if specified
         if self.required_service_roles and membership.service_role not in self.required_service_roles:
