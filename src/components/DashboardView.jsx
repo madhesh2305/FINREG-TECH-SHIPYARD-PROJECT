@@ -2294,9 +2294,13 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
             <AdviceDecisionsView isDarkMode={isDarkMode} activeProject={currentProject} />
           )}
 
-          {/* TAB: AI / RAG FINDINGS VIEW (Matching uploaded images) */}
+          {/* TAB: AI / RAG FINDINGS VIEW (Matching Padma AI/RAG handover spec) */}
           {activeTab === 'AI / RAG Findings' && (
-            <AiRagFindingsView isDarkMode={isDarkMode} />
+            <AiRagFindingsView
+              isDarkMode={isDarkMode}
+              activeProject={currentProject}
+              onNavigateTab={(tab) => setActiveTab(tab)}
+            />
           )}
 
           {/* TAB: READINESS VIEW (Matching uploaded images media_1791739750674_a1d6ca4d.png and media_1791739798112_b0256e69.png) */}
