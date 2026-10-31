@@ -70,6 +70,7 @@ class RAGServiceClient:
         requirement_ids: Optional[List[str]] = None,
         advisor_advice_ids: Optional[List[Union[int, str]]] = None,
         context: Optional[Dict[str, Any]] = None,
+        scope_tenant_documents: bool = False,
     ) -> Dict[str, Any]:
         """Forward a regulatory query to the ABC Shield RAG microservice."""
         clean_query = query.strip()
@@ -77,6 +78,8 @@ class RAGServiceClient:
             raise ValidationError("Query cannot be empty or whitespace-only.")
 
         payload: Dict[str, Any] = {"query": clean_query}
+        if scope_tenant_documents:
+            payload["project_id"] = str(project_id) if project_id is not None else None
         ctx = dict(context) if context else {}
         if project_id is not None:
             ctx["project_id"] = str(project_id)
@@ -111,6 +114,18 @@ class RAGServiceClient:
                 f"The regulatory AI intelligence service timed out after {self.timeout}s."
             ) from e
 
+    def _sanitize_advisor_payload(self, adv: Dict[str, Any], default_id: str = "ADV-001") -> Dict[str, Any]:
+        """Strip extra non-schema fields to comply with strict Pydantic models in the RAG microservice."""
+        clean = {
+            "advice_id": str(adv.get("advice_id") or default_id),
+            "advisor_name": str(adv.get("advisor_name") or "Advisor"),
+            "advice_text": str(adv.get("advice_text") or adv.get("recommendation") or adv.get("title") or ""),
+        }
+        ref = adv.get("source_reference") or adv.get("source_ref") or adv.get("source") or adv.get("title")
+        if ref:
+            clean["source_reference"] = str(ref)
+        return clean
+
     def compare_advice(
         self,
         advisor_1: Dict[str, Any],
@@ -122,8 +137,8 @@ class RAGServiceClient:
     ) -> Dict[str, Any]:
         """Forward an advisor advice comparison request to the ABC Shield RAG microservice."""
         payload: Dict[str, Any] = {
-            "advisor_1": advisor_1,
-            "advisor_2": advisor_2,
+            "advisor_1": self._sanitize_advisor_payload(advisor_1, "ADV-101"),
+            "advisor_2": self._sanitize_advisor_payload(advisor_2, "ADV-102"),
         }
         if comparison_id:
             payload["comparison_id"] = comparison_id

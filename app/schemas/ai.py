@@ -34,6 +34,9 @@ class RAGAnalyzeRequest(BaseModel):
     def resolved_project_id(self) -> Optional[Union[int, str]]:
         return self.projectId if self.projectId is not None else self.project_id
 
+
+
+
 class AdviceItemPayload(BaseModel):
     advice_id: str = Field(..., description="Advice identifier (e.g. ADV-001)")
     advice_text: str = Field(..., min_length=1, max_length=4000, description="Natural language advice content")
@@ -51,3 +54,49 @@ class RAGCompareRequest(BaseModel):
     @property
     def resolved_project_id(self) -> Optional[Union[int, str]]:
         return self.projectId if self.projectId is not None else self.project_id
+
+
+class RAGHealthResponse(BaseModel):
+    status: str = Field("ok", description="RAG service health status")
+    service: str = Field("finreg-rag-engine", description="Service identifier")
+    details: Optional[Dict[str, Any]] = None
+
+
+class QueryRequestPayload(BaseModel):
+    query: str = Field(..., description="Natural language regulatory or compliance question")
+    project_id: Optional[Union[int, str]] = Field(None, description="Project ID or project code, or null for public corpus")
+    projectId: Optional[Union[int, str]] = Field(None, description="CamelCase alias for project_id")
+    requirement_ids: Optional[List[str]] = Field(None, description="Optional requirement identifiers")
+    advisor_advice_ids: Optional[List[Union[int, str]]] = Field(None, description="Optional advice identifiers")
+    context: Optional[Dict[str, Any]] = Field(None, description="Optional context dictionary")
+    filter_approved_only: Optional[bool] = Field(False, description="Filter only approved sources")
+
+    @property
+    def resolved_project_id(self) -> Optional[Union[int, str]]:
+        val = self.project_id if self.project_id is not None else self.projectId
+        if val in (None, "null", "None", ""):
+            return None
+        return val
+
+
+class CompareRequestPayload(BaseModel):
+    project_id: Optional[Union[int, str]] = Field(None, description="Project ID or project code")
+    projectId: Optional[Union[int, str]] = Field(None, description="CamelCase alias for project_id")
+    comparison_id: Optional[str] = Field(None, description="Correlation comparison identifier")
+    advisor_1_id: Optional[str] = Field(None, description="Identifier of Advisor 1 (e.g. ADV-101)")
+    advisor_2_id: Optional[str] = Field(None, description="Identifier of Advisor 2 (e.g. ADV-102)")
+    topic: Optional[str] = Field(None, description="Comparison topic")
+    advisor_1: Optional[AdviceItemPayload] = Field(None, description="First advisor position if provided")
+    advisor_2: Optional[AdviceItemPayload] = Field(None, description="Second advisor position if provided")
+    context: Optional[Dict[str, Any]] = Field(None, description="Optional context hints")
+
+    @property
+    def resolved_project_id(self) -> Optional[Union[int, str]]:
+        val = self.project_id if self.project_id is not None else self.projectId
+        if val in (None, "null", "None", ""):
+            return None
+        return val
+
+
+
+

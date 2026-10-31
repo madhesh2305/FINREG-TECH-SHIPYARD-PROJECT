@@ -1,4 +1,5 @@
 import hashlib
+from typing import Optional
 from datetime import datetime, timedelta, timezone
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -64,3 +65,15 @@ def get_current_user(
             pass
 
     return user
+
+def get_optional_current_user(
+    db: Session = Depends(get_db),
+    token: str = Depends(oauth2_scheme),
+    authorization: str = Header(None)
+) -> Optional[User]:
+    """Dependency that returns active User if authenticated, or None if anonymous/unauthenticated."""
+    try:
+        return get_current_user(db=db, token=token, authorization=authorization)
+    except (AuthenticationError, InactiveUserError):
+        return None
+
