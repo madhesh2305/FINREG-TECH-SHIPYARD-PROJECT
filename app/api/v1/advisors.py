@@ -8,7 +8,8 @@ from app.models.advisor import AdvisorProfile, AdvisorInvitation
 from app.schemas.advisor import (
     AdvisorProfileResponse,
     AdvisorInvitationCreate,
-    AdvisorInvitationResponse
+    AdvisorInvitationResponse,
+    AdvisorSelectionRequest
 )
 from app.security.authentication import get_current_user
 from app.security.authorization import require_project_member, require_project_owner
@@ -16,6 +17,7 @@ from app.services.advisor_service import (
     list_advisors,
     get_advisor_by_id,
     create_advisor_invitation,
+    select_advisor_for_project,
     list_advisor_invitations,
     resend_advisor_invitation,
     revoke_advisor_invitation,
@@ -106,6 +108,37 @@ def invite_advisor(
     db: Session = Depends(get_db)
 ):
     return create_advisor_invitation(db=db, project_id=membership.project_id, request=request, actor=current_user)
+
+@router.post(
+    "/projects/{projectId}/advisors/select",
+    response_model=AdvisorInvitationResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Select and Assign Advisor in Project Flow",
+    description="Selects an eligible advisor from directory or email during initial project flow (DEF-33)."
+)
+def select_advisor(
+    projectId: Union[int, str],
+    request: AdvisorSelectionRequest,
+    current_user: User = Depends(get_current_user),
+    membership: ProjectMember = Depends(require_project_owner),
+    db: Session = Depends(get_db)
+):
+    return select_advisor_for_project(db=db, project_id=membership.project_id, request=request, actor=current_user)
+
+@router.get(
+    "/projects/{projectId}/advisors/eligible",
+    response_model=List[AdvisorProfileResponse],
+    status_code=status.HTTP_200_OK,
+    summary="List Eligible Advisors for Project Selection",
+    description="Returns verified advisors eligible to be selected for this project (DEF-33)."
+)
+def get_eligible_advisors(
+    projectId: Union[int, str],
+    membership: ProjectMember = Depends(require_project_member),
+    db: Session = Depends(get_db)
+):
+    advisors = list_advisors(db=db)
+    return [_to_advisor_response(a) for a in advisors]
 
 @router.post(
     "/projects/{projectId}/advisor-invitations/{invitationId}/resend",

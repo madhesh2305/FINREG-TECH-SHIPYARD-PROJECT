@@ -2,7 +2,7 @@ import uuid
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Union
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -10,6 +10,8 @@ from app.db.session import get_db
 from app.models.project import Project, ProjectMember
 from app.models.regulatory import RegulatorySource, RegulatoryRequirement
 from app.models.advice import Advice
+from app.models.ai import AIAnalysis, ConflictGap
+from app.services.audit_service import log_audit_event
 from app.schemas.ai import (
     RetrievalRequest,
     RetrievalResponse,
@@ -288,7 +290,7 @@ def rag_query_endpoint(
 
         # Enforce tenant authorization when principal is authenticated and project exists
         if current_user and project:
-            is_admin = getattr(current_user, "role", "").upper() == "ADMIN"
+            is_admin = bool(current_user.role and getattr(current_user.role, "role_name", "").upper() == "ADMIN")
             is_owner = getattr(project, "created_by", None) == current_user.user_id
             if not is_admin and not is_owner:
                 membership = db.query(ProjectMember).filter(
@@ -497,7 +499,75 @@ def rag_query_endpoint(
     meta["approved_evidence_count"] = sum(1 for ev in retrieved if ev.get("is_approved_for_rag") is True)
     meta["citation_count"] = len(citations)
     meta["conflict_count"] = len(conflicts)
-    meta["requires_human_review"] = meta.get("requires_human_review", True)
+
+    # DEF-27: If no approved resource found, or evidence gap exists, route to human verification
+    is_gap_or_unapproved = (
+        meta["approved_evidence_count"] == 0
+        or result["status"] in ("INSUFFICIENT_EVIDENCE", "OUT_OF_SCOPE")
+        or not result["grounded"]
+        or (result.get("gap") and result["gap"].get("is_gap"))
+    )
+
+    if is_gap_or_unapproved:
+        meta["requires_human_review"] = True
+        result["human_verification_required"] = True
+        result["user_message"] = "Insufficient approved evidence — human verification required."
+
+        # Persist human verification task in ai.conflict_gaps
+        target_project_id = project.project_id if project else 1
+        existing_gap = (
+            db.query(ConflictGap)
+            .filter(
+                ConflictGap.project_id == target_project_id,
+                ConflictGap.title.ilike(f"%{query_text[:40]}%"),
+                ConflictGap.review_status.in_(["OPEN", "UNDER_REVIEW"])
+            )
+            .first()
+        )
+
+        if not existing_gap:
+            analysis = AIAnalysis(
+                project_id=target_project_id,
+                analysis_type="RAG_VERIFICATION_ROUTING",
+                prompt_text=query_text,
+                output_summary="Insufficient approved evidence found; routed to human compliance verification.",
+                model_name="finreg-rag-engine",
+                analysis_status="COMPLETED"
+            )
+            db.add(analysis)
+            db.flush()
+
+            gap = ConflictGap(
+                analysis_id=analysis.analysis_id,
+                project_id=target_project_id,
+                issue_type="GAP",
+                title=f"Evidence Gap: {query_text[:60]}",
+                description=f"Query '{query_text}' lacked approved regulatory citations. Routed to human compliance expert for review and verification.",
+                severity="MEDIUM",
+                review_status="OPEN"
+            )
+            db.add(gap)
+            db.commit()
+            db.refresh(gap)
+            existing_gap = gap
+        else:
+            existing_gap.updated_at = datetime.now(timezone.utc)
+            db.commit()
+
+        result["human_review_task"] = {
+            "conflict_gap_id": existing_gap.conflict_gap_id,
+            "issue_type": existing_gap.issue_type,
+            "title": existing_gap.title,
+            "description": existing_gap.description,
+            "review_status": existing_gap.review_status,
+            "severity": existing_gap.severity,
+            "project_id": str(target_pid or target_project_id),
+            "created_at": existing_gap.created_at.isoformat()
+        }
+    else:
+        meta["requires_human_review"] = meta.get("requires_human_review", False)
+        result["human_verification_required"] = False
+
     result["metadata"] = meta
     result["findings"] = formatted.get("findings", [])
 
@@ -531,7 +601,7 @@ def rag_compare_endpoint(
                 ).first()
 
         if current_user and project:
-            is_admin = getattr(current_user, "role", "").upper() == "ADMIN"
+            is_admin = bool(current_user.role and getattr(current_user.role, "role_name", "").upper() == "ADMIN")
             is_owner = getattr(project, "created_by", None) == current_user.user_id
             if not is_admin and not is_owner:
                 membership = db.query(ProjectMember).filter(
@@ -830,3 +900,95 @@ def rag_compare_endpoint(
     raw_comp["metadata"] = formatted.get("metadata", {})
 
     return raw_comp
+
+class HumanReviewStatusUpdate(BaseModel):
+    review_status: str = Field(..., description="Review status: OPEN, UNDER_REVIEW, RESOLVED, DISMISSED")
+    resolution_notes: Optional[str] = None
+
+@router.get(
+    "/projects/{projectId}/human-reviews",
+    status_code=status.HTTP_200_OK,
+    summary="List Project Human Review Tasks",
+    description="Returns open and pending regulatory human review tasks for unapproved or gapped AI queries (DEF-27)."
+)
+def list_project_human_reviews(
+    projectId: Union[int, str],
+    status_filter: Optional[str] = Query(None, alias="status"),
+    membership: ProjectMember = Depends(require_project_member),
+    db: Session = Depends(get_db)
+):
+    query = db.query(ConflictGap).filter(ConflictGap.project_id == membership.project_id)
+    if status_filter:
+        query = query.filter(ConflictGap.review_status.ilike(status_filter.strip()))
+    reviews = query.order_by(ConflictGap.created_at.desc()).all()
+    return [
+        {
+            "conflict_gap_id": r.conflict_gap_id,
+            "project_id": str(membership.project_id),
+            "issue_type": r.issue_type,
+            "title": r.title,
+            "description": r.description,
+            "severity": r.severity,
+            "review_status": r.review_status,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+        }
+        for r in reviews
+    ]
+
+@router.patch(
+    "/projects/{projectId}/human-reviews/{reviewId}",
+    status_code=status.HTTP_200_OK,
+    summary="Update / Resolve Human Review Task",
+    description="Allows authorized reviewer to resolve, dismiss, or progress a human verification item (DEF-27)."
+)
+def update_project_human_review(
+    projectId: Union[int, str],
+    reviewId: int,
+    payload: HumanReviewStatusUpdate,
+    membership: ProjectMember = Depends(require_project_member),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    review = db.query(ConflictGap).filter(
+        ConflictGap.conflict_gap_id == reviewId,
+        ConflictGap.project_id == membership.project_id
+    ).first()
+
+    if not review:
+        raise NotFoundError(f"Human review task #{reviewId} not found in this project.")
+
+    target_status = payload.review_status.strip().upper()
+    if target_status not in ("OPEN", "UNDER_REVIEW", "RESOLVED", "DISMISSED"):
+        raise ValidationError("Invalid review_status. Must be OPEN, UNDER_REVIEW, RESOLVED, or DISMISSED.")
+
+    old_status = review.review_status
+    review.review_status = target_status
+    if payload.resolution_notes:
+        review.description = f"{review.description} [Resolution: {payload.resolution_notes}]"
+    review.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(review)
+
+    log_audit_event(
+        db=db,
+        project_id=membership.project_id,
+        actor_user_id=current_user.user_id,
+        event_type="HUMAN_REVIEW_UPDATED",
+        entity_type="CONFLICT_GAP",
+        entity_id=review.conflict_gap_id,
+        event_description=f"Human review #{review.conflict_gap_id} status updated from '{old_status}' to '{target_status}' by {current_user.full_name}",
+        old_values={"review_status": old_status},
+        new_values={"review_status": target_status, "resolution_notes": payload.resolution_notes}
+    )
+
+    return {
+        "conflict_gap_id": review.conflict_gap_id,
+        "project_id": str(membership.project_id),
+        "issue_type": review.issue_type,
+        "title": review.title,
+        "description": review.description,
+        "severity": review.severity,
+        "review_status": review.review_status,
+        "updated_at": review.updated_at.isoformat()
+    }

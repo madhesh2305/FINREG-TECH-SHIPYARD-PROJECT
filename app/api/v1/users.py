@@ -1,9 +1,11 @@
+from typing import List
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.identity import User
 from app.models.project import ProjectMember
 from app.schemas.user import CurrentUserContext, UserMembershipContext, UserUpdateRequest
+from app.schemas.advisor import AdvisorInboxInvitation
 from app.security.authentication import get_current_user
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -65,6 +67,45 @@ def update_me(
         db.refresh(current_user)
 
     return _build_user_context(current_user, db)
+
+@router.get(
+    "/me/invitations",
+    response_model=List[AdvisorInboxInvitation],
+    status_code=status.HTTP_200_OK,
+    summary="Get Current User Advisory Invitations",
+    description="Returns all active and pending invitations addressed to the authenticated advisor (DEF-34)."
+)
+def get_my_invitations(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    from app.models.advisor import AdvisorInvitation
+    from app.models.project import Project
+
+    invitations = (
+        db.query(AdvisorInvitation)
+        .filter(AdvisorInvitation.advisor_email.ilike(current_user.email.strip()))
+        .order_by(AdvisorInvitation.created_at.desc())
+        .all()
+    )
+
+    results = []
+    for inv in invitations:
+        proj = db.query(Project).filter(Project.project_id == inv.project_id).first()
+        inviter = db.query(User).filter(User.user_id == inv.invited_by).first()
+        results.append(AdvisorInboxInvitation(
+            invitation_id=inv.invitation_id,
+            project_id=inv.project_id,
+            project_code=proj.project_code if proj else f"PRJ-{inv.project_id}",
+            project_name=proj.project_name if proj else f"Project {inv.project_id}",
+            inviting_user=inviter.full_name if inviter else "Builder",
+            access_level=inv.access_level,
+            status=inv.invitation_status,
+            invitation_token=inv.invitation_token,
+            expires_at=inv.expires_at,
+            created_at=inv.created_at
+        ))
+    return results
 
 @router.get(
     "/me/notifications",

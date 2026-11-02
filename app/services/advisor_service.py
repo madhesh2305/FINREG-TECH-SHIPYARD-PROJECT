@@ -2,11 +2,11 @@ import secrets
 from datetime import datetime, timedelta, timezone
 from typing import List
 from sqlalchemy.orm import Session
-from app.core.exceptions import ConflictError, NotFoundError, ValidationError
+from app.core.exceptions import ConflictError, NotFoundError, ValidationError, ForbiddenError
 from app.models.identity import User, Role
 from app.models.advisor import AdvisorProfile, AdvisorInvitation
 from app.models.project import ProjectMember
-from app.schemas.advisor import AdvisorInvitationCreate
+from app.schemas.advisor import AdvisorInvitationCreate, AdvisorSelectionRequest
 from app.schemas.member import ROLE_TO_DEFAULT_SCOPE
 from app.services.audit_service import log_audit_event
 from app.security.authorization import verify_object_belongs_to_project
@@ -56,15 +56,35 @@ def get_advisor_by_id(db: Session, advisor_id: int) -> AdvisorProfile:
     return advisor
 
 def create_advisor_invitation(db: Session, project_id: int, request: AdvisorInvitationCreate, actor: User) -> AdvisorInvitation:
-    # Check if there is an active pending invitation
+    from app.models.project import Project
+
+    # Ensure project is active and not disabled (DEF-38)
+    project = db.query(Project).filter(Project.project_id == project_id).first()
+    if project and project.status in ("DISABLED", "ARCHIVED"):
+        raise ForbiddenError(f"Project '{project.project_code}' is disabled/archived and cannot issue advisor invitations.")
+
+    clean_email = request.advisor_email.strip().lower()
+
+    # Check if there is an active pending or accepted invitation (DEF-32)
     existing = db.query(AdvisorInvitation).filter(
         AdvisorInvitation.project_id == project_id,
-        AdvisorInvitation.advisor_email == request.advisor_email,
-        AdvisorInvitation.invitation_status == "PENDING"
+        AdvisorInvitation.advisor_email.ilike(clean_email),
+        AdvisorInvitation.invitation_status.in_(["PENDING", "ACCEPTED"])
     ).first()
 
     if existing:
-        raise ConflictError(f"A pending invitation already exists for {request.advisor_email}")
+        raise ConflictError(f"An active invitation already exists for {clean_email} in this project. Use resend if needed.")
+
+    # Check if user is already an active project member (DEF-32)
+    target_user = db.query(User).filter(User.email.ilike(clean_email)).first()
+    if target_user:
+        existing_mem = db.query(ProjectMember).filter(
+            ProjectMember.project_id == project_id,
+            ProjectMember.user_id == target_user.user_id,
+            ProjectMember.member_status == "ACTIVE"
+        ).first()
+        if existing_mem:
+            raise ConflictError(f"Advisor {clean_email} is already an active member of this project.")
 
     now = datetime.now(timezone.utc)
     token = secrets.token_urlsafe(32)
@@ -83,7 +103,7 @@ def create_advisor_invitation(db: Session, project_id: int, request: AdvisorInvi
     invitation = AdvisorInvitation(
         project_id=project_id,
         invited_by=actor.user_id,
-        advisor_email=request.advisor_email,
+        advisor_email=clean_email,
         access_level=canonical_access,
         invitation_status="PENDING",
         invitation_token=token,
@@ -262,3 +282,33 @@ def accept_advisor_invitation(db: Session, project_id: int, invitation_id: int, 
     db.commit()
     db.refresh(invitation)
     return invitation
+
+
+def select_advisor_for_project(
+    db: Session,
+    project_id: int,
+    request: AdvisorSelectionRequest,
+    actor: User
+) -> AdvisorInvitation:
+    """Assign or invite an advisor directly during the advisor selection step (DEF-33)."""
+    clean_email = None
+    if request.advisor_email:
+        clean_email = request.advisor_email.strip().lower()
+    elif request.advisor_id:
+        prof = db.query(AdvisorProfile).filter(AdvisorProfile.advisor_profile_id == request.advisor_id).first()
+        if prof and prof.user:
+            clean_email = prof.user.email.strip().lower()
+        else:
+            usr = db.query(User).filter(User.user_id == request.advisor_id).first()
+            if usr:
+                clean_email = usr.email.strip().lower()
+
+    if not clean_email:
+        raise ValidationError("Could not resolve valid advisor email or ID for selection.")
+
+    invitation_payload = AdvisorInvitationCreate(
+        advisor_email=clean_email,
+        access_level=request.access_level,
+        expiry_days=request.expiry_days
+    )
+    return create_advisor_invitation(db=db, project_id=project_id, request=invitation_payload, actor=actor)

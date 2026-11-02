@@ -2,13 +2,25 @@ from datetime import datetime, timezone
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from app.core.exceptions import ConflictError, NotFoundError
+from app.core.exceptions import ConflictError, NotFoundError, ForbiddenError
 from app.models.identity import User
 from app.models.project import Project, ProjectProfile, ProjectMember
 from app.models.regulatory import RegulatoryRequirement
 from app.models.advice import Advice
 from app.schemas.project import ProjectCreate, ProjectUpdate, DashboardSummary
 from app.services.audit_service import log_audit_event
+
+def calculate_project_progress(db: Session, project_id: int) -> int:
+    """Calculate dynamic project progress percentage based on completed regulatory requirements and advice."""
+    total_reqs = db.query(RegulatoryRequirement).filter(RegulatoryRequirement.project_id == project_id).count()
+    if total_reqs == 0:
+        advice_count = db.query(Advice).filter(Advice.project_id == project_id).count()
+        return min(25, advice_count * 10) if advice_count > 0 else 0
+    completed_reqs = db.query(RegulatoryRequirement).filter(
+        RegulatoryRequirement.project_id == project_id,
+        RegulatoryRequirement.requirement_status == "COMPLETED"
+    ).count()
+    return round((completed_reqs / total_reqs) * 100)
 
 def create_project(db: Session, request: ProjectCreate, creator: User) -> Project:
     """Transactionally create project, profile, owner membership and audit event."""
@@ -76,31 +88,40 @@ def create_project(db: Session, request: ProjectCreate, creator: User) -> Projec
     return project
 
 def list_user_projects(db: Session, user: User, status: Optional[str] = None, search: Optional[str] = None) -> List[Project]:
-    """Return projects accessible to the user via active project membership or advisor invitation."""
+    """Return projects accessible to the user via active project membership, creator role, or advisor invitation."""
     from app.models.advisor import AdvisorInvitation
 
-    member_project_ids = (
-        db.query(ProjectMember.project_id)
-        .filter(
-            ProjectMember.user_id == user.user_id,
-            ProjectMember.member_status == "ACTIVE"
+    # If user has ADMIN role, they have platform-wide visibility
+    is_admin = False
+    if user.role and user.role.role_name and user.role.role_name.upper() == "ADMIN":
+        is_admin = True
+
+    if is_admin:
+        query = db.query(Project)
+    else:
+        member_project_ids = (
+            db.query(ProjectMember.project_id)
+            .filter(
+                ProjectMember.user_id == user.user_id,
+                ProjectMember.member_status == "ACTIVE"
+            )
         )
-    )
 
-    invited_project_ids = (
-        db.query(AdvisorInvitation.project_id)
-        .filter(
-            AdvisorInvitation.advisor_email.ilike(user.email.strip()),
-            AdvisorInvitation.invitation_status.in_(["PENDING", "ACCEPTED"])
+        creator_project_ids = (
+            db.query(Project.project_id)
+            .filter(Project.created_by == user.user_id)
         )
-    )
 
-    combined_ids = member_project_ids.union(invited_project_ids).subquery()
+        invited_project_ids = (
+            db.query(AdvisorInvitation.project_id)
+            .filter(
+                AdvisorInvitation.advisor_email.ilike(user.email.strip()),
+                AdvisorInvitation.invitation_status.in_(["PENDING", "ACCEPTED"])
+            )
+        )
 
-    query = (
-        db.query(Project)
-        .filter(Project.project_id.in_(db.query(combined_ids)))
-    )
+        combined_ids = member_project_ids.union(creator_project_ids, invited_project_ids).subquery()
+        query = db.query(Project).filter(Project.project_id.in_(db.query(combined_ids)))
 
     if status:
         query = query.filter(Project.status == status)
@@ -126,6 +147,8 @@ def get_project_by_id(db: Session, project_id: Union[int, str]) -> Project:
 
 def update_project(db: Session, project_id: Union[int, str], request: ProjectUpdate, actor: User) -> Project:
     project = get_project_by_id(db, project_id)
+    if project.status in ("DISABLED", "ARCHIVED"):
+        raise ForbiddenError(f"Project '{project.project_code}' is disabled/archived and cannot be modified.")
     old_values = {
         "project_name": project.project_name,
         "status": project.status
@@ -237,3 +260,76 @@ def get_dashboard_summary(db: Session, user: User) -> DashboardSummary:
         total_advice_reviews=total_advice,
         audit_readiness_percentage=readiness_pct
     )
+
+def get_project_workflow_status(db: Session, project: Project) -> dict:
+    """Calculate real, persisted workflow progress and step states for a project (DEF-30)."""
+    total_reqs = db.query(RegulatoryRequirement).filter(RegulatoryRequirement.project_id == project.project_id).count()
+    completed_reqs = db.query(RegulatoryRequirement).filter(
+        RegulatoryRequirement.project_id == project.project_id,
+        RegulatoryRequirement.requirement_status == "COMPLETED"
+    ).count()
+    advice_count = db.query(Advice).filter(Advice.project_id == project.project_id).count()
+
+    from app.models.decision import Decision
+    decision = db.query(Decision).filter(Decision.project_id == project.project_id).first()
+
+    step1_status = "COMPLETED" if total_reqs > 0 else "IN_PROGRESS"
+    step2_status = "COMPLETED" if completed_reqs > 0 else ("IN_PROGRESS" if total_reqs > 0 else "PENDING")
+    step3_status = "COMPLETED" if advice_count > 0 else ("IN_PROGRESS" if completed_reqs > 0 else "PENDING")
+    step4_status = "COMPLETED" if decision is not None else ("IN_PROGRESS" if advice_count > 0 else "PENDING")
+
+    steps = [
+        {
+            "step_id": 1,
+            "step_number": "01",
+            "name": "Scope & risk assessment",
+            "title": "Scope & risk assessment",
+            "status": step1_status,
+            "description": "Establish regulatory baseline, applicable MLR/FCA rules, and preliminary risk matrix.",
+            "completed": step1_status == "COMPLETED",
+            "metrics": {"total_requirements": total_reqs}
+        },
+        {
+            "step_id": 2,
+            "step_number": "02",
+            "name": "Control design",
+            "title": "Control design",
+            "status": step2_status,
+            "description": "Design defensible policies and governance controls mapped to identified requirements.",
+            "completed": step2_status == "COMPLETED",
+            "metrics": {"completed_requirements": completed_reqs}
+        },
+        {
+            "step_id": 3,
+            "step_number": "03",
+            "name": "Advisor validation",
+            "title": "Advisor validation",
+            "status": step3_status,
+            "description": "Obtain independent regulatory advice and evaluate divergent professional recommendations.",
+            "completed": step3_status == "COMPLETED",
+            "metrics": {"advice_reviews": advice_count}
+        },
+        {
+            "step_id": 4,
+            "step_number": "04",
+            "name": "Approval & implementation",
+            "title": "Approval & implementation",
+            "status": step4_status,
+            "description": "Finalize compliance decisions with complete defensible audit trail and execution sign-off.",
+            "completed": step4_status == "COMPLETED",
+            "metrics": {"decision_recorded": decision is not None}
+        }
+    ]
+
+    completed_count = sum(1 for s in steps if s["completed"])
+    overall_pct = round((completed_count / len(steps)) * 100)
+
+    return {
+        "project_id": project.project_id,
+        "project_code": project.project_code,
+        "project_name": project.project_name,
+        "total_steps": len(steps),
+        "completed_steps": completed_count,
+        "overall_progress_pct": overall_pct,
+        "steps": steps
+    }

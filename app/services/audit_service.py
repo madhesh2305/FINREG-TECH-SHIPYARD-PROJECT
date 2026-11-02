@@ -57,3 +57,14 @@ def list_project_audit_events(
     if event_type:
         query = query.filter(AuditEvent.event_type == event_type)
     return query.order_by(AuditEvent.created_at.desc()).limit(limit).all()
+
+def list_all_audit_events(
+    db: Session,
+    event_type: Optional[str] = None,
+    limit: int = 100
+) -> list[AuditEvent]:
+    """Retrieve platform-wide audit events ordered by creation timestamp."""
+    query = db.query(AuditEvent)
+    if event_type:
+        query = query.filter(AuditEvent.event_type == event_type)
+    return query.order_by(AuditEvent.created_at.desc()).limit(limit).all()

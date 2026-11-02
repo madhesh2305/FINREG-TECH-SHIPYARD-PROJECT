@@ -7,7 +7,15 @@ from app.models.project import Project, ProjectMember
 from app.schemas.project import ProjectCreate, ProjectUpdate, ProjectResponse, DashboardSummary
 from app.security.authentication import get_current_user
 from app.security.authorization import ProjectAccessGuard, require_platform_role, require_project_member, require_project_owner
-from app.services.project_service import create_project, list_user_projects, get_project_by_id, update_project, get_dashboard_summary
+from app.services.project_service import (
+    create_project,
+    list_user_projects,
+    get_project_by_id,
+    update_project,
+    get_dashboard_summary,
+    calculate_project_progress,
+    get_project_workflow_status,
+)
 
 router = APIRouter(prefix="/projects", tags=["Project Management"])
 
@@ -48,7 +56,8 @@ def get_projects(
             owner_name=p.creator.full_name if p.creator else None,
             created_at=p.created_at,
             updated_at=p.updated_at,
-            profile=p.profile
+            profile=p.profile,
+            progress=calculate_project_progress(db=db, project_id=p.project_id)
         )
         for p in projects
     ]
@@ -75,7 +84,8 @@ def create_new_project(
         owner_name=current_user.full_name,
         created_at=project.created_at,
         updated_at=project.updated_at,
-        profile=project.profile
+        profile=project.profile,
+        progress=0
     )
 
 from typing import List, Optional, Union
@@ -102,7 +112,8 @@ def get_project(
         owner_name=project.creator.full_name if project.creator else None,
         created_at=project.created_at,
         updated_at=project.updated_at,
-        profile=project.profile
+        profile=project.profile,
+        progress=calculate_project_progress(db=db, project_id=project.project_id)
     )
 
 @router.patch(
@@ -129,5 +140,45 @@ def patch_project(
         owner_name=project.creator.full_name if project.creator else None,
         created_at=project.created_at,
         updated_at=project.updated_at,
-        profile=project.profile
+        profile=project.profile,
+        progress=calculate_project_progress(db=db, project_id=project.project_id)
     )
+
+@router.get(
+    "/{projectId}/workflow",
+    status_code=status.HTTP_200_OK,
+    summary="Get Project Workflow Steps & State",
+    description="Returns the 4 structured regulatory workflow steps with live status, completion, and metrics (DEF-30)."
+)
+def get_project_workflow(
+    projectId: Union[int, str],
+    membership: ProjectMember = Depends(require_project_member),
+    db: Session = Depends(get_db)
+):
+    project = get_project_by_id(db=db, project_id=membership.project_id)
+    return get_project_workflow_status(db=db, project=project)
+
+@router.get(
+    "/{projectId}/workflow/steps/{stepId}",
+    status_code=status.HTTP_200_OK,
+    summary="Get Project Workflow Step Details",
+    description="Returns detailed workflow step status and items (DEF-30)."
+)
+def get_project_workflow_step(
+    projectId: Union[int, str],
+    stepId: Union[int, str],
+    membership: ProjectMember = Depends(require_project_member),
+    db: Session = Depends(get_db)
+):
+    project = get_project_by_id(db=db, project_id=membership.project_id)
+    workflow_data = get_project_workflow_status(db=db, project=project)
+    str_step = str(stepId).strip().lstrip("0")
+    for step in workflow_data["steps"]:
+        if str(step["step_id"]) == str_step or step["step_number"] == str(stepId).zfill(2) or step["name"].lower() == str(stepId).lower():
+            return {
+                "project_id": project.project_id,
+                "project_code": project.project_code,
+                "step": step
+            }
+    from app.core.exceptions import NotFoundError
+    raise NotFoundError(f"Workflow step '{stepId}' not found in project '{project.project_code}'")

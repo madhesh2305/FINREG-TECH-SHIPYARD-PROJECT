@@ -75,11 +75,12 @@ class ProjectResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     profile: Optional[ProjectProfileResponse] = None
+    progress: int = 0
 
     @computed_field
     @property
-    def id(self) -> int:
-        return self.project_id
+    def id(self) -> str:
+        return self.project_code or f"PRJ-{self.project_id}"
 
     @computed_field
     @property
@@ -93,8 +94,8 @@ class ProjectResponse(BaseModel):
 
     @computed_field
     @property
-    def owner(self) -> Optional[str]:
-        return self.owner_name
+    def owner(self) -> str:
+        return self.owner_name or "Project Owner"
 
     @computed_field
     @property

@@ -35,3 +35,23 @@ class AdvisorInvitationResponse(BaseModel):
     accepted_at: Optional[datetime] = None
     revoked_at: Optional[datetime] = None
     created_at: datetime
+
+class AdvisorSelectionRequest(BaseModel):
+    advisor_id: Optional[int] = Field(None, description="User ID or Advisor Profile ID of the selected advisor")
+    advisor_email: Optional[EmailStr] = Field(None, description="Email address of the selected advisor")
+    access_level: str = Field("REGULATORY", description="Role: REGULATORY, LEGAL, TECH, FUNDING_BUSINESS, MARKETING")
+    expiry_days: int = Field(7, ge=1, le=30)
+
+class AdvisorInboxInvitation(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    invitation_id: int
+    project_id: int
+    project_code: str
+    project_name: str
+    inviting_user: str
+    access_level: str
+    status: str
+    invitation_token: str
+    expires_at: datetime
+    created_at: datetime

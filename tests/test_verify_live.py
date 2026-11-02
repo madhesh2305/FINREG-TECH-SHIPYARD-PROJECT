@@ -136,15 +136,17 @@ def test_full_live_verification():
     inv_data = r_inv.json()
     print(f"-> Advisor invitation issued: ID={inv_data.get('invitation_id')}, Status={inv_data.get('invitation_status')}")
 
-    # Add advisor to project members directly with REGULATORY service_role
-    db.add(ProjectMember(
-        project_id=proj_id,
-        user_id=db_adv.user_id,
-        service_role="REGULATORY",
-        service_scope="REGULATORY_ANALYSIS",
-        member_status="ACTIVE"
-    ))
-    db.commit()
+    # Ensure advisor is project member with REGULATORY service_role
+    existing_adv_mem = db.query(ProjectMember).filter(ProjectMember.project_id == proj_id, ProjectMember.user_id == db_adv.user_id).first()
+    if not existing_adv_mem:
+        db.add(ProjectMember(
+            project_id=proj_id,
+            user_id=db_adv.user_id,
+            service_role="REGULATORY",
+            service_scope="REGULATORY_ANALYSIS",
+            member_status="ACTIVE"
+        ))
+        db.commit()
     print(f"-> Advisor joined project with service_role=REGULATORY.")
 
     print("\n=======================================================")
