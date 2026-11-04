@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Calendar, ChevronDown, X } from 'lucide-react';
 import { getAuditEvents } from '../services/auditService';
+import { getProjectAuditEvents } from '../services/projectService';
 
-export default function AuditTrailView({ isDarkMode, events = [] }) {
+export default function AuditTrailView({ isDarkMode, events = [], projectId, activeProject }) {
   const [selectedEvent, setSelectedEvent] = useState(null);
 
   // Filter states
@@ -12,11 +13,35 @@ export default function AuditTrailView({ isDarkMode, events = [] }) {
   const [eventTypeFilter, setEventTypeFilter] = useState('All event types');
   const [dateFilter, setDateFilter] = useState('');
 
-  // Master Audit Trail items - clean default ready for live backend integration
+  // Master Audit Trail items
   const [auditEvents, setAuditEvents] = useState(events);
 
   useEffect(() => {
-    if (events && events.length > 0) {
+    const targetPid = projectId || activeProject?.id || activeProject?.project_id;
+    if (targetPid) {
+      getProjectAuditEvents(targetPid)
+        .then((data) => {
+          if (Array.isArray(data)) {
+            setAuditEvents(
+              data.map((evt, idx) => ({
+                id: evt.id || evt.event_id || idx,
+                dateTime: evt.created_at ? new Date(evt.created_at).toLocaleString() : (evt.dateTime || 'Recent'),
+                user: evt.actor_email || evt.user_email || evt.user || 'system@finreg.internal',
+                role: evt.actor_role || evt.role || 'System',
+                eventType: evt.event_type || evt.eventType || 'PROJECT_EVENT',
+                action: evt.action || evt.event_type || 'Audit Action',
+                relatedProject: evt.project_name || evt.project_id || targetPid,
+                result: evt.status || 'Recorded',
+                resultType: (evt.status || '').toLowerCase() === 'failed' ? 'error' : 'recorded',
+                description: evt.description || evt.details || evt.action || 'Project audit event logged.',
+              }))
+            );
+          } else {
+            setAuditEvents([]);
+          }
+        })
+        .catch(() => setAuditEvents([]));
+    } else if (events && events.length > 0) {
       setAuditEvents(events);
     } else {
       getAuditEvents().then((data) => {
@@ -25,7 +50,7 @@ export default function AuditTrailView({ isDarkMode, events = [] }) {
         }
       });
     }
-  }, [events]);
+  }, [events, projectId, activeProject]);
 
   const projectOptions = Array.from(
     new Set(auditEvents.map((e) => e.relatedProject).filter(Boolean))
@@ -172,7 +197,9 @@ export default function AuditTrailView({ isDarkMode, events = [] }) {
                     colSpan={8}
                     className="py-12 px-6 text-center text-slate-400 dark:text-slate-500 text-sm"
                   >
-                    No audit trail events found. System and workflow actions will be recorded here automatically.
+                    {projectId || activeProject
+                      ? 'No audit trail events recorded for this project yet.'
+                      : 'No audit trail events found. System and workflow actions will be recorded here automatically.'}
                   </td>
                 </tr>
               ) : (

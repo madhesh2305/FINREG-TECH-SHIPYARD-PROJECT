@@ -17,10 +17,17 @@ import {
   Search,
   ExternalLink,
   Sliders,
-  Filter
+  Filter,
+  Mail,
+  RefreshCw,
 } from 'lucide-react';
 import { logoutUser, getCurrentUser } from '../services/authService';
-import { submitProjectAdvice, getProjectAdvice } from '../services/advisorService';
+import {
+  submitProjectAdvice,
+  getProjectAdvice,
+  getAdvisorInboxInvitations,
+  acceptAdvisorInvitation,
+} from '../services/advisorService';
 import { ADVISOR_PROFILES } from './AdvisorExpertiseView';
 
 const ADVISOR_REVIEWS_STORAGE_KEY = 'finreg_advisor_reviews';
@@ -43,6 +50,11 @@ export default function AdvisorDashboardView({
   const [selectedProject, setSelectedProject] = useState(null); // 'PRJ-001' or null
   const [searchQuery, setSearchQuery] = useState('');
 
+  // DEF-34: Advisor Inbox Invitations State
+  const [inboxInvitations, setInboxInvitations] = useState([]);
+  const [isLoadingInvitations, setIsLoadingInvitations] = useState(false);
+  const [acceptingInviteId, setAcceptingInviteId] = useState(null);
+
   // Dynamic User Profile state (DEF-03)
   const [userProfile, setUserProfile] = useState(currentUser || null);
 
@@ -57,6 +69,48 @@ export default function AdvisorDashboardView({
       loadUser();
     }
   }, [currentUser]);
+
+  // DEF-34: Fetch Advisor Inbox Invitations
+  const fetchInboxInvitations = async () => {
+    setIsLoadingInvitations(true);
+    try {
+      const list = await getAdvisorInboxInvitations();
+      setInboxInvitations(Array.isArray(list) ? list : []);
+    } catch (err) {
+      console.warn('[AdvisorDashboardView] Failed to load advisor invitations:', err);
+    } finally {
+      setIsLoadingInvitations(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchInboxInvitations();
+  }, [currentUser]);
+
+  const handleAcceptInvitation = async (invitation) => {
+    const invId = invitation.id || invitation.invitation_id;
+    const projId = invitation.project_id || invitation.projectId;
+    if (!invId || acceptingInviteId) return;
+
+    setAcceptingInviteId(invId);
+    try {
+      await acceptAdvisorInvitation(projId, invId);
+      showToast(`Invitation for project "${invitation.project_name || invitation.projectName || projId}" accepted!`);
+      setInboxInvitations((prev) =>
+        prev.map((i) =>
+          i.id === invId || i.invitation_id === invId
+            ? { ...i, status: 'ACCEPTED', status_display: 'Accepted' }
+            : i
+        )
+      );
+      await fetchInboxInvitations();
+    } catch (err) {
+      console.error('Failed to accept invitation:', err);
+      showToast(`Failed to accept invitation: ${err.message || 'API error'}`);
+    } finally {
+      setAcceptingInviteId(null);
+    }
+  };
 
   const userName = userProfile?.name || 'Advisor Expert';
   const userFirstName = userName.split(' ')[0] || 'Advisor';
@@ -534,6 +588,13 @@ export default function AdvisorDashboardView({
             <nav className="space-y-1 text-left">
               {[
                 { name: 'Dashboard', icon: LayoutGrid },
+                {
+                  name: 'Invitations',
+                  icon: Mail,
+                  badge: inboxInvitations.filter(
+                    (i) => (i.status || 'PENDING').toUpperCase() === 'PENDING'
+                  ).length,
+                },
                 { name: 'My Projects', icon: Folder },
                 { name: 'Requirements', icon: Shield },
                 { name: 'My Advice & Reviews', icon: FileText },
@@ -547,19 +608,26 @@ export default function AdvisorDashboardView({
                     key={item.name}
                     type="button"
                     onClick={() => setActiveTab(item.name)}
-                    className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-md text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-md text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
                       isActive
                         ? 'bg-[#2a1d12] text-amber-400 border border-amber-600/50 shadow-sm'
                         : 'text-slate-400 hover:bg-slate-800/60 hover:text-slate-200 border border-transparent'
                     }`}
                   >
-                    <Icon
-                      className={`w-4 h-4 shrink-0 ${
-                        isActive ? 'text-amber-400' : 'text-slate-400'
-                      }`}
-                    />
-                    {isSidebarOpen && (
-                      <span className="flex-1 text-left truncate">{item.name}</span>
+                    <div className="flex items-center gap-3 truncate">
+                      <Icon
+                        className={`w-4 h-4 shrink-0 ${
+                          isActive ? 'text-amber-400' : 'text-slate-400'
+                        }`}
+                      />
+                      {isSidebarOpen && (
+                        <span className="truncate">{item.name}</span>
+                      )}
+                    </div>
+                    {isSidebarOpen && item.badge > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-mono">
+                        {item.badge}
+                      </span>
                     )}
                   </button>
                 );
@@ -832,6 +900,125 @@ export default function AdvisorDashboardView({
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB: INVITATIONS VIEW (DEF-34) */}
+          {activeTab === 'Invitations' && (
+            <div className="space-y-6 animate-fadeIn">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+                <div>
+                  <span className="text-[11px] font-mono font-bold tracking-widest text-amber-500 uppercase block mb-1">
+                    ADVISOR INBOX
+                  </span>
+                  <h1 className="text-3xl font-extrabold tracking-tight text-white">
+                    Project Invitations
+                  </h1>
+                  <p className="text-xs sm:text-sm text-slate-400 mt-1">
+                    Builder requests inviting you to review regulatory frameworks and provide compliance opinions.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={fetchInboxInvitations}
+                  disabled={isLoadingInvitations}
+                  className="px-3.5 py-2 rounded-xl border border-slate-800 bg-[#16181d] hover:bg-slate-800 text-slate-200 text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors self-start sm:self-auto"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isLoadingInvitations ? 'animate-spin' : ''}`} />
+                  <span>Refresh</span>
+                </button>
+              </div>
+
+              {inboxInvitations.length === 0 ? (
+                <div className="text-center py-16 bg-[#16181d] rounded-2xl border border-slate-800/80 p-8 space-y-3">
+                  <Mail className="w-12 h-12 text-slate-600 mx-auto" />
+                  <h3 className="text-base font-bold text-white">No Invitations Yet</h3>
+                  <p className="text-xs text-slate-400 max-w-md mx-auto">
+                    When project builders invite you to contribute compliance advice or validate controls, your invitations will appear here.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-slate-800/90 bg-[#16181d] overflow-hidden shadow-xl">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-300">
+                      <thead className="bg-[#121316] text-[11px] font-mono uppercase text-slate-400 border-b border-slate-800">
+                        <tr>
+                          <th className="px-5 py-3.5 font-bold">Project Name</th>
+                          <th className="px-5 py-3.5 font-bold">Inviting Builder</th>
+                          <th className="px-5 py-3.5 font-bold">Access Level</th>
+                          <th className="px-5 py-3.5 font-bold">Date Received</th>
+                          <th className="px-5 py-3.5 font-bold">Status</th>
+                          <th className="px-5 py-3.5 font-bold text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-800/60">
+                        {inboxInvitations.map((inv, idx) => {
+                          const invId = inv.id || inv.invitation_id || idx;
+                          const isPending = (inv.status || 'PENDING').toUpperCase() === 'PENDING';
+                          const isAccepting = acceptingInviteId === (inv.id || inv.invitation_id);
+
+                          return (
+                            <tr key={invId} className="hover:bg-slate-800/30 transition-colors">
+                              <td className="px-5 py-4 font-semibold text-white">
+                                <div className="flex items-center gap-2">
+                                  <Folder className="w-4 h-4 text-amber-400 shrink-0" />
+                                  <span>{inv.project_name || inv.projectName || `Project #${inv.project_id || inv.projectId}`}</span>
+                                </div>
+                                {inv.invitation_notes && (
+                                  <p className="text-[11px] text-slate-400 font-normal mt-1 italic">
+                                    "{inv.invitation_notes}"
+                                  </p>
+                                )}
+                              </td>
+                              <td className="px-5 py-4 text-slate-300 font-medium">
+                                {inv.inviting_builder || inv.invited_by_name || inv.created_by_email || 'Project Builder'}
+                              </td>
+                              <td className="px-5 py-4">
+                                <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-amber-400 font-mono text-[10px] uppercase font-bold">
+                                  {inv.access_level || 'REGULATORY'}
+                                </span>
+                              </td>
+                              <td className="px-5 py-4 text-slate-400 font-mono text-[11px]">
+                                {inv.created_at ? new Date(inv.created_at).toLocaleDateString() : 'Recent'}
+                              </td>
+                              <td className="px-5 py-4">
+                                <span
+                                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${
+                                    !isPending
+                                      ? 'border-emerald-800/80 bg-emerald-950/60 text-emerald-400'
+                                      : 'border-amber-800/80 bg-amber-950/60 text-amber-300'
+                                  }`}
+                                >
+                                  <span className={`w-1.5 h-1.5 rounded-full ${!isPending ? 'bg-emerald-400' : 'bg-amber-400 animate-pulse'}`} />
+                                  <span>{!isPending ? 'Accepted' : 'Pending'}</span>
+                                </span>
+                              </td>
+                              <td className="px-5 py-4 text-right">
+                                {isPending ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleAcceptInvitation(inv)}
+                                    disabled={isAccepting}
+                                    className="px-4 py-2 rounded-xl bg-[#e6a13d] hover:bg-[#d8932f] disabled:opacity-50 text-slate-950 font-bold text-xs cursor-pointer transition-colors shadow-md"
+                                  >
+                                    {isAccepting ? 'Accepting...' : 'Accept Invitation'}
+                                  </button>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-emerald-400 font-semibold text-xs">
+                                    <Check className="w-4 h-4" />
+                                    <span>Accepted</span>
+                                  </span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

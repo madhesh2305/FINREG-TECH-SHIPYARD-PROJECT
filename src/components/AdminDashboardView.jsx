@@ -31,8 +31,17 @@ import {
   X
 } from 'lucide-react';
 import { logoutUser, getRegisteredUsers } from '../services/authService';
-import { getLocalProjects, getProjects } from '../services/projectService';
-import { getAdminStats, getAdminUsers, updateUserStatus } from '../services/adminService';
+import { getProjects, updateProjectStatus } from '../services/projectService';
+import {
+  getAdminStats,
+  getAdminUsers,
+  updateUserStatus,
+  getRolesPermissions,
+  updateUserRole,
+  getAdminAdvisorInvitations,
+  provisionAdmin,
+  getAdminAuditEvents,
+} from '../services/adminService';
 
 export default function AdminDashboardView({
   isDarkMode = true,
@@ -65,32 +74,26 @@ export default function AdminDashboardView({
   const [users, setUsers] = useState([]);
   const [projectsList, setProjectsList] = useState([]);
 
-  // Advisor Invitations list initialized to empty array
-  const DEFAULT_ADMIN_INVITATIONS = [];
+  // Advisor Invitations list loaded from live backend (DEF-34)
+  const [advisorInvitationsList, setAdvisorInvitationsList] = useState([]);
 
-  const loadInitialInvitations = () => {
-    try {
-      const raw = localStorage.getItem('finreg_advisor_assignments');
-      const assignments = raw ? JSON.parse(raw) : [];
-      if (!Array.isArray(assignments) || assignments.length === 0) return [];
-      return assignments.map((a, idx) => ({
-        id: a.id || `INV-${String(idx + 10).padStart(3, '0')}`,
-        project: a.projectName || 'Project',
-        invitingBuilder: 'Builder',
-        invitedAdvisor: a.advisorName || 'Advisor',
-        expertise: a.advisorRole || 'Advisor Expert',
-        invitationDate: a.assignedDate || 'Recently',
-        status: a.status === 'In Review' ? 'Active' : (a.status || 'Active'),
-        statusBadgeClass: 'bg-[#0e2316] text-emerald-400 border-emerald-800/50',
-        statusDotClass: 'bg-emerald-400',
-        accessStatus: 'Active',
-      }));
-    } catch (e) {
-      return [];
-    }
-  };
+  // DEF-35: Controlled Administrator Provisioning States
+  const [isProvisionAdminModalOpen, setIsProvisionAdminModalOpen] = useState(false);
+  const [provisionForm, setProvisionForm] = useState({ email: '', full_name: '', password: '' });
+  const [isSubmittingProvision, setIsSubmittingProvision] = useState(false);
 
-  const [advisorInvitationsList, setAdvisorInvitationsList] = useState(loadInitialInvitations);
+  // DEF-37: Admin Roles & Role Change States
+  const [rolesList, setRolesList] = useState([]);
+  const [changingRoleUser, setChangingRoleUser] = useState(null);
+  const [selectedNewRole, setSelectedNewRole] = useState('BUILDER');
+  const [isSubmittingRoleChange, setIsSubmittingRoleChange] = useState(false);
+
+  // DEF-38: Project Lifecycle & Disabling States
+  const [disablingProject, setDisablingProject] = useState(null);
+  const [isDisablingProject, setIsDisablingProject] = useState(false);
+
+  // DEF-31: System Audit Logs State
+  const [auditLogsList, setAuditLogsList] = useState([]);
 
   // Platform activity and security alerts initialized to empty arrays
   const recentPlatformActivity = [];
@@ -101,52 +104,84 @@ export default function AdminDashboardView({
   const [selectedRoleFilter, setSelectedRoleFilter] = useState('All roles');
   const [selectedStatusFilter, setSelectedStatusFilter] = useState('All statuses');
   const [deactivatingUser, setDeactivatingUser] = useState(null);
-  const [showStatusRecordedBanner, setShowStatusRecordedBanner] = useState(true);
+  const [showStatusRecordedBanner, setShowStatusRecordedBanner] = useState(false);
 
-  const persistUserStatus = (identifier, newStatus) => {
+  // Reload live users from PostgreSQL
+  const reloadUsers = async () => {
     try {
-      const isActive = newStatus === 'Active';
-      const raw = localStorage.getItem('finreg_registered_users');
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        const updated = parsed.map((u) => (u.id === identifier || u.email === identifier || u.user_id === identifier ? { ...u, status: newStatus, is_active: isActive } : u));
-        localStorage.setItem('finreg_registered_users', JSON.stringify(updated));
+      const list = await getAdminUsers();
+      if (Array.isArray(list)) {
+        setUsers(
+          list.map((u, idx) => ({
+            id: u.user_id ? `USR-${String(u.user_id).padStart(3, '0')}` : `USR-${String(idx + 1).padStart(3, '0')}`,
+            user_id: u.user_id,
+            name: u.full_name || 'User',
+            email: u.email || '',
+            role: u.platform_role ? u.platform_role.charAt(0).toUpperCase() + u.platform_role.slice(1).toLowerCase() : 'Builder',
+            status: u.is_active ? 'Active' : 'Inactive',
+            registered: u.created_at
+              ? new Date(u.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+              : 'Recently',
+            lastLogin: u.updated_at
+              ? new Date(u.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+              : 'Recently',
+          }))
+        );
       }
-      const rawAccounts = localStorage.getItem('finreg_local_accounts');
-      if (rawAccounts) {
-        const accounts = JSON.parse(rawAccounts);
-        const emailKey = Object.keys(accounts).find(k => k.toLowerCase() === String(identifier).toLowerCase() || accounts[k].user?.user_id === identifier);
-        if (emailKey && accounts[emailKey]) {
-          accounts[emailKey].user.status = newStatus;
-          accounts[emailKey].user.is_active = isActive;
-          localStorage.setItem('finreg_local_accounts', JSON.stringify(accounts));
-        }
-      }
-    } catch (e) {
-      // ignore
+    } catch (err) {
+      console.warn('[AdminDashboardView] reloadUsers error:', err);
     }
   };
 
+  // Reload live projects from PostgreSQL
+  const reloadProjects = async () => {
+    try {
+      const data = await getProjects();
+      if (Array.isArray(data)) {
+        setProjectsList(
+          data.map((p) => {
+            const isDis = (p.status || '').toUpperCase() === 'DISABLED';
+            return {
+              id: p.id || p.project_id,
+              name: p.name || p.project_name,
+              owner: p.owner || p.owner_name || 'Project Owner',
+              status: isDis ? 'Disabled' : (p.status || 'Active'),
+              rawStatus: (p.status || 'Active').toUpperCase(),
+              statusColor: isDis
+                ? 'bg-slate-900 text-slate-400 border-amber-900/60'
+                : 'bg-[#281d11] text-amber-400 border-amber-800/50',
+              dotColor: isDis ? 'bg-slate-500' : 'bg-amber-400',
+              assignedAdvisors: 'Assigned',
+              creationDate: p.created_at ? new Date(p.created_at).toLocaleDateString('en-GB') : 'Recently',
+              lastActivity: p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-GB') : 'Recently',
+              readiness: 'Active Review',
+              accessBoundary: 'Platform isolation enforced.',
+            };
+          })
+        );
+      }
+    } catch (err) {
+      console.warn('[AdminDashboardView] reloadProjects error:', err);
+    }
+  };
+
+  // DEF-36: Deactivate User Enforcement
   const handleConfirmDeactivate = async (userId) => {
     const targetUser = deactivatingUser || users.find((u) => u.id === userId || u.user_id === userId);
     const rawId = targetUser?.user_id || targetUser?.id || userId;
-    const email = targetUser?.email;
 
     try {
-      if (rawId) {
-        await updateUserStatus(rawId, false);
-      }
+      await updateUserStatus(rawId, 'INACTIVE');
+      setUsers((prev) =>
+        prev.map((u) => (u.id === userId || u.user_id === rawId ? { ...u, status: 'Inactive', is_active: false } : u))
+      );
+      setShowStatusRecordedBanner(true);
+      showToast('Account deactivated and active sessions revoked');
+      setDeactivatingUser(null);
+      await reloadUsers();
     } catch (err) {
-      console.warn('[AdminDashboardView] updateUserStatus backend error:', err);
+      showToast(`Failed to deactivate user: ${err.message || 'API error'}`);
     }
-
-    setUsers((prev) =>
-      prev.map((u) => (u.id === userId || u.user_id === rawId ? { ...u, status: 'Inactive', is_active: false } : u))
-    );
-    persistUserStatus(email || rawId, 'Inactive');
-    setShowStatusRecordedBanner(true);
-    showToast(`Account status updated for ${targetUser?.name || 'User'} and recorded in audit log.`);
-    setDeactivatingUser(null);
   };
 
   const handleToggleStatus = async (userId) => {
@@ -157,24 +192,74 @@ export default function AdminDashboardView({
     const nextStatus = nextActive ? 'Active' : 'Inactive';
 
     try {
-      if (rawId) {
-        await updateUserStatus(rawId, nextActive);
-      }
+      await updateUserStatus(rawId, nextActive ? 'ACTIVE' : 'INACTIVE');
+      setUsers((prev) =>
+        prev.map((u) => {
+          if (u.id === userId || u.user_id === rawId) {
+            return { ...u, status: nextStatus, is_active: nextActive };
+          }
+          return u;
+        })
+      );
+      setShowStatusRecordedBanner(true);
+      showToast(`Account status updated to ${nextStatus} for ${targetUser.name}`);
+      await reloadUsers();
     } catch (err) {
-      console.warn('[AdminDashboardView] updateUserStatus backend error:', err);
+      showToast(`Failed to update status: ${err.message || 'API error'}`);
     }
+  };
 
-    setUsers((prev) =>
-      prev.map((u) => {
-        if (u.id === userId || u.user_id === rawId) {
-          return { ...u, status: nextStatus, is_active: nextActive };
-        }
-        return u;
-      })
-    );
-    persistUserStatus(targetUser.email || rawId, nextStatus);
-    setShowStatusRecordedBanner(true);
-    showToast(`Account status updated to ${nextStatus} for ${targetUser.name}`);
+  // DEF-35: Handle Provision Administrator Submit
+  const handleProvisionAdminSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!provisionForm.email || !provisionForm.password || isSubmittingProvision) return;
+
+    setIsSubmittingProvision(true);
+    try {
+      await provisionAdmin(provisionForm);
+      showToast('Administrator account provisioned successfully');
+      setIsProvisionAdminModalOpen(false);
+      setProvisionForm({ email: '', full_name: '', password: '' });
+      await reloadUsers();
+    } catch (err) {
+      showToast(`Provisioning failed: ${err.message || 'API error'}`);
+    } finally {
+      setIsSubmittingProvision(false);
+    }
+  };
+
+  // DEF-37: Handle User Role Update
+  const handleConfirmRoleChange = async () => {
+    if (!changingRoleUser || isSubmittingRoleChange) return;
+    setIsSubmittingRoleChange(true);
+    const uid = changingRoleUser.user_id || changingRoleUser.id;
+    try {
+      await updateUserRole(uid, selectedNewRole);
+      showToast(`Role updated to ${selectedNewRole} for ${changingRoleUser.name}`);
+      setChangingRoleUser(null);
+      await reloadUsers();
+    } catch (err) {
+      showToast(`Failed to update role: ${err.message || 'API error'}`);
+    } finally {
+      setIsSubmittingRoleChange(false);
+    }
+  };
+
+  // DEF-38: Handle Project Disabling
+  const handleConfirmDisableProject = async () => {
+    if (!disablingProject || isDisablingProject) return;
+    setIsDisablingProject(true);
+    const pid = disablingProject.id || disablingProject.project_id;
+    try {
+      await updateProjectStatus(pid, 'DISABLED');
+      showToast(`Project ${disablingProject.name || pid} has been disabled.`);
+      setDisablingProject(null);
+      await reloadProjects();
+    } catch (err) {
+      showToast(`Failed to disable project: ${err.message || 'API error'}`);
+    } finally {
+      setIsDisablingProject(false);
+    }
   };
 
   const filteredUsers = users.filter((u) => {
@@ -233,9 +318,6 @@ export default function AdminDashboardView({
 
   const [regulatorySources, setRegulatorySources] = useState([]);
 
-  // Roles & Permissions definitions initialized to empty array (ready for live backend permission definitions)
-  const DEFAULT_ROLES = [];
-  const [rolesList, setRolesList] = useState(DEFAULT_ROLES);
 
   // Platform Telemetry services initialized to empty array (ready for live backend infrastructure monitoring)
   const [platformServices, setPlatformServices] = useState([]);
@@ -276,33 +358,31 @@ export default function AdminDashboardView({
     showToast('Regulatory source added as Pending Validation');
   };
 
-  // Audit Logs state initialized to empty array (ready for live backend system audit logs)
+  // Audit Logs state (DEF-31)
   const [auditLogSearchQuery, setAuditLogSearchQuery] = useState('');
   const [auditLogDateFilter, setAuditLogDateFilter] = useState('');
   const [auditLogActionTypeFilter, setAuditLogActionTypeFilter] = useState('All action types');
   const [auditLogResultFilter, setAuditLogResultFilter] = useState('All results');
 
-  const [auditLogsList] = useState([]);
-
   const filteredAuditLogs = auditLogsList.filter((log) => {
     const matchesSearch =
       auditLogSearchQuery.trim() === '' ||
-      log.user.toLowerCase().includes(auditLogSearchQuery.toLowerCase()) ||
-      log.action.toLowerCase().includes(auditLogSearchQuery.toLowerCase()) ||
-      log.affectedResource.toLowerCase().includes(auditLogSearchQuery.toLowerCase()) ||
-      log.relevantDetails.toLowerCase().includes(auditLogSearchQuery.toLowerCase());
+      (log.user || '').toLowerCase().includes(auditLogSearchQuery.toLowerCase()) ||
+      (log.action || '').toLowerCase().includes(auditLogSearchQuery.toLowerCase()) ||
+      (log.affectedResource || '').toLowerCase().includes(auditLogSearchQuery.toLowerCase()) ||
+      (log.relevantDetails || '').toLowerCase().includes(auditLogSearchQuery.toLowerCase());
 
     const matchesAction =
       auditLogActionTypeFilter === 'All action types' ||
-      log.action.toLowerCase() === auditLogActionTypeFilter.toLowerCase();
+      (log.action || '').toLowerCase() === auditLogActionTypeFilter.toLowerCase();
 
     const matchesResult =
       auditLogResultFilter === 'All results' ||
-      log.result.toLowerCase() === auditLogResultFilter.toLowerCase();
+      (log.result || '').toLowerCase() === auditLogResultFilter.toLowerCase();
 
     const matchesDate =
       auditLogDateFilter.trim() === '' ||
-      log.timestamp.toLowerCase().includes(auditLogDateFilter.toLowerCase());
+      (log.timestamp || '').toLowerCase().includes(auditLogDateFilter.toLowerCase());
 
     return matchesSearch && matchesAction && matchesResult && matchesDate;
   });
@@ -314,6 +394,95 @@ export default function AdminDashboardView({
   const [adminNotificationPref, setAdminNotificationPref] = useState('Essential Admin alerts');
 
   const [adminStats, setAdminStats] = useState(null);
+
+  // DEF-37: Fetch live roles & permissions
+  const fetchRolesData = async () => {
+    try {
+      const data = await getRolesPermissions();
+      const roles = Array.isArray(data) ? data : (data?.roles || []);
+      setRolesList(
+        roles.map((r, i) => ({
+          id: r.id || r.role_id || `ROLE-${i + 1}`,
+          name: r.name || r.role_name || r.role || 'Role',
+          permittedActions: Array.isArray(r.permitted_actions || r.permittedActions)
+            ? (r.permitted_actions || r.permittedActions)
+            : (r.permitted_actions || r.permittedActions || 'Standard Operations'),
+          accessBoundary: r.access_boundary || r.accessBoundary || 'Role-specific tenant boundary',
+          status: r.status || 'Active definition',
+        }))
+      );
+    } catch (err) {
+      console.warn('[AdminDashboardView] fetchRolesData error:', err.message);
+    }
+  };
+
+  // DEF-34: Fetch live admin advisor invitations
+  const fetchAdminInvitationsData = async () => {
+    try {
+      const data = await getAdminAdvisorInvitations(advisorInvitationStatusFilter);
+      const list = Array.isArray(data) ? data : (data?.invitations || []);
+      setAdvisorInvitationsList(
+        list.map((inv, idx) => {
+          const st = (inv.status || 'PENDING').toUpperCase();
+          const isAccepted = st === 'ACCEPTED';
+          const isPending = st === 'PENDING';
+          return {
+            id: inv.id || inv.invitation_id || `INV-${idx + 1}`,
+            project: inv.project_code || inv.project_name || `Project #${inv.project_id || idx + 1}`,
+            project_id: inv.project_id,
+            invitingBuilder: inv.inviting_builder || inv.builder_email || inv.created_by_email || 'Project Builder',
+            invitedAdvisor: inv.invited_advisor || inv.advisor_email || inv.advisor_name || 'Advisor',
+            expertise: inv.access_level || inv.expertise || 'REGULATORY',
+            invitationDate: inv.created_at ? new Date(inv.created_at).toLocaleDateString('en-GB') : 'Recent',
+            status: isAccepted ? 'Accepted' : isPending ? 'Pending' : (inv.status || 'Pending'),
+            statusBadgeClass: isAccepted
+              ? 'bg-[#0e2316] text-emerald-400 border-emerald-800/50'
+              : 'bg-amber-950/40 text-amber-300 border-amber-800/50',
+            statusDotClass: isAccepted ? 'bg-emerald-400' : 'bg-amber-400',
+            accessStatus: isAccepted ? 'Active' : isPending ? 'Pending' : 'Inactive',
+          };
+        })
+      );
+    } catch (err) {
+      console.warn('[AdminDashboardView] fetchAdminInvitationsData error:', err.message);
+    }
+  };
+
+  // DEF-31: Fetch live admin audit events
+  const fetchAdminAuditLogsData = async () => {
+    try {
+      const data = await getAdminAuditEvents(auditLogActionTypeFilter);
+      const list = Array.isArray(data) ? data : (data?.events || []);
+      setAuditLogsList(
+        list.map((log, idx) => ({
+          id: log.id || log.event_id || idx,
+          timestamp: log.created_at ? new Date(log.created_at).toLocaleString() : (log.timestamp || 'Recent'),
+          user: log.actor_email || log.user_email || log.user || 'admin@finreg.internal',
+          action: log.action || log.event_type || 'SYSTEM_EVENT',
+          affectedResource: log.resource || log.affected_resource || log.project_name || 'Global',
+          eventCategory: log.event_type || log.category || 'Platform Lifecycle',
+          result: log.status || 'SUCCESS',
+          resultBadgeClass: (log.status || '').toUpperCase() === 'FAILED'
+            ? 'bg-rose-950/40 text-rose-300 border-rose-800/50'
+            : 'bg-emerald-950/40 text-emerald-300 border-emerald-800/50',
+          resultDotClass: (log.status || '').toUpperCase() === 'FAILED' ? 'bg-rose-500' : 'bg-emerald-400',
+          relevantDetails: log.description || log.details || log.action || 'Audit event logged in PostgreSQL',
+        }))
+      );
+    } catch (err) {
+      console.warn('[AdminDashboardView] fetchAdminAuditLogsData error:', err.message);
+    }
+  };
+
+  // Re-fetch advisor invitations when filter changes
+  useEffect(() => {
+    fetchAdminInvitationsData();
+  }, [advisorInvitationStatusFilter]);
+
+  // Re-fetch audit logs when filter changes
+  useEffect(() => {
+    fetchAdminAuditLogsData();
+  }, [auditLogActionTypeFilter]);
 
   // Live admin metrics and users fetch from PostgreSQL backend
   useEffect(() => {
@@ -355,23 +524,33 @@ export default function AdminDashboardView({
 
         if (projectsData.status === 'fulfilled' && Array.isArray(projectsData.value)) {
           setProjectsList(
-            projectsData.value.map((p) => ({
-              id: p.id || p.project_id,
-              name: p.name || p.project_name,
-              owner: p.owner || p.owner_name || 'Project Owner',
-              status: p.status || 'Active',
-              statusColor: 'bg-[#281d11] text-amber-400 border-amber-800/50',
-              dotColor: 'bg-amber-400',
-              assignedAdvisors: 'Assigned',
-              creationDate: p.created_at ? new Date(p.created_at).toLocaleDateString('en-GB') : 'Recently',
-              lastActivity: p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-GB') : 'Recently',
-              readiness: 'Active Review',
-              accessBoundary: 'Platform isolation enforced.',
-            }))
+            projectsData.value.map((p) => {
+              const isDis = (p.status || '').toUpperCase() === 'DISABLED';
+              return {
+                id: p.id || p.project_id,
+                name: p.name || p.project_name,
+                owner: p.owner || p.owner_name || 'Project Owner',
+                status: isDis ? 'Disabled' : (p.status || 'Active'),
+                rawStatus: (p.status || 'Active').toUpperCase(),
+                statusColor: isDis
+                  ? 'bg-slate-900 text-slate-400 border-amber-900/60'
+                  : 'bg-[#281d11] text-amber-400 border-amber-800/50',
+                dotColor: isDis ? 'bg-slate-500' : 'bg-amber-400',
+                assignedAdvisors: 'Assigned',
+                creationDate: p.created_at ? new Date(p.created_at).toLocaleDateString('en-GB') : 'Recently',
+                lastActivity: p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-GB') : 'Recently',
+                readiness: 'Active Review',
+                accessBoundary: 'Platform isolation enforced.',
+              };
+            })
           );
         } else if (projectsData.status === 'rejected') {
           setProjectsList([]);
         }
+
+        await fetchRolesData();
+        await fetchAdminInvitationsData();
+        await fetchAdminAuditLogsData();
       } catch (err) {
         console.warn('[AdminDashboardView] Live admin data fetch error:', err.message);
       }
@@ -1004,6 +1183,16 @@ export default function AdminDashboardView({
                   </select>
                   <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
+
+                {/* DEF-35: Provision Administrator Action Button */}
+                <button
+                  type="button"
+                  onClick={() => setIsProvisionAdminModalOpen(true)}
+                  className="px-4 py-2.5 rounded-md bg-[#e6a13d] hover:bg-[#d8932f] text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-md whitespace-nowrap shrink-0"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Provision Administrator</span>
+                </button>
               </div>
 
               {/* Status Banner matching Image 1 */}
@@ -1074,6 +1263,16 @@ export default function AdminDashboardView({
                           </td>
                           <td className="py-4 px-4 text-right">
                             <div className="flex items-center justify-end gap-3">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setChangingRoleUser(user);
+                                  setSelectedNewRole((user.role || 'BUILDER').toUpperCase());
+                                }}
+                                className="text-xs sm:text-sm font-semibold text-amber-400 hover:text-amber-300 transition-colors cursor-pointer"
+                              >
+                                Change Role
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => showToast(`Viewing profile details for ${user.name}`)}
@@ -1155,7 +1354,20 @@ export default function AdminDashboardView({
                               {role.name}
                             </td>
                             <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                              {role.permittedActions}
+                              {Array.isArray(role.permittedActions) ? (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {role.permittedActions.map((act, i) => (
+                                    <span
+                                      key={i}
+                                      className="px-2 py-0.5 rounded bg-slate-800 text-amber-300 border border-slate-700 font-mono text-[11px]"
+                                    >
+                                      {act}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span>{role.permittedActions}</span>
+                              )}
                             </td>
                             <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
                               {role.accessBoundary}
@@ -1286,13 +1498,28 @@ export default function AdminDashboardView({
                             {proj.readiness}
                           </td>
                           <td className="py-4 px-4 text-right">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedProjectOverview(proj)}
-                              className="text-xs sm:text-sm font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
-                            >
-                              View overview
-                            </button>
+                            <div className="flex items-center justify-end gap-3">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedProjectOverview(proj)}
+                                className="text-xs sm:text-sm font-semibold text-slate-300 hover:text-white transition-colors cursor-pointer"
+                              >
+                                View overview
+                              </button>
+                              {proj.rawStatus !== 'DISABLED' && proj.status !== 'Disabled' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setDisablingProject(proj)}
+                                  className="px-3 py-1 rounded-md border border-rose-800/80 bg-rose-950/30 hover:bg-rose-900/40 text-rose-300 text-xs font-semibold cursor-pointer transition-colors"
+                                >
+                                  Disable Project
+                                </button>
+                              ) : (
+                                <span className="text-xs text-slate-500 font-medium">
+                                  Locked
+                                </span>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -2255,6 +2482,187 @@ export default function AdminDashboardView({
             >
               Close
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* PROVISION ADMINISTRATOR MODAL (DEF-35) */}
+      {isProvisionAdminModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn text-left">
+          <div className="bg-[#16181d] border border-slate-700/80 rounded-2xl w-full max-w-md shadow-2xl p-6 relative">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800 mb-4">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-amber-400" />
+                <span>Provision Administrator Account</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setIsProvisionAdminModalOpen(false)}
+                className="text-slate-400 hover:text-white text-lg font-bold"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleProvisionAdminSubmit} className="space-y-4 text-xs">
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Administrator Email:
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={provisionForm.email}
+                  onChange={(e) => setProvisionForm({ ...provisionForm, email: e.target.value })}
+                  placeholder="admin.lead@finreg.internal"
+                  className="w-full bg-[#111216] border border-slate-700/80 rounded-lg px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Full Name:
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={provisionForm.full_name}
+                  onChange={(e) => setProvisionForm({ ...provisionForm, full_name: e.target.value })}
+                  placeholder="Senior Compliance Administrator"
+                  className="w-full bg-[#111216] border border-slate-700/80 rounded-lg px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  Temporary Password:
+                </label>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  value={provisionForm.password}
+                  onChange={(e) => setProvisionForm({ ...provisionForm, password: e.target.value })}
+                  placeholder="Minimum 8 characters"
+                  className="w-full bg-[#111216] border border-slate-700/80 rounded-lg px-3.5 py-2.5 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setIsProvisionAdminModalOpen(false)}
+                  className="px-4 py-2 rounded-lg border border-slate-800 text-slate-400 hover:text-white font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingProvision}
+                  className="px-5 py-2 rounded-lg bg-[#e6a13d] hover:bg-[#d8932f] disabled:opacity-50 text-slate-950 font-bold transition-colors cursor-pointer shadow-md"
+                >
+                  {isSubmittingProvision ? 'Provisioning...' : 'Provision Administrator'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* CHANGE ROLE MODAL (DEF-37) */}
+      {changingRoleUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn text-left">
+          <div className="bg-[#16181d] border border-slate-700/80 rounded-2xl w-full max-w-sm shadow-2xl p-6 relative space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Shield className="w-5 h-5 text-amber-400" />
+                <span>Change User Role</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setChangingRoleUser(null)}
+                className="text-slate-400 hover:text-white text-lg font-bold"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <p className="text-slate-300">
+                Update platform authorization boundary for <strong>{changingRoleUser.name}</strong> ({changingRoleUser.email}).
+              </p>
+
+              <div>
+                <label className="block text-slate-400 font-semibold mb-1">
+                  Assign Platform Role:
+                </label>
+                <select
+                  value={selectedNewRole}
+                  onChange={(e) => setSelectedNewRole(e.target.value)}
+                  className="w-full bg-[#111216] border border-slate-700/80 rounded-lg px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-amber-500"
+                >
+                  <option value="BUILDER">Builder (Project Owner &amp; Workflow)</option>
+                  <option value="ADVISOR">Advisor (SME Compliance Reviewer)</option>
+                  <option value="ADMIN">Administrator (Global Platform Governance)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setChangingRoleUser(null)}
+                className="px-4 py-2 rounded-lg border border-slate-800 text-slate-400 hover:text-white font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingRoleChange}
+                onClick={handleConfirmRoleChange}
+                className="px-5 py-2 rounded-lg bg-[#e6a13d] hover:bg-[#d8932f] disabled:opacity-50 text-slate-950 font-bold transition-colors cursor-pointer shadow-md"
+              >
+                {isSubmittingRoleChange ? 'Updating...' : 'Update Role'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DISABLE PROJECT CONFIRMATION MODAL (DEF-38) */}
+      {disablingProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn text-left">
+          <div className="bg-[#16181d] border border-rose-900/80 rounded-2xl w-full max-w-md shadow-2xl p-6 relative space-y-4">
+            <div className="flex items-center gap-3 text-rose-400 pb-2 border-b border-slate-800">
+              <AlertTriangle className="w-6 h-6 shrink-0" />
+              <h3 className="text-base font-bold text-white">Disable Project Confirmation</h3>
+            </div>
+
+            <p className="text-xs sm:text-sm text-slate-200 leading-relaxed">
+              Are you sure you want to disable <strong>{disablingProject.name || disablingProject.id}</strong>? All further submissions and invitations will be locked.
+            </p>
+
+            <div className="p-3 rounded-lg bg-rose-950/30 border border-rose-900/50 text-xs text-rose-300">
+              This action enforces project-level lockouts across all Builder workspaces and advisor queues.
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setDisablingProject(null)}
+                className="px-4 py-2 rounded-lg border border-slate-800 text-slate-400 hover:text-white font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDisablingProject}
+                onClick={handleConfirmDisableProject}
+                className="px-5 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold transition-colors cursor-pointer shadow-md"
+              >
+                {isDisablingProject ? 'Disabling...' : 'Confirm Disable'}
+              </button>
+            </div>
           </div>
         </div>
       )}

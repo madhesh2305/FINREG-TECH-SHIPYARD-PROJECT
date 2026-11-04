@@ -1,7 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getProjects, getProjectDetails, createProject, getProjectAttachments, uploadProjectAttachment } from '../services/projectService';
+import {
+  getProjects,
+  getProjectDetails,
+  createProject,
+  getProjectAttachments,
+  uploadProjectAttachment,
+  getProjectWorkflow,
+  getProjectWorkflowStep,
+  getProjectAuditEvents,
+  updateProjectStatus,
+} from '../services/projectService';
 import { getCurrentUser, logoutUser } from '../services/authService';
-import { getAdvisors } from '../services/advisorService';
+import { getAdvisors, getEligibleAdvisors, selectProjectAdvisor, getProjectMembers } from '../services/advisorService';
 import AdvisorsExpertsView from './AdvisorsExpertsView';
 import RegulatorySupportView from './RegulatorySupportView';
 import ToolsView from './ToolsView';
@@ -11,9 +21,6 @@ import AdviceDecisionsView from './AdviceDecisionsView';
 import AiRagFindingsView from './AiRagFindingsView';
 import ReadinessView from './ReadinessView';
 import AuditTrailView from './AuditTrailView';
-
-
-
 
 import {
   Menu,
@@ -45,7 +52,11 @@ import {
   CheckSquare,
   Square,
   Edit3,
-  ExternalLink
+  ExternalLink,
+  AlertTriangle,
+  RefreshCw,
+  UserCheck,
+  X,
 } from 'lucide-react';
 
 export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, currentUser }) {
@@ -132,6 +143,26 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   const [newProjectDomain, setNewProjectDomain] = useState('');
   const [toastMessage, setToastMessage] = useState(null);
 
+  // DEF-29: Dynamic Project Workflow State
+  const [projectWorkflowData, setProjectWorkflowData] = useState(null);
+
+  // DEF-30: Workflow Step Details Modal States
+  const [projectWorkflowStepDetails, setProjectWorkflowStepDetails] = useState(null);
+  const [isLoadingWorkflowStep, setIsLoadingWorkflowStep] = useState(false);
+  const [isWorkflowStepModalOpen, setIsWorkflowStepModalOpen] = useState(false);
+
+  // DEF-31: Project Audit Events State
+  const [projectAuditEventsList, setProjectAuditEventsList] = useState([]);
+
+  // Live Project Members State (DEF-32 / DEF-33)
+  const [projectMembers, setProjectMembers] = useState([]);
+
+  // DEF-33: Advisor Selection Step in Project Creation
+  const [eligibleAdvisors, setEligibleAdvisors] = useState([]);
+  const [selectedAdvisorForProject, setSelectedAdvisorForProject] = useState(null);
+  const [isLoadingEligibleAdvisors, setIsLoadingEligibleAdvisors] = useState(false);
+  const [isSubmittingCreateProject, setIsSubmittingCreateProject] = useState(false);
+
   // Projects list initialized to empty array (ready for live backend API data)
   const [allProjects, setAllProjects] = useState([]);
 
@@ -154,6 +185,98 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
       isMounted = false;
     };
   }, [currentUser]);
+
+  // DEF-29 & DEF-31: Fetch live workflow structure and project audit trail
+  useEffect(() => {
+    let isMounted = true;
+    const targetProj = selectedProject || allProjects[0];
+    const pid = targetProj?.id || targetProj?.project_id;
+    if (!pid) {
+      if (isMounted) {
+        setProjectWorkflowData(null);
+        setProjectAuditEventsList([]);
+      }
+      return;
+    }
+
+    getProjectWorkflow(pid)
+      .then((wf) => {
+        if (isMounted) setProjectWorkflowData(wf);
+      })
+      .catch(() => {
+        if (isMounted) setProjectWorkflowData(null);
+      });
+
+    getProjectAuditEvents(pid)
+      .then((evts) => {
+        if (isMounted) setProjectAuditEventsList(Array.isArray(evts) ? evts : []);
+      })
+      .catch(() => {
+        if (isMounted) setProjectAuditEventsList([]);
+      });
+
+    getProjectMembers(pid)
+      .then((m) => {
+        if (isMounted) setProjectMembers(Array.isArray(m) ? m : []);
+      })
+      .catch(() => {
+        if (isMounted) setProjectMembers([]);
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [selectedProject?.id, selectedProject?.project_id, allProjects, projectSubTab]);
+
+  // DEF-30: Fetch single workflow step details
+  const handleOpenWorkflowStep = async (stepId) => {
+    const targetProj = selectedProject || allProjects[0];
+    const pid = targetProj?.id || targetProj?.project_id;
+    if (!pid) return;
+
+    setIsLoadingWorkflowStep(true);
+    setIsWorkflowStepModalOpen(true);
+    try {
+      const details = await getProjectWorkflowStep(pid, stepId);
+      setProjectWorkflowStepDetails(details);
+    } catch (err) {
+      console.warn('Failed to load workflow step details:', err);
+      setToastMessage(`Failed to load step details: ${err.message || 'Error'}`);
+      setTimeout(() => setToastMessage(null), 3500);
+    } finally {
+      setIsLoadingWorkflowStep(false);
+    }
+  };
+
+  // DEF-33: Next action from Step 1 to Step 2 in Create Project wizard
+  const handleStep1Next = async () => {
+    if (!newProjectName.trim()) {
+      setToastMessage('Please enter a Project Name');
+      setTimeout(() => setToastMessage(null), 2500);
+      return;
+    }
+    if (!newProjectType) {
+      setToastMessage('Please select a Project Type');
+      setTimeout(() => setToastMessage(null), 2500);
+      return;
+    }
+    setCreateProjectStep(2);
+    setIsLoadingEligibleAdvisors(true);
+    try {
+      const list = await getEligibleAdvisors('new-project');
+      setEligibleAdvisors(Array.isArray(list) ? list : []);
+    } catch (err) {
+      console.warn('Failed to load eligible advisors, trying fallback:', err);
+      try {
+        const advs = await getAdvisors();
+        setEligibleAdvisors(Array.isArray(advs) ? advs : []);
+      } catch (e) {
+        setEligibleAdvisors([]);
+      }
+    } finally {
+      setIsLoadingEligibleAdvisors(false);
+    }
+  };
 
   // Open Project Details Page (fetches live details from API)
   const handleOpenProject = async (project) => {
@@ -222,11 +345,12 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     }
   };
 
-  // Handle New Project Creation via POST /projects (DEF-08: Bind creator name to authenticated user)
+  // DEF-28 & DEF-33: Handle New Project Creation via POST /projects
   const handleCreateProjectSubmit = async (e) => {
-    e.preventDefault();
-    if (!newProjectName || !newProjectType) return;
+    if (e) e.preventDefault();
+    if (!newProjectName || !newProjectType || isSubmittingCreateProject) return;
 
+    setIsSubmittingCreateProject(true);
     const creatorName = currentUser?.name || 'Project Owner';
     const creatorEmail = (currentUser?.email || '').toLowerCase();
 
@@ -241,43 +365,42 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
 
     try {
       const createdProject = await createProject(payload);
-      const newEntry = {
-        id: createdProject.id || `PRJ-00${allProjects.length + 1}`,
-        name: createdProject.name || payload.name,
-        type: createdProject.type || payload.type,
-        status: createdProject.status || 'Draft',
-        statusColor: createdProject.statusColor || 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700',
-        dotColor: createdProject.dotColor || 'bg-slate-400',
-        lastUpdated: createdProject.lastUpdated || 'Just now',
-        owner: createdProject.owner || creatorName,
-        ownerEmail: creatorEmail,
-        progress: 0,
-        isNew: true,
-        description: createdProject.description || payload.description,
-        created: createdProject.created || 'Today',
-        jurisdiction: createdProject.jurisdiction || payload.jurisdiction,
-      };
 
-      setAllProjects([newEntry, ...allProjects]);
-      setToastMessage(`Project "${newProjectName}" created successfully!`);
+      // DEF-33: Assign selected advisor if specified
+      if (selectedAdvisorForProject && createdProject?.id) {
+        try {
+          const advId = selectedAdvisorForProject.id || selectedAdvisorForProject.advisor_id || selectedAdvisorForProject.user_id;
+          await selectProjectAdvisor(createdProject.id, {
+            advisor_id: advId,
+            access_level: 'REGULATORY',
+          });
+        } catch (advErr) {
+          console.warn('[DashboardView] selectProjectAdvisor warning:', advErr.message);
+        }
+      }
 
-      // Reset Form
+      // DEF-28: Immediately re-fetch live projects from PostgreSQL
+      const liveProjects = await getProjects();
+      setAllProjects(Array.isArray(liveProjects) ? liveProjects : []);
+
+      setToastMessage(`Project "${newProjectName}" created successfully! Persisted in database.`);
+
+      // Reset Form and navigate to My Projects
       setCreateProjectStep(1);
       setNewProjectName('');
       setNewProjectType('');
       setNewProjectDescription('');
       setNewProjectJurisdiction('');
       setNewProjectDomain('');
+      setSelectedAdvisorForProject(null);
       setActiveTab('My Projects');
     } catch (err) {
-      setToastMessage(`Project creation failed: ${err.message}`);
+      // Catch error, display backend error message in toast, do NOT navigate away
+      setToastMessage(`Project creation failed: ${err.message || 'API error'}`);
+    } finally {
+      setIsSubmittingCreateProject(false);
+      setTimeout(() => setToastMessage(null), 4000);
     }
-
-    // Automatically navigate to My Projects View
-    setTimeout(() => {
-      setActiveTab('My Projects');
-      setToastMessage(null);
-    }, 1200);
   };
 
 
@@ -330,38 +453,9 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   const activityFeed = [];
 
   const loadDynamicAdvice = () => {
-    try {
-      const raw = localStorage.getItem('finreg_advisor_reviews');
-      const list = raw ? JSON.parse(raw) : [];
-      if (!Array.isArray(list)) return [];
-      const clean = list.filter(
-        (r) =>
-          r &&
-          typeof r === 'object' &&
-          r.id &&
-          r.id.startsWith('ADV-REV-') &&
-          !r.id.startsWith('REV-') &&
-          !r.id.startsWith('ADV-00') &&
-          !r.id.includes('MOCK') &&
-          r.project !== 'ABC Shield' &&
-          r.project !== 'KYC Onboarding Controls' &&
-          !r.advisor?.includes('Maya Chen') &&
-          !r.requirement?.toLowerCase().includes('identity verification') &&
-          !r.requirement?.toLowerCase().includes('cdd evidence') &&
-          !r.adviceSubmitted?.toLowerCase().includes('contractual agreement') &&
-          r.date !== '09 Oct 2026' &&
-          r.date !== '12 Oct 2026' &&
-          r.date !== '14 Oct 2026'
-      );
-      try {
-        localStorage.setItem('finreg_advisor_reviews', JSON.stringify(clean));
-      } catch (e) {}
-      return clean;
-    } catch (e) {
-      return [];
-    }
+    return [];
   };
-  const dynamicAdviceList = loadDynamicAdvice();
+  const dynamicAdviceList = [];
   const pendingReviewsCount = dynamicAdviceList.filter((a) => a.status === 'Pending Review' || a.status === 'Submitted').length;
   const acceptedReviewsCount = dynamicAdviceList.filter((a) => a.status === 'Accepted').length;
   const clarificationReviewsCount = dynamicAdviceList.filter((a) => a.status === 'Needs Clarification').length;
@@ -1383,9 +1477,9 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                 </p>
               </div>
 
-              {/* 3-Step Wizard Navigation Bar matching media_1791737402091_0e2c6bea.png */}
-              <div className="rounded-xl border border-slate-800 bg-[#161619] grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-slate-800 overflow-hidden shadow-sm">
-                {/* Step 1: Project Information */}
+              {/* 2-Step Wizard Navigation Bar (DEF-33) */}
+              <div className="rounded-xl border border-slate-800 bg-[#161619] grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-800 overflow-hidden shadow-sm">
+                {/* Step 1: Project Details */}
                 <button
                   type="button"
                   onClick={() => setCreateProjectStep(1)}
@@ -1403,14 +1497,14 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                   <span className={`text-xs sm:text-sm font-bold ${
                     createProjectStep === 1 ? 'text-slate-100' : 'text-slate-400'
                   }`}>
-                    Project Information
+                    1. Project Details
                   </span>
                 </button>
 
-                {/* Step 2: Project Profile */}
+                {/* Step 2: Select Advisor */}
                 <button
                   type="button"
-                  onClick={() => setCreateProjectStep(2)}
+                  onClick={handleStep1Next}
                   className={`p-3.5 sm:px-6 flex items-center justify-center sm:justify-start gap-3 transition-colors cursor-pointer ${
                     createProjectStep === 2 ? 'bg-amber-500/5' : 'hover:bg-slate-800/30'
                   }`}
@@ -1425,29 +1519,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                   <span className={`text-xs sm:text-sm font-semibold ${
                     createProjectStep === 2 ? 'text-slate-100' : 'text-slate-400'
                   }`}>
-                    Project Profile
-                  </span>
-                </button>
-
-                {/* Step 3: Review */}
-                <button
-                  type="button"
-                  onClick={() => setCreateProjectStep(3)}
-                  className={`p-3.5 sm:px-6 flex items-center justify-center sm:justify-start gap-3 transition-colors cursor-pointer ${
-                    createProjectStep === 3 ? 'bg-amber-500/5' : 'hover:bg-slate-800/30'
-                  }`}
-                >
-                  <div className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-bold shrink-0 ${
-                    createProjectStep === 3
-                      ? 'border-amber-500/90 text-amber-400 bg-amber-500/10'
-                      : 'border-slate-700 text-slate-400'
-                  }`}>
-                    3
-                  </div>
-                  <span className={`text-xs sm:text-sm font-semibold ${
-                    createProjectStep === 3 ? 'text-slate-100' : 'text-slate-400'
-                  }`}>
-                    Review
+                    2. Select Advisor
                   </span>
                 </button>
               </div>
@@ -1459,7 +1531,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                     Project Information
                   </h2>
 
-                  <form onSubmit={(e) => { e.preventDefault(); setCreateProjectStep(2); }} className="space-y-6">
+                  <form onSubmit={(e) => { e.preventDefault(); handleStep1Next(); }} className="space-y-6">
                     {/* Row 1: Project Name & Project Type */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
@@ -1515,6 +1587,19 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                           <option value="Global / International">Global / International</option>
                         </select>
                       </div>
+
+                      <div className="space-y-2">
+                        <label className="block text-xs font-semibold text-slate-200">
+                          Regulatory Framework / Scope (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={newProjectDomain}
+                          onChange={(e) => setNewProjectDomain(e.target.value)}
+                          placeholder="e.g. FCA SYSC 6.3, UK MLR 2017"
+                          className="w-full px-4 py-3 text-sm rounded-xl border border-slate-800 bg-[#121214] text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#96562c] transition-all"
+                        />
+                      </div>
                     </div>
 
                     {/* Row 3: Description */}
@@ -1523,7 +1608,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                         Description <span className="text-amber-400">*</span>
                       </label>
                       <textarea
-                        rows={5}
+                        rows={4}
                         required
                         value={newProjectDescription}
                         onChange={(e) => setNewProjectDescription(e.target.value)}
@@ -1545,22 +1630,10 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                       <div className="flex items-center gap-3">
                         <button
                           type="button"
-                          onClick={() => {
-                            if (!newProjectName.trim()) {
-                              setToastMessage('Please enter a Project Name');
-                              setTimeout(() => setToastMessage(null), 2500);
-                              return;
-                            }
-                            if (!newProjectType) {
-                              setToastMessage('Please select a Project Type');
-                              setTimeout(() => setToastMessage(null), 2500);
-                              return;
-                            }
-                            setCreateProjectStep(2);
-                          }}
+                          onClick={handleStep1Next}
                           className="px-6 py-2.5 rounded-xl bg-[#e6a13d] hover:bg-[#d8932f] text-slate-950 font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 cursor-pointer transition-colors"
                         >
-                          <span>Next: Project Profile</span>
+                          <span>Next: Select Advisor</span>
                           <ArrowRight className="w-4 h-4" />
                         </button>
                       </div>
@@ -1569,116 +1642,142 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                 </div>
               )}
 
-              {/* STEP 2: PROJECT PROFILE */}
+              {/* STEP 2: SELECT COMPLIANCE ADVISOR (DEF-33) */}
               {createProjectStep === 2 && (
                 <div className="rounded-2xl border border-slate-800/90 bg-[#161619] p-6 sm:p-8 space-y-6 text-left shadow-xl animate-fadeIn">
-                  <h2 className="text-lg sm:text-xl font-bold text-slate-100">
-                    Project Profile
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    Optional governance and scope parameters to align your compliance workflow.
-                  </p>
-
-                  <div className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-2">
-                        <label className="block text-xs font-semibold text-slate-200">
-                          Regulatory Framework / Standard
-                        </label>
-                        <input
-                          type="text"
-                          value={newProjectDomain}
-                          onChange={(e) => setNewProjectDomain(e.target.value)}
-                          placeholder="e.g. FCA SYSC 6.3, UK MLR 2017"
-                          className="w-full px-4 py-3 text-sm rounded-xl border border-slate-800 bg-[#121214] text-slate-100 placeholder-slate-500 focus:outline-none focus:border-[#96562c] transition-all"
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <label className="block text-xs font-semibold text-slate-200">
-                          Target Delivery Date
-                        </label>
-                        <input
-                          type="date"
-                          defaultValue="2026-11-30"
-                          className="w-full px-4 py-3 text-sm rounded-xl border border-slate-800 bg-[#121214] text-slate-100 focus:outline-none focus:border-[#96562c] transition-all"
-                        />
-                      </div>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <h2 className="text-lg sm:text-xl font-bold text-slate-100">
+                        Select Compliance Advisor
+                      </h2>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Choose an eligible expert to advise on regulatory requirements for <strong>{newProjectName || 'your project'}</strong>, or skip to assign later.
+                      </p>
                     </div>
-
-                    <div className="flex items-center justify-between pt-4 border-t border-slate-800/80">
-                      <button
-                        type="button"
-                        onClick={() => setCreateProjectStep(1)}
-                        className="px-5 py-2.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-900/60 text-slate-400 hover:text-slate-200 font-medium text-xs sm:text-sm cursor-pointer transition-colors"
-                      >
-                        ← Back
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setCreateProjectStep(3)}
-                        className="px-6 py-2.5 rounded-xl bg-[#e6a13d] hover:bg-[#d8932f] text-slate-950 font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 cursor-pointer transition-colors"
-                      >
-                        <span>Next: Review</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* STEP 3: REVIEW & SUBMIT */}
-              {createProjectStep === 3 && (
-                <div className="rounded-2xl border border-slate-800/90 bg-[#161619] p-6 sm:p-8 space-y-6 text-left shadow-xl animate-fadeIn">
-                  <h2 className="text-lg sm:text-xl font-bold text-slate-100">
-                    Review Project Information
-                  </h2>
-                  <p className="text-xs text-slate-400">
-                    Verify project parameters before adding to your delivery workspace.
-                  </p>
-
-                  <div className="divide-y divide-slate-800/80 rounded-xl border border-slate-800/80 bg-[#121214] p-5 text-sm space-y-3.5">
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Project Name</span>
-                      <span className="font-bold text-slate-100">{newProjectName || 'Untitled Project'}</span>
-                    </div>
-                    <div className="flex items-center justify-between pt-3.5">
-                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Project Type</span>
-                      <span className="font-semibold text-amber-400">{newProjectType || 'AML/CTF'}</span>
-                    </div>
-                    <div className="flex items-center justify-between pt-3.5">
-                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Jurisdiction</span>
-                      <span className="font-semibold text-slate-200">{newProjectJurisdiction || 'United Kingdom'}</span>
-                    </div>
-                    {newProjectDomain && (
-                      <div className="flex items-center justify-between pt-3.5">
-                        <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Regulatory Framework</span>
-                        <span className="font-semibold text-slate-200">{newProjectDomain}</span>
-                      </div>
+                    {selectedAdvisorForProject && (
+                      <span className="px-2.5 py-1 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold">
+                        1 Selected
+                      </span>
                     )}
-                    <div className="pt-3.5">
-                      <span className="text-xs font-semibold text-slate-400 uppercase tracking-wider block mb-1">Description</span>
-                      <p className="text-slate-300 text-xs sm:text-sm leading-relaxed">{newProjectDescription || 'None provided.'}</p>
-                    </div>
                   </div>
 
+                  {isLoadingEligibleAdvisors ? (
+                    <div className="py-12 text-center text-slate-400 text-sm">
+                      <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-amber-400" />
+                      Loading eligible advisors...
+                    </div>
+                  ) : eligibleAdvisors.length === 0 ? (
+                    <div className="p-6 rounded-xl border border-slate-800 bg-[#121214] text-center text-slate-400 text-sm space-y-2">
+                      <p className="font-medium text-slate-300">No eligible advisors found at this time.</p>
+                      <p className="text-xs text-slate-500">You can proceed to create your project and invite advisors anytime from the platform.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {eligibleAdvisors.map((adv) => {
+                        const advId = adv.id || adv.advisor_id || adv.user_id;
+                        const isSelected = selectedAdvisorForProject && (
+                          selectedAdvisorForProject.id === advId ||
+                          selectedAdvisorForProject.advisor_id === advId ||
+                          selectedAdvisorForProject.user_id === advId
+                        );
+                        const advName = adv.full_name || adv.name || adv.advisor_name || 'Compliance Specialist';
+                        const advRole = adv.specialization || adv.role || 'Regulatory Advisor';
+                        const advDomain = adv.domain || adv.jurisdiction || 'UK / FCA & AML';
+                        const advEmail = adv.email || adv.contact_email || '';
+
+                        return (
+                          <div
+                            key={advId}
+                            onClick={() => {
+                              if (isSelected) {
+                                setSelectedAdvisorForProject(null);
+                              } else {
+                                setSelectedAdvisorForProject(adv);
+                              }
+                            }}
+                            className={`p-4 rounded-xl border transition-all cursor-pointer text-left space-y-2 ${
+                              isSelected
+                                ? 'bg-amber-500/10 border-amber-500 ring-2 ring-amber-500/30'
+                                : 'bg-[#121214] border-slate-800 hover:border-slate-700'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-lg bg-[#96562c] text-white font-bold text-xs flex items-center justify-center">
+                                  {advName.split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()}
+                                </div>
+                                <div>
+                                  <h4 className="text-sm font-bold text-slate-100">{advName}</h4>
+                                  <span className="text-[11px] text-amber-400 font-medium">{advRole}</span>
+                                </div>
+                              </div>
+                              <input
+                                type="radio"
+                                name="selectedAdvisor"
+                                checked={!!isSelected}
+                                onChange={() => {}}
+                                className="w-4 h-4 text-amber-500 accent-amber-500 cursor-pointer"
+                              />
+                            </div>
+                            <div className="text-xs text-slate-400 space-y-0.5 pt-1 border-t border-slate-800/60">
+                              <div>Scope: <span className="text-slate-300 font-medium">{advDomain}</span></div>
+                              {advEmail && <div className="text-slate-500 font-mono text-[11px]">{advEmail}</div>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Skip Option */}
+                  <div
+                    onClick={() => setSelectedAdvisorForProject(null)}
+                    className={`p-3.5 rounded-xl border transition-colors cursor-pointer flex items-center justify-between ${
+                      !selectedAdvisorForProject
+                        ? 'bg-slate-800/40 border-slate-600'
+                        : 'bg-[#121214] border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 rounded-full border border-slate-600 flex items-center justify-center">
+                        {!selectedAdvisorForProject && <div className="w-2 h-2 rounded-full bg-amber-400" />}
+                      </div>
+                      <div>
+                        <span className="text-xs sm:text-sm font-semibold text-slate-200">
+                          Skip advisor selection for now
+                        </span>
+                        <p className="text-[11px] text-slate-400">
+                          Create the project immediately and invite compliance advisors later.
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[11px] text-slate-500 font-mono">Optional</span>
+                  </div>
+
+                  {/* Actions */}
                   <div className="flex items-center justify-between pt-4 border-t border-slate-800/80">
                     <button
                       type="button"
-                      onClick={() => setCreateProjectStep(2)}
+                      onClick={() => setCreateProjectStep(1)}
                       className="px-5 py-2.5 rounded-xl border border-slate-800 hover:border-slate-700 bg-slate-900/60 text-slate-400 hover:text-slate-200 font-medium text-xs sm:text-sm cursor-pointer transition-colors"
                     >
-                      ← Back to Profile
+                      ← Back to Details
                     </button>
 
                     <button
                       type="button"
+                      disabled={isSubmittingCreateProject}
                       onClick={handleCreateProjectSubmit}
-                      className="px-7 py-3 rounded-xl bg-[#e6a13d] hover:bg-[#d8932f] text-slate-950 font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 cursor-pointer transition-colors"
+                      className="px-7 py-3 rounded-xl bg-[#e6a13d] hover:bg-[#d8932f] disabled:opacity-50 text-slate-950 font-bold text-xs sm:text-sm shadow-md flex items-center gap-2 cursor-pointer transition-colors"
                     >
                       <Plus className="w-4 h-4 stroke-[3]" />
-                      <span>Create Project</span>
+                      <span>
+                        {isSubmittingCreateProject
+                          ? 'Creating Project...'
+                          : selectedAdvisorForProject
+                          ? 'Create & Assign Advisor'
+                          : 'Create Project'}
+                      </span>
                     </button>
                   </div>
                 </div>
@@ -1718,6 +1817,14 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
               >
                 <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                   <div>
+                    {/* DEF-38: Disabled Project Banner */}
+                    {(currentProject?.status || '').toUpperCase() === 'DISABLED' && (
+                      <div className="mb-4 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center gap-3 text-amber-300 text-xs sm:text-sm font-medium">
+                        <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
+                        <span>This project has been disabled by an administrator. Editing and uploads are restricted.</span>
+                      </div>
+                    )}
+
                     {/* ID & Status Badges */}
                     <div className="flex items-center gap-2.5 mb-2.5">
                       <span className="font-mono text-xs font-bold text-slate-400 bg-stone-100 dark:bg-slate-800 px-2.5 py-1 rounded">
@@ -1751,11 +1858,12 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                   <div className="flex items-center gap-2.5 shrink-0 pt-2 md:pt-0">
                     <button
                       type="button"
+                      disabled={(currentProject?.status || '').toUpperCase() === 'DISABLED'}
                       onClick={(e) => {
                         e.stopPropagation();
                         alert(`Editing settings for ${currentProject.name}...`);
                       }}
-                      className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm border transition-all cursor-pointer ${
+                      className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                         isDarkMode
                           ? 'bg-slate-800 border-slate-700 hover:border-slate-500 text-slate-200'
                           : 'bg-stone-50 border-stone-200 hover:border-stone-400 text-slate-700'
@@ -1766,11 +1874,12 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
 
                     <button
                       type="button"
+                      disabled={(currentProject?.status || '').toUpperCase() === 'DISABLED'}
                       onClick={(e) => {
                         e.stopPropagation();
                         setProjectSubTab('Workflow');
                       }}
-                      className="px-5 py-2.5 rounded-xl bg-[#7c4a27] hover:bg-[#633a1e] dark:bg-[#96562c] dark:hover:bg-[#7c4a27] text-white font-bold text-xs sm:text-sm shadow-md shadow-amber-950/20 flex items-center justify-center gap-2 transition-all cursor-pointer border-2 border-stone-300 hover:border-slate-500 hover:scale-[1.03]"
+                      className="px-5 py-2.5 rounded-xl bg-[#7c4a27] hover:bg-[#633a1e] dark:bg-[#96562c] dark:hover:bg-[#7c4a27] text-white font-bold text-xs sm:text-sm shadow-md shadow-amber-950/20 flex items-center justify-center gap-2 transition-all cursor-pointer border-2 border-stone-300 hover:border-slate-500 hover:scale-[1.03] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                     >
                       <span>Open Workflow</span>
                       <ArrowRight className="w-4 h-4" />
@@ -1884,49 +1993,29 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                       </h2>
 
                       {(() => {
-                        // Dynamic progress calculation based on project state (DEF-10)
-                        const isDraft = !currentProject || currentProject.status === 'Draft' || currentProject.isNew;
-                        const isCompleted = currentProject?.status === 'Completed';
-                        const isReview = currentProject?.status === 'Under Review';
+                        // DEF-29: Dynamic progress calculation based on live project workflow steps
+                        const wfSteps = Array.isArray(projectWorkflowData?.steps) ? projectWorkflowData.steps : [];
+                        const isCompleted = (currentProject?.status || '').toUpperCase() === 'COMPLETED';
 
-                        let checklistItems = [];
-                        if (isCompleted) {
-                          checklistItems = [
-                            { label: 'Requirements defined', done: true },
-                            { label: 'Workflow configured', done: true },
-                            { label: 'Advisor review', done: true },
-                            { label: 'Compliance sign-off', done: true },
-                            { label: 'Final submission', done: true },
-                          ];
-                        } else if (isDraft) {
-                          checklistItems = [
-                            { label: 'Requirements defined', done: false },
-                            { label: 'Workflow configured', done: false },
-                            { label: 'Advisor review', done: false },
-                            { label: 'Compliance sign-off', done: false },
-                            { label: 'Final submission', done: false },
-                          ];
-                        } else if (isReview) {
-                          checklistItems = [
-                            { label: 'Requirements defined', done: true },
-                            { label: 'Workflow configured', done: true },
-                            { label: 'Advisor review', done: false },
-                            { label: 'Compliance sign-off', done: false },
-                            { label: 'Final submission', done: false },
-                          ];
-                        } else {
-                          // Default for PRJ-001 In Progress fixture
-                          checklistItems = [
-                            { label: 'Requirements defined', done: true },
-                            { label: 'Workflow configured', done: true },
-                            { label: 'Advisor review', done: true },
-                            { label: 'Compliance sign-off', done: false },
-                            { label: 'Final submission', done: false },
-                          ];
-                        }
+                        const reqStep = wfSteps.find((s) => s.step_id === 'step_1' || s.step_number === 1 || s.name?.toLowerCase().includes('scope') || s.name?.toLowerCase().includes('requirement'));
+                        const wfStep = wfSteps.find((s) => s.step_id === 'step_2' || s.step_number === 2 || s.name?.toLowerCase().includes('control') || s.name?.toLowerCase().includes('workflow'));
+                        const advStep = wfSteps.find((s) => s.step_id === 'step_3' || s.step_number === 3 || s.name?.toLowerCase().includes('advisor'));
+                        const signStep = wfSteps.find((s) => s.step_id === 'step_4' || s.step_number === 4 || s.name?.toLowerCase().includes('approval') || s.name?.toLowerCase().includes('sign'));
+
+                        const isStepDone = (step) => isCompleted || step?.status === 'COMPLETED' || step?.completed === true;
+
+                        const checklistItems = [
+                          { label: 'Requirements defined', done: isStepDone(reqStep) },
+                          { label: 'Workflow configured', done: isStepDone(wfStep) },
+                          { label: 'Advisor review', done: isStepDone(advStep) },
+                          { label: 'Compliance sign-off', done: isStepDone(signStep) },
+                          { label: 'Final submission', done: isCompleted },
+                        ];
 
                         const doneCount = checklistItems.filter((item) => item.done).length;
-                        const progressPct = currentProject?.progress !== undefined
+                        const progressPct = projectWorkflowData?.overall_progress_pct != null
+                          ? projectWorkflowData.overall_progress_pct
+                          : currentProject?.progress != null
                           ? currentProject.progress
                           : Math.round((doneCount / checklistItems.length) * 100);
 
@@ -2013,31 +2102,14 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                           </span>
                         </div>
 
-                        {/* Dynamic Assigned Advisors */}
-                        {(() => {
-                          let advisors = [];
-                          try {
-                            const raw = localStorage.getItem('finreg_advisor_assignments');
-                            const assignments = raw ? JSON.parse(raw) : [];
-                            advisors = assignments.filter(
-                              (a) =>
-                                a.projectId === selectedProject?.id ||
-                                (selectedProject?.name && a.projectName === selectedProject?.name)
-                            );
-                          } catch (e) {
-                            advisors = [];
-                          }
-
-                          if (advisors.length === 0) {
-                            return (
-                              <div className="pt-3 text-xs text-slate-400 dark:text-slate-400 italic">
-                                No advisors assigned yet. Invite advisors from the Advisors &amp; Experts tab.
-                              </div>
-                            );
-                          }
-
-                          return advisors.map((adv, idx) => {
-                            const advName = adv.advisorName || adv.name || `Advisor ${idx + 1}`;
+                        {/* Dynamic Assigned Advisors (DEF-32 / DEF-33) */}
+                        {projectMembers.length === 0 ? (
+                          <div className="pt-3 text-xs text-slate-400 dark:text-slate-400 italic">
+                            No advisors assigned yet. Invite advisors from the Advisors &amp; Experts tab.
+                          </div>
+                        ) : (
+                          projectMembers.map((adv, idx) => {
+                            const advName = adv.full_name || adv.name || adv.advisor_name || `Advisor ${idx + 1}`;
                             const advInitials = advName
                               .split(' ')
                               .filter(Boolean)
@@ -2046,9 +2118,10 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                               .slice(0, 2)
                               .toUpperCase();
                             const colorBg = idx % 2 === 0 ? 'bg-[#96562c]' : 'bg-slate-700';
+                            const advRole = adv.access_level || adv.role || 'Compliance SME';
 
                             return (
-                              <div key={adv.id || idx} className="pt-3 flex items-center justify-between">
+                              <div key={adv.id || adv.user_id || idx} className="pt-3 flex items-center justify-between">
                                 <div className="flex items-center gap-2.5">
                                   <div className={`w-7 h-7 rounded-lg ${colorBg} text-white font-bold text-xs flex items-center justify-center`}>
                                     {advInitials}
@@ -2058,12 +2131,12 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                                   </span>
                                 </div>
                                 <span className="text-[11px] font-mono text-slate-500 dark:text-slate-300 font-medium">
-                                  {adv.roleTag || adv.advisorRole || `Advisor ${idx + 1}`}
+                                  {advRole}
                                 </span>
                               </div>
                             );
-                          });
-                        })()}
+                          })
+                        )}
                       </div>
                     </div>
                   </div>
@@ -2073,90 +2146,75 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
               {/* Sub-Tab 2: WORKFLOW TAB CONTENT (Matching media_1791212953490.png) */}
               {projectSubTab === 'Workflow' && (
                 <div className="rounded-2xl border border-slate-800 bg-[#161619] p-6 sm:p-8 space-y-6 shadow-lg animate-fadeIn text-left pt-4">
-                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100 mb-6">
-                    Workflow
-                  </h2>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100">
+                        Workflow Steps
+                      </h2>
+                      <p className="text-xs text-slate-400 mt-1">
+                        4-step lifecycle tracking governance, advisory validation, and sign-offs.
+                      </p>
+                    </div>
+                    {projectWorkflowData?.overall_progress_pct != null && (
+                      <span className="px-3 py-1 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold">
+                        {projectWorkflowData.overall_progress_pct}% Completed
+                      </span>
+                    )}
+                  </div>
 
                   <div className="divide-y divide-slate-800/80">
-                    {/* Step 01 */}
-                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4 sm:gap-6">
-                        <span className="text-amber-400 font-mono font-bold text-sm sm:text-base w-8 shrink-0">
-                          01
-                        </span>
-                        <span className="font-bold text-slate-100 text-sm sm:text-base">
-                          Scope &amp; risk assessment
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setToastMessage('Opening Scope & risk assessment workflow step...')}
-                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
-                      >
-                        <span>View</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
+                    {(Array.isArray(projectWorkflowData?.steps) && projectWorkflowData.steps.length > 0
+                      ? projectWorkflowData.steps
+                      : [
+                          { step_id: 'step_1', step_number: 1, name: 'Scope & risk assessment', status: 'NOT_STARTED' },
+                          { step_id: 'step_2', step_number: 2, name: 'Control design', status: 'NOT_STARTED' },
+                          { step_id: 'step_3', step_number: 3, name: 'Advisor validation', status: 'NOT_STARTED' },
+                          { step_id: 'step_4', step_number: 4, name: 'Approval & implementation', status: 'NOT_STARTED' },
+                        ]
+                    ).map((step, idx) => {
+                      const stepNum = String(step.step_number || idx + 1).padStart(2, '0');
+                      const stepStatus = (step.status || (step.completed ? 'COMPLETED' : 'NOT_STARTED')).toUpperCase();
+                      const statusColor =
+                        stepStatus === 'COMPLETED'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                          : stepStatus === 'IN_PROGRESS'
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                          : 'bg-slate-800/60 text-slate-400 border-slate-700/60';
 
-                    {/* Step 02 */}
-                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4 sm:gap-6">
-                        <span className="text-amber-400 font-mono font-bold text-sm sm:text-base w-8 shrink-0">
-                          02
-                        </span>
-                        <span className="font-bold text-slate-100 text-sm sm:text-base">
-                          Control design
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setToastMessage('Opening Control design workflow step...')}
-                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
-                      >
-                        <span>View</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
+                      return (
+                        <div key={step.step_id || idx} className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-4 sm:gap-6">
+                            <span className="text-amber-400 font-mono font-bold text-sm sm:text-base w-8 shrink-0">
+                              {stepNum}
+                            </span>
+                            <div>
+                              <span className="font-bold text-slate-100 text-sm sm:text-base block">
+                                {step.name}
+                              </span>
+                              {step.description && (
+                                <span className="text-xs text-slate-400 block mt-0.5 line-clamp-1">
+                                  {step.description}
+                                </span>
+                              )}
+                            </div>
+                          </div>
 
-                    {/* Step 03 */}
-                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4 sm:gap-6">
-                        <span className="text-amber-400 font-mono font-bold text-sm sm:text-base w-8 shrink-0">
-                          03
-                        </span>
-                        <span className="font-bold text-slate-100 text-sm sm:text-base">
-                          Advisor validation
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setToastMessage('Opening Advisor validation workflow step...')}
-                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
-                      >
-                        <span>View</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    {/* Step 04 */}
-                    <div className="py-4 sm:py-5 flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-4 sm:gap-6">
-                        <span className="text-amber-400 font-mono font-bold text-sm sm:text-base w-8 shrink-0">
-                          04
-                        </span>
-                        <span className="font-bold text-slate-100 text-sm sm:text-base">
-                          Approval &amp; implementation
-                        </span>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setToastMessage('Opening Approval & implementation workflow step...')}
-                        className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
-                      >
-                        <span>View</span>
-                        <ArrowRight className="w-4 h-4" />
-                      </button>
-                    </div>
+                          <div className="flex items-center gap-3 shrink-0">
+                            <span className={`px-2.5 py-0.5 rounded text-[11px] font-semibold border ${statusColor}`}>
+                              {stepStatus.replace('_', ' ')}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenWorkflowStep(step.step_id || `step_${idx + 1}`)}
+                              className="text-slate-400 hover:text-amber-300 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                            >
+                              <span>View</span>
+                              <ArrowRight className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -2234,37 +2292,44 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                 </div>
               )}
 
-              {/* Sub-Tab 4: AUDIT TRAIL TAB CONTENT (Matching media_1791213504450.png) */}
+              {/* Sub-Tab 4: AUDIT TRAIL TAB CONTENT (DEF-31) */}
               {projectSubTab === 'Audit Trail' && (
                 <div className="rounded-2xl border border-slate-800 bg-[#161619] p-6 sm:p-8 space-y-6 shadow-lg animate-fadeIn text-left pt-4">
-                  <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100 mb-6">
-                    Audit Trail
-                  </h2>
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100">
+                        Audit Trail
+                      </h2>
+                      <p className="text-xs text-slate-400 mt-1">
+                        Cryptographic ledger of project actions, advisor interactions, and status transitions.
+                      </p>
+                    </div>
+                  </div>
 
                   <div className="divide-y divide-slate-800/80">
-                    {Array.isArray(currentProject?.auditEvents) && currentProject.auditEvents.length > 0 ? (
-                      currentProject.auditEvents.map((evt, idx) => (
-                        <div key={idx} className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                    {projectAuditEventsList.length > 0 ? (
+                      projectAuditEventsList.map((evt, idx) => (
+                        <div key={evt.id || idx} className="py-4 sm:py-5 flex items-center justify-between gap-4">
                           <div className="flex items-center gap-4 sm:gap-6">
-                            <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-20 sm:w-24 shrink-0">
-                              {evt.date || 'LOG'}
+                            <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-24 sm:w-28 shrink-0">
+                              {evt.created_at ? new Date(evt.created_at).toLocaleDateString('en-GB') : (evt.date || 'EVENT')}
                             </span>
-                            <span className="font-bold text-slate-100 text-sm sm:text-base">
-                              {evt.action || evt.text}
-                            </span>
+                            <div>
+                              <span className="font-bold text-slate-100 text-sm sm:text-base block">
+                                {evt.action || evt.event_type || evt.text || 'Audit Record'}
+                              </span>
+                              <span className="text-xs text-slate-400 block mt-0.5">
+                                {evt.description || evt.details || `Logged by ${evt.actor_email || evt.actor || 'System'}`}
+                              </span>
+                            </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => setToastMessage('Viewing audit event details...')}
-                            className="text-slate-400 hover:text-slate-200 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
-                          >
-                            <span>View</span>
-                            <ArrowRight className="w-4 h-4" />
-                          </button>
+                          <span className="text-xs font-mono text-slate-500 shrink-0">
+                            {evt.actor_email || evt.actor || 'System'}
+                          </span>
                         </div>
                       ))
                     ) : (
-                      <div className="py-8 text-center text-slate-500 text-sm">
+                      <div className="py-12 text-center text-slate-500 text-sm">
                         No audit trail events recorded for this project yet. Actions and validations will be recorded here automatically.
                       </div>
                     )}
@@ -2274,9 +2339,9 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
             </div>
           )}
 
-          {/* TAB: ADVISORS / EXPERTS VIEW */}
+          {/* TAB: ADVISORS / EXPERTS VIEW (DEF-32) */}
           {activeTab === 'Advisors / Experts' && (
-            <AdvisorsExpertsView isDarkMode={isDarkMode} availableProjects={allProjects} />
+            <AdvisorsExpertsView isDarkMode={isDarkMode} availableProjects={allProjects} activeProject={currentProject} />
           )}
 
           {/* TAB: ADVISOR ADVICE VIEW (Matching uploaded image media_1791737929366_a3b12230.png) */}
@@ -2316,9 +2381,9 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
             />
           )}
 
-          {/* TAB: AUDIT TRAIL VIEW (Matching uploaded images media_1791740746094_bb421bec.png and media_1791740799469_3c3a4c41.png) */}
+          {/* TAB: AUDIT TRAIL VIEW (DEF-31) */}
           {activeTab === 'Audit Trail' && (
-            <AuditTrailView isDarkMode={isDarkMode} />
+            <AuditTrailView isDarkMode={isDarkMode} activeProject={currentProject} />
           )}
 
           {/* TAB: TOOLS VIEW */}
@@ -2345,6 +2410,83 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
               >
                 ← Return to Dashboard
               </button>
+            </div>
+          )}
+
+          {/* WORKFLOW STEP DETAILS MODAL (DEF-30) */}
+          {isWorkflowStepModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn text-left">
+              <div className="bg-[#16181d] border border-slate-700/80 rounded-2xl w-full max-w-lg shadow-2xl p-6 relative space-y-4">
+                <button
+                  type="button"
+                  onClick={() => setIsWorkflowStepModalOpen(false)}
+                  className="absolute top-4 right-4 text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+
+                {isLoadingWorkflowStep ? (
+                  <div className="py-12 text-center text-slate-400 text-sm">
+                    <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2 text-amber-400" />
+                    Loading step details...
+                  </div>
+                ) : projectWorkflowStepDetails ? (
+                  <>
+                    <div className="flex items-center gap-3 pb-3 border-b border-slate-800">
+                      <span className="font-mono text-xs px-2.5 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">
+                        STEP {String(projectWorkflowStepDetails.step_number || projectWorkflowStepDetails.step_id || '01').toUpperCase()}
+                      </span>
+                      <h3 className="text-lg font-bold text-white">
+                        {projectWorkflowStepDetails.name || projectWorkflowStepDetails.title || 'Workflow Step'}
+                      </h3>
+                    </div>
+
+                    <div className="space-y-3 text-xs sm:text-sm">
+                      <div>
+                        <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold block mb-1">Status</span>
+                        <span className="inline-block px-2.5 py-1 rounded text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/30">
+                          {projectWorkflowStepDetails.status || 'IN_PROGRESS'}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold block mb-1">Description</span>
+                        <p className="text-slate-200 leading-relaxed bg-[#111216] p-3 rounded-xl border border-slate-800">
+                          {projectWorkflowStepDetails.description || 'Step scope, compliance controls, and required artifacts for this regulatory phase.'}
+                        </p>
+                      </div>
+
+                      {Array.isArray(projectWorkflowStepDetails.checklist) && projectWorkflowStepDetails.checklist.length > 0 && (
+                        <div>
+                          <span className="text-xs text-slate-400 uppercase tracking-wider font-semibold block mb-1.5">Action Items</span>
+                          <div className="space-y-1.5">
+                            {projectWorkflowStepDetails.checklist.map((item, cIdx) => (
+                              <div key={cIdx} className="flex items-center gap-2 text-slate-300 text-xs">
+                                <CheckCircle2 className={`w-3.5 h-3.5 ${item.done ? 'text-emerald-400' : 'text-slate-600'}`} />
+                                <span>{item.text || item.label || item}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-end pt-3 border-t border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => setIsWorkflowStepModalOpen(false)}
+                        className="px-5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs sm:text-sm transition-colors cursor-pointer"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="py-8 text-center text-slate-400 text-sm">
+                    No step details found.
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </main>

@@ -34,78 +34,15 @@ const DEFAULT_ADVISORS_LIST = [
 ];
 
 /**
- * Fetches expert advisors
+ * Fetches expert advisors directory
  */
 export async function getAdvisors() {
-  let backendAdvisors = [];
   try {
     const data = await apiCall('/advisors', 'GET');
-    if (Array.isArray(data)) {
-      backendAdvisors = data;
-    }
+    if (Array.isArray(data) && data.length > 0) return data;
   } catch (err) {
-    console.info('[advisorService] Backend offline or request failed:', err);
+    console.info('[advisorService] getAdvisors API warning:', err.message);
   }
-
-  let localAdvisors = [];
-  try {
-    const raw = localStorage.getItem('finreg_local_accounts');
-    const rawReg = localStorage.getItem('finreg_registered_users');
-    const allLocalUsers = [];
-    if (raw) {
-      const accounts = JSON.parse(raw);
-      Object.values(accounts).forEach((acc) => {
-        if (acc && acc.user) allLocalUsers.push(acc.user);
-      });
-    }
-    if (rawReg) {
-      const reg = JSON.parse(rawReg);
-      if (Array.isArray(reg)) allLocalUsers.push(...reg);
-    }
-
-    localAdvisors = allLocalUsers
-      .filter(
-        (acc) =>
-          acc &&
-          ((acc.role || acc.platform_role || '').toUpperCase() === 'ADVISOR') &&
-          acc.is_active !== false &&
-          acc.status !== 'Inactive'
-      )
-      .map((acc) => ({
-        advisor_profile_id: acc.id || acc.user_id,
-        user_id: acc.id || acc.user_id,
-        full_name: acc.name || acc.full_name,
-        email: acc.email,
-        organization_name: acc.organization || acc.organization_name || 'Independent Advisory',
-        professional_title: 'Regulatory & Compliance Advisor',
-        specialization: 'Financial Crime Compliance & Regulatory Strategy',
-        bio: acc.bio || `Verified compliance advisor ${acc.name || acc.full_name || ''}.`,
-      }));
-  } catch (_) {}
-
-  // Merge backend and local advisors, prioritizing backend data and deduplicating by email
-  const seenEmails = new Set();
-  const merged = [];
-
-  for (const adv of backendAdvisors) {
-    const emailKey = (adv.email || '').toLowerCase().trim();
-    if (emailKey && !seenEmails.has(emailKey)) {
-      seenEmails.add(emailKey);
-      merged.push(adv);
-    } else if (!emailKey) {
-      merged.push(adv);
-    }
-  }
-
-  for (const adv of localAdvisors) {
-    const emailKey = (adv.email || '').toLowerCase().trim();
-    if (emailKey && !seenEmails.has(emailKey)) {
-      seenEmails.add(emailKey);
-      merged.push(adv);
-    }
-  }
-
-  if (merged.length > 0) return merged;
   return DEFAULT_ADVISORS_LIST;
 }
 
@@ -122,87 +59,41 @@ export async function getAdvisorDetails(advisorId) {
 }
 
 /**
- * Fetches project team members
+ * Fetches project team members: GET /projects/{projectId}/members
  */
 export async function getProjectMembers(projectId) {
   try {
     const data = await apiCall(`/projects/${projectId}/members`, 'GET');
     if (Array.isArray(data)) return data;
-  } catch (err) {}
-  return [];
-}
-
-/**
- * Submits authoritative advice for a project requirement
- */
-export async function submitProjectAdvice(projectId, advicePayload) {
-  try {
-    return await apiCall(`/projects/${projectId}/advice`, 'POST', advicePayload);
   } catch (err) {
-    console.info('[advisorService] Backend offline. Saving advice locally.');
-    const newAdvice = {
-      advice_id: Date.now(),
-      project_id: projectId,
-      title: advicePayload.title,
-      advice_text: advicePayload.advice_text,
-      recommendation: advicePayload.recommendation,
-      assumptions: advicePayload.assumptions || '',
-      advice_status: 'SUBMITTED',
-      display_status: 'Pending Review',
-      submitted_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      source_links: advicePayload.source_links || [],
-    };
-    try {
-      const raw = localStorage.getItem(`finreg_advice_${projectId}`);
-      const list = raw ? JSON.parse(raw) : [];
-      list.unshift(newAdvice);
-      localStorage.setItem(`finreg_advice_${projectId}`, JSON.stringify(list));
-    } catch (e) {}
-    return newAdvice;
-  }
-}
-
-/**
- * Fetches authoritative advice submissions for a project
- */
-export async function getProjectAdvice(projectId, statusFilter = null) {
-  try {
-    const endpoint = statusFilter
-      ? `/projects/${projectId}/advice?status=${encodeURIComponent(statusFilter)}`
-      : `/projects/${projectId}/advice`;
-    const data = await apiCall(endpoint, 'GET');
-    if (Array.isArray(data)) return data;
-  } catch (err) {
-    const raw = localStorage.getItem(`finreg_advice_${projectId}`);
-    return raw ? JSON.parse(raw) : [];
+    console.warn('[advisorService] getProjectMembers failed:', err.message);
   }
   return [];
 }
 
 /**
- * Updates advisory review or status transition
+ * Fetches eligible advisors for assignment: GET /projects/{projectId}/advisors/eligible
  */
-export async function updateProjectAdvice(projectId, adviceId, payload) {
+export async function getEligibleAdvisors(projectId = 1) {
   try {
-    return await apiCall(`/projects/${projectId}/advice/${adviceId}`, 'PATCH', payload);
+    const data = await apiCall(`/projects/${projectId}/advisors/eligible`, 'GET');
+    if (Array.isArray(data) && data.length > 0) return data;
   } catch (err) {
-    const raw = localStorage.getItem(`finreg_advice_${projectId}`);
-    if (raw) {
-      const list = JSON.parse(raw);
-      const idx = list.findIndex((a) => a.advice_id === adviceId);
-      if (idx >= 0) {
-        list[idx] = { ...list[idx], ...payload };
-        localStorage.setItem(`finreg_advice_${projectId}`, JSON.stringify(list));
-        return list[idx];
-      }
-    }
-    return payload;
+    console.info('[advisorService] getEligibleAdvisors fallback to /advisors');
   }
+  return await getAdvisors();
+}
+
+/**
+ * Selects/assigns an advisor to a project: POST /projects/{projectId}/advisors/select
+ */
+export async function selectProjectAdvisor(projectId, payload) {
+  return await apiCall(`/projects/${projectId}/advisors/select`, 'POST', payload);
 }
 
 /**
  * Sends an invitation via POST /projects/{projectId}/advisor-invitations
+ * No fake catches - lets backend 409 Conflict bubble up truthful error.
  */
 export async function sendAdvisorInvitation(projectId, payload) {
   const email = payload.advisor_email || payload.advisorEmail || payload.email;
@@ -219,29 +110,66 @@ export async function sendAdvisorInvitation(projectId, payload) {
     advisor_email: email,
     access_level: accessLevel,
     expiry_days: 7,
+    invitation_notes: notes || undefined,
   };
 
-  try {
-    return await apiCall(`/projects/${projectId}/advisor-invitations`, 'POST', backendPayload);
-  } catch (err) {
-    return {
-      invitation_id: Date.now(),
-      project_id: projectId,
-      advisor_email: email,
-      access_level: accessLevel,
-      invitation_status: 'PENDING',
-      created_at: new Date().toISOString(),
-    };
-  }
+  return await apiCall(`/projects/${projectId}/advisor-invitations`, 'POST', backendPayload);
 }
 
 /**
- * Retrieves all invitations issued for a project
+ * Retrieves all invitations issued for a project: GET /projects/{projectId}/advisor-invitations
  */
 export async function getProjectAdvisorInvitations(projectId) {
   try {
     const data = await apiCall(`/projects/${projectId}/advisor-invitations`, 'GET');
     if (Array.isArray(data)) return data;
-  } catch (err) {}
+  } catch (err) {
+    console.warn('[advisorService] getProjectAdvisorInvitations error:', err.message);
+  }
   return [];
+}
+
+/**
+ * Retrieves pending invitations for the logged-in advisor: GET /advisors/me/invitations
+ */
+export async function getAdvisorInboxInvitations() {
+  try {
+    const data = await apiCall('/advisors/me/invitations', 'GET');
+    if (Array.isArray(data)) return data;
+  } catch (err) {
+    console.info('[advisorService] getAdvisorInboxInvitations:', err.message);
+  }
+  return [];
+}
+
+/**
+ * Accepts an advisor invitation: POST /projects/{projectId}/advisor-invitations/{invitationId}/accept
+ */
+export async function acceptAdvisorInvitation(projectId, invitationId) {
+  return await apiCall(`/projects/${projectId}/advisor-invitations/${invitationId}/accept`, 'POST');
+}
+
+/**
+ * Submits authoritative advice for a project requirement
+ */
+export async function submitProjectAdvice(projectId, advicePayload) {
+  return await apiCall(`/projects/${projectId}/advice`, 'POST', advicePayload);
+}
+
+/**
+ * Fetches authoritative advice submissions for a project
+ */
+export async function getProjectAdvice(projectId, statusFilter = null) {
+  const endpoint = statusFilter
+    ? `/projects/${projectId}/advice?status=${encodeURIComponent(statusFilter)}`
+    : `/projects/${projectId}/advice`;
+  const data = await apiCall(endpoint, 'GET');
+  return Array.isArray(data) ? data : [];
+}
+
+/**
+ * Updates advisory review or status transition
+ */
+export async function updateProjectAdvice(projectId, adviceId, payload) {
+  return await apiCall(`/projects/${projectId}/advice/${adviceId}`, 'PATCH', payload);
 }

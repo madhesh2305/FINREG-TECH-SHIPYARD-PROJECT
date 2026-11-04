@@ -1,158 +1,76 @@
 import { apiCall } from './api';
 
-export const PROJECTS_STORAGE_KEY = 'finreg_projects';
-
-function getCurrentUserId() {
-  try {
-    const raw = localStorage.getItem('finreg_current_user') || localStorage.getItem('currentUser');
-    if (raw) {
-      const u = JSON.parse(raw);
-      return u.id || u.user_id || u.email || 'anon';
-    }
-  } catch (_) {}
-  return 'anon';
-}
-
-function getStoredLocalProjects() {
-  try {
-    const uid = getCurrentUserId();
-    const raw = localStorage.getItem(`${PROJECTS_STORAGE_KEY}_${uid}`);
-    return raw ? JSON.parse(raw) : [];
-  } catch (e) {
-    return [];
-  }
-}
-
-function saveStoredLocalProjects(list) {
-  try {
-    const uid = getCurrentUserId();
-    localStorage.setItem(`${PROJECTS_STORAGE_KEY}_${uid}`, JSON.stringify(list));
-  } catch (e) {}
-}
-
 /**
- * Returns locally stored projects
- */
-export function getLocalProjects() {
-  return getStoredLocalProjects();
-}
-
-/**
- * Fetches all authorized user projects.
- * Uses live backend when available, and falls back to locally created projects when offline.
+ * Fetches all authorized user projects from live PostgreSQL backend.
  */
 export async function getProjects() {
-  try {
-    const data = await apiCall('/projects', 'GET');
-    if (Array.isArray(data)) return data;
-  } catch (err) {
-    console.info('[projectService] Backend offline. Using local projects.');
-  }
-  return getStoredLocalProjects();
+  const data = await apiCall('/projects', 'GET');
+  return Array.isArray(data) ? data : [];
 }
 
+// Deprecated local storage bridges redirected to live API (DEF-28)
+export const getLocalProjects = getProjects;
+export const saveLocalProjects = () => {};
+
 /**
- * Fetches summary metrics
+ * Fetches summary metrics for user's projects.
  */
 export async function getProjectSummary() {
-  try {
-    return await apiCall('/projects/summary', 'GET');
-  } catch (err) {
-    const projects = getStoredLocalProjects();
-    return {
-      total_projects: projects.length,
-      active_projects: projects.filter((p) => p.status !== 'Draft').length,
-      archived_projects: 0,
-      total_requirements: 8,
-      total_members: 3,
-      open_requirements: 5,
-      completed_requirements: 3,
-      total_advice_reviews: 2,
-      audit_readiness_percentage: 78,
-    };
-  }
+  return await apiCall('/projects/summary', 'GET');
 }
 
 /**
- * Fetches single project details
+ * Fetches single project details.
  */
 export async function getProjectDetails(projectId) {
-  try {
-    return await apiCall(`/projects/${projectId}`, 'GET');
-  } catch (err) {
-    const projects = getStoredLocalProjects();
-    const found = projects.find(
-      (p) => String(p.id) === String(projectId) || String(p.project_id) === String(projectId)
-    );
-    if (found) return found;
-    return {
-      id: projectId,
-      project_id: projectId,
-      name: 'Regulatory Compliance Framework',
-      project_name: 'Regulatory Compliance Framework',
-      status: 'Active',
-      owner: 'Project Owner',
-    };
-  }
+  return await apiCall(`/projects/${projectId}`, 'GET');
 }
 
 /**
- * Creates a new project
+ * Creates a new project in PostgreSQL.
  */
 export async function createProject(projectPayload) {
-  try {
-    return await apiCall('/projects', 'POST', projectPayload);
-  } catch (err) {
-    console.info('[projectService] Backend offline. Persisting project in local storage.');
-    const newProj = {
-      id: `PRJ-${Date.now().toString().slice(-4)}`,
-      project_id: Date.now(),
-      name: projectPayload.name || projectPayload.project_name || 'New Project',
-      project_name: projectPayload.name || projectPayload.project_name || 'New Project',
-      code: projectPayload.code || `PRJ-${Date.now().toString().slice(-4)}`,
-      project_code: projectPayload.code || `PRJ-${Date.now().toString().slice(-4)}`,
-      type: projectPayload.type || projectPayload.regulatory_scope || 'Anti-Bribery and Corruption (ABC)',
-      status: 'Active',
-      statusColor: 'bg-[#281d11] text-amber-400 border-amber-800/50',
-      dotColor: 'bg-amber-400',
-      owner: projectPayload.owner || 'Project Owner',
-      owner_name: projectPayload.owner || 'Project Owner',
-      ownerEmail: projectPayload.ownerEmail || '',
-      created_at: new Date().toISOString(),
-      lastUpdated: 'Just now',
-      description: projectPayload.description || 'Regulatory project created in ShipYard workspace.',
-      jurisdiction: projectPayload.jurisdiction || 'UK / EU',
-    };
-
-    const list = getStoredLocalProjects();
-    list.unshift(newProj);
-    saveStoredLocalProjects(list);
-    return newProj;
-  }
+  return await apiCall('/projects', 'POST', projectPayload);
 }
 
 /**
- * Updates an existing project
+ * Updates an existing project in PostgreSQL.
  */
 export async function updateProject(projectId, updatePayload) {
-  try {
-    return await apiCall(`/projects/${projectId}`, 'PATCH', updatePayload);
-  } catch (err) {
-    const list = getStoredLocalProjects();
-    const idx = list.findIndex(
-      (p) => String(p.id) === String(projectId) || String(p.project_id) === String(projectId)
-    );
-    if (idx >= 0) {
-      list[idx] = { ...list[idx], ...updatePayload };
-      saveStoredLocalProjects(list);
-      return list[idx];
-    }
-    return updatePayload;
-  }
+  return await apiCall(`/projects/${projectId}`, 'PATCH', updatePayload);
 }
 
 /**
- * Fetches project requirements
+ * Updates project lifecycle status: PATCH /projects/{projectId}/status
+ */
+export async function updateProjectStatus(projectId, status) {
+  return await apiCall(`/projects/${projectId}/status`, 'PATCH', { status: status.toUpperCase() });
+}
+
+/**
+ * Fetches project regulatory workflow structure and step progress: GET /projects/{projectId}/workflow
+ */
+export async function getProjectWorkflow(projectId) {
+  return await apiCall(`/projects/${projectId}/workflow`, 'GET');
+}
+
+/**
+ * Fetches details for a single workflow step: GET /projects/{projectId}/workflow/steps/{stepId}
+ */
+export async function getProjectWorkflowStep(projectId, stepId) {
+  return await apiCall(`/projects/${projectId}/workflow/steps/${stepId}`, 'GET');
+}
+
+/**
+ * Fetches project audit trail events: GET /projects/{projectId}/audit-events
+ */
+export async function getProjectAuditEvents(projectId) {
+  const data = await apiCall(`/projects/${projectId}/audit-events`, 'GET');
+  return Array.isArray(data) ? data : [];
+}
+
+/**
+ * Fetches project requirements: GET /projects/{projectId}/requirements
  */
 export async function getProjectRequirements(projectId) {
   try {
@@ -169,7 +87,6 @@ export async function getProjectReadiness(projectId) {
   try {
     return await apiCall(`/projects/${projectId}/readiness`, 'GET');
   } catch (err) {
-    // Fallback: return structured data matching what ReadinessView expects
     return {
       readiness_score: 0,
       readiness_percentage: 0,
@@ -207,16 +124,5 @@ export async function uploadProjectAttachment(projectId, file, category = 'ADVIS
   formData.append('file', file);
   formData.append('category', category);
 
-  try {
-    return await apiCall(`/projects/${projectId}/attachments`, 'POST', formData);
-  } catch (err) {
-    return {
-      attachment_id: Date.now(),
-      project_id: projectId,
-      original_filename: file.name,
-      file_size: file.size,
-      category: category,
-      created_at: new Date().toISOString(),
-    };
-  }
+  return await apiCall(`/projects/${projectId}/attachments`, 'POST', formData);
 }

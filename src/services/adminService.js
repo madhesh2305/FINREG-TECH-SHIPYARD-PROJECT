@@ -5,95 +5,83 @@ import { apiCall } from './api';
  */
 export async function getAdminStats() {
   try {
-    const data = await apiCall('/admin/stats', 'GET');
-    if (data) return data;
+    return await apiCall('/admin/stats', 'GET');
   } catch (err) {
-    console.info('[adminService] Backend offline. Using platform admin metrics.');
+    return {
+      total_users: 0,
+      active_users: 0,
+      total_projects: 0,
+      regulatory_sources_count: 0,
+      total_audit_events: 0,
+    };
   }
-  return {
-    total_users: 12,
-    active_users: 10,
-    total_projects: 4,
-    regulatory_sources_count: 18,
-    total_audit_events: 28,
-  };
 }
 
 /**
  * Fetches all registered users for administration via GET /admin/users
  */
-export async function getAdminUsers() {
-  try {
-    const data = await apiCall('/admin/users', 'GET');
-    if (Array.isArray(data) && data.length > 0) return data;
-  } catch (err) {
-    console.info('[adminService] Backend offline. Using registered accounts overview.');
-  }
-
-  let localAccounts = [];
-  try {
-    const raw = localStorage.getItem('finreg_local_accounts');
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      localAccounts = Object.values(parsed).map((entry, idx) => ({
-        user_id: 10 + idx,
-        full_name: entry.user.full_name || entry.user.name,
-        email: entry.user.email,
-        platform_role: entry.user.platform_role || entry.user.role || 'BUILDER',
-        is_active: true,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }));
-    }
-  } catch (e) {}
-
-  return [
-    {
-      user_id: 1,
-      full_name: 'Admin User',
-      email: 'admin@finregtech.io',
-      platform_role: 'ADMIN',
-      is_active: true,
-      created_at: '2026-10-01T10:00:00Z',
-    },
-    {
-      user_id: 2,
-      full_name: 'Jun Chen',
-      email: 'jun@finregtech.io',
-      platform_role: 'BUILDER',
-      is_active: true,
-      created_at: '2026-10-05T12:00:00Z',
-    },
-    {
-      user_id: 3,
-      full_name: 'Eleanor Vance',
-      email: 'eleanor.vance@vancelegal.co.uk',
-      platform_role: 'ADVISOR',
-      is_active: true,
-      created_at: '2026-10-08T14:30:00Z',
-    },
-    ...localAccounts,
-  ];
+export async function getAdminUsers(roleFilter = null, statusFilter = null) {
+  let url = '/admin/users?';
+  if (roleFilter && roleFilter !== 'All roles') url += `role=${roleFilter.toUpperCase()}&`;
+  if (statusFilter && statusFilter !== 'All statuses') url += `status=${statusFilter.toUpperCase()}&`;
+  const cleanUrl = url.replace(/[?&]$/, '');
+  const data = await apiCall(cleanUrl, 'GET');
+  return Array.isArray(data) ? data : [];
 }
 
 /**
- * Updates a user account status (active/inactive) via PATCH /admin/users/{userId}/status
+ * Updates a user account status (ACTIVE/INACTIVE) via PATCH /admin/users/{userId}/status
  */
-export async function updateUserStatus(userId, isActive) {
-  try {
-    return await apiCall(`/admin/users/${userId}/status`, 'PATCH', { is_active: isActive });
-  } catch (err) {
-    return { user_id: userId, is_active: isActive };
-  }
+export async function updateUserStatus(userId, status) {
+  const statusStr = typeof status === 'boolean' ? (status ? 'ACTIVE' : 'INACTIVE') : String(status).toUpperCase();
+  return await apiCall(`/admin/users/${userId}/status`, 'PATCH', {
+    status: statusStr,
+    is_active: statusStr === 'ACTIVE',
+  });
+}
+
+/**
+ * Fetches roles and permissions definitions: GET /admin/roles-permissions
+ */
+export async function getRolesPermissions() {
+  const data = await apiCall('/admin/roles-permissions', 'GET');
+  return Array.isArray(data) ? data : [];
+}
+
+/**
+ * Updates a user's platform role: PUT /admin/users/{userId}/role
+ */
+export async function updateUserRole(userId, role) {
+  return await apiCall(`/admin/users/${userId}/role`, 'PUT', { role: role.toUpperCase() });
+}
+
+/**
+ * Retrieves platform-wide advisor invitations: GET /admin/advisor-invitations
+ */
+export async function getAdminAdvisorInvitations(status = null) {
+  const url =
+    status && status !== 'All statuses'
+      ? `/admin/advisor-invitations?status=${status.toUpperCase()}`
+      : `/admin/advisor-invitations`;
+  const data = await apiCall(url, 'GET');
+  return Array.isArray(data) ? data : [];
+}
+
+/**
+ * Provisions a new company administrator: POST /admin/users/provision-admin
+ */
+export async function provisionAdmin(payload) {
+  return await apiCall('/admin/users/provision-admin', 'POST', payload);
 }
 
 /**
  * Retrieves platform-wide audit events via GET /admin/audit-events
  */
-export async function getAdminAuditEvents(limit = 100) {
-  try {
-    const data = await apiCall(`/admin/audit-events?limit=${limit}`, 'GET');
-    if (Array.isArray(data)) return data;
-  } catch (err) {}
-  return [];
+export async function getAdminAuditEvents(eventType = null) {
+  const url =
+    eventType && eventType !== 'All events' && eventType !== 'All event types'
+      ? `/admin/audit-events?event_type=${eventType.toUpperCase()}`
+      : `/admin/audit-events`;
+  const data = await apiCall(url, 'GET');
+  return Array.isArray(data) ? data : [];
 }

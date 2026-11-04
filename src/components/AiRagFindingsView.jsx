@@ -26,6 +26,8 @@ import {
   checkRAGHealth,
   submitRegulatoryQuery,
   compareAdvisorPositions,
+  getHumanReviews,
+  resolveHumanReview,
 } from '../services/ragService';
 
 export default function AiRagFindingsView({
@@ -55,6 +57,15 @@ export default function AiRagFindingsView({
   const [compareTopic, setCompareTopic] = useState('Timing of Customer Due Diligence Verification');
   const [copiedId, setCopiedId] = useState(null);
   const [expandedChunkId, setExpandedChunkId] = useState(null);
+
+  // DEF-27: Human Review Queue States
+  const [humanReviews, setHumanReviews] = useState([]);
+  const [isLoadingReviews, setIsLoadingReviews] = useState(false);
+  const [selectedReviewForModal, setSelectedReviewForModal] = useState(null);
+  const [resolveDecision, setResolveDecision] = useState('APPROVED');
+  const [resolveNotes, setResolveNotes] = useState('');
+  const [isSubmittingResolve, setIsSubmittingResolve] = useState(false);
+  const [toastMessage, setToastMessage] = useState(null);
 
   const targetProjectId = activeProject?.id || activeProject?.project_id || 'PRJ-ABC-001';
   const targetProjectName = activeProject?.name || 'Regulatory Compliance Framework';
@@ -92,6 +103,14 @@ export default function AiRagFindingsView({
         });
         if (isMounted) setCompareResult(initialCmp);
       } catch (e) {}
+
+      // Fetch pending human reviews (DEF-27)
+      try {
+        const reviews = await getHumanReviews(targetProjectId);
+        if (isMounted && Array.isArray(reviews)) {
+          setHumanReviews(reviews);
+        }
+      } catch (e) {}
     }
 
     init();
@@ -99,6 +118,42 @@ export default function AiRagFindingsView({
       isMounted = false;
     };
   }, [activeProject]);
+
+  const refreshHumanReviews = async () => {
+    setIsLoadingReviews(true);
+    try {
+      const reviews = await getHumanReviews(targetProjectId);
+      setHumanReviews(Array.isArray(reviews) ? reviews : []);
+    } catch (e) {
+      console.warn('Failed to refresh human reviews', e);
+    } finally {
+      setIsLoadingReviews(false);
+    }
+  };
+
+  const handleOpenResolveModal = (review) => {
+    setSelectedReviewForModal(review);
+    setResolveDecision('APPROVED');
+    setResolveNotes('');
+  };
+
+  const handleResolveSubmit = async (e) => {
+    if (e) e.preventDefault();
+    if (!selectedReviewForModal || isSubmittingResolve) return;
+    setIsSubmittingResolve(true);
+    try {
+      const reviewId = selectedReviewForModal.id || selectedReviewForModal.review_id;
+      await resolveHumanReview(reviewId, resolveDecision, resolveNotes);
+      setToastMessage({ type: 'success', text: `Review ${reviewId} successfully resolved (${resolveDecision}).` });
+      setSelectedReviewForModal(null);
+      await refreshHumanReviews();
+    } catch (err) {
+      setToastMessage({ type: 'error', text: err.message || 'Failed to resolve review' });
+    } finally {
+      setIsSubmittingResolve(false);
+      setTimeout(() => setToastMessage(null), 4000);
+    }
+  };
 
   // Copy helper
   const handleCopy = (text, id) => {
@@ -228,6 +283,24 @@ export default function AiRagFindingsView({
             <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 font-mono">
               Compare
             </span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTabMode('review')}
+            className={`px-5 py-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${
+              activeTabMode === 'review'
+                ? 'border-amber-500 text-amber-400 bg-amber-500/5'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <ShieldAlert className="w-4 h-4" />
+            <span>Human Review Queue</span>
+            {humanReviews.length > 0 && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 font-mono">
+                {humanReviews.length}
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -456,16 +529,16 @@ export default function AiRagFindingsView({
                   </div>
                 </div>
 
-                {/* PROMINENT MANDATORY HUMAN REVIEW WARNING (Section 3 & 6) */}
-                {queryResult.metadata?.requires_human_review && (
-                  <div className="rounded-xl border border-amber-900/80 bg-amber-950/30 p-4 text-xs sm:text-sm text-amber-200 flex items-start gap-3 shadow-sm">
-                    <ShieldAlert className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+                {/* DEF-27: PROMINENT AMBER WARNING CARD FOR UNAPPROVED / INSUFFICIENT EVIDENCE */}
+                {(queryResult.status === 'INSUFFICIENT_EVIDENCE' || queryResult.metadata?.requires_human_review) && (
+                  <div className="rounded-xl border border-amber-500/80 bg-amber-950/40 p-5 text-amber-200 flex items-start gap-3 shadow-lg">
+                    <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                     <div className="space-y-1">
-                      <p className="font-bold text-amber-300">
-                        Human Review Required · Retrieved Evidence Pending SME Sign-Off
+                      <p className="font-bold text-amber-300 text-sm">
+                        Insufficient approved evidence — query automatically routed to human compliance verification
                       </p>
                       <p className="text-xs text-amber-200/90 leading-relaxed font-normal">
-                        AI retrieval identifies factual regulatory excerpts and semantic similarity. Per platform governance, evidence is not certified as formal legal advice or binding supervisory approval until reviewed by an authorised Compliance Officer.
+                        Per regulatory governance protocols, automated synthesis is restricted when source evidence has not received qualified human sign-off. This query has been entered into the Compliance Verification Queue.
                       </p>
                     </div>
                   </div>
@@ -473,7 +546,7 @@ export default function AiRagFindingsView({
               </div>
 
               {/* MAIN SYNTHESIZED ANSWER OR EVIDENCE GAP PANEL */}
-              {queryResult.answer ? (
+              {queryResult.status !== 'INSUFFICIENT_EVIDENCE' && !queryResult.metadata?.requires_human_review && queryResult.answer ? (
                 <div className="rounded-2xl border border-slate-800/90 bg-[#161619] p-6 sm:p-7 shadow-xl space-y-3">
                   <div className="text-[11px] font-mono uppercase tracking-wider text-amber-400 font-bold">
                     SYNTHESIZED REGULATORY ANSWER
@@ -804,6 +877,295 @@ export default function AiRagFindingsView({
               </div>
             </div>
           )}
+
+          {/* DEF-27: HUMAN REVIEW QUEUE SUB-PANEL */}
+          <div className="rounded-2xl border border-slate-800/90 bg-[#161619] p-6 sm:p-7 shadow-xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5 text-amber-400" />
+                  <span>Human Review Queue</span>
+                  {humanReviews.length > 0 && (
+                    <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      {humanReviews.length} Pending
+                    </span>
+                  )}
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Unapproved evidence chunks and low-confidence queries automatically routed for human compliance verification.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={refreshHumanReviews}
+                disabled={isLoadingReviews}
+                className="px-3 py-1.5 rounded-lg border border-slate-800 bg-[#121214] hover:bg-slate-800 text-slate-300 hover:text-white text-xs font-medium flex items-center gap-2 cursor-pointer transition-colors"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingReviews ? 'animate-spin' : ''}`} />
+                <span>Refresh Queue</span>
+              </button>
+            </div>
+
+            {humanReviews.length === 0 ? (
+              <div className="text-center py-8 text-slate-500 text-xs sm:text-sm bg-[#121214] rounded-xl border border-slate-800/60 p-6">
+                <CheckCircle2 className="w-8 h-8 text-emerald-500/60 mx-auto mb-2" />
+                <p className="font-semibold text-slate-300">Human Verification Queue Clear</p>
+                <p className="text-slate-500 text-xs mt-1">No unapproved regulatory queries or candidate evidence awaiting review for this project.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {humanReviews.map((rev, idx) => (
+                  <div
+                    key={rev.id || rev.review_id || idx}
+                    className="p-4 rounded-xl border border-slate-800 bg-[#121214] flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-slate-700 transition-colors"
+                  >
+                    <div className="space-y-1.5 text-left flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 font-bold uppercase">
+                          {rev.source_status || rev.status || 'PENDING_VERIFICATION'}
+                        </span>
+                        <span className="text-xs font-mono text-slate-400">
+                          {rev.review_id || rev.id || `REV-${idx + 1}`}
+                        </span>
+                        {(rev.project_id || targetProjectId) && (
+                          <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded">
+                            {rev.project_id || targetProjectId}
+                          </span>
+                        )}
+                        {rev.created_at && (
+                          <span className="text-[11px] text-slate-500 font-mono">
+                            {new Date(rev.created_at).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-sm font-semibold text-slate-100">
+                        {rev.query || rev.question || rev.query_text || rev.summary || 'Unverified Query Evidence'}
+                      </p>
+
+                      {rev.reason && (
+                        <p className="text-xs text-slate-400">
+                          <strong className="text-slate-300">Routing Reason:</strong> {rev.reason}
+                        </p>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenResolveModal(rev)}
+                      className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs shrink-0 cursor-pointer transition-colors shadow-sm self-start md:self-auto"
+                    >
+                      Review &amp; Resolve
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* VIEW 3: DEDICATED HUMAN REVIEW QUEUE (DEF-27)                              */}
+      {/* ========================================================================= */}
+      {activeTabMode === 'review' && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-slate-800/90 bg-[#161619] p-6 sm:p-7 shadow-xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5 text-amber-400" />
+                  <span>Regulatory Compliance Human Verification Queue</span>
+                  {humanReviews.length > 0 && (
+                    <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      {humanReviews.length} Active
+                    </span>
+                  )}
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Mandatory human review checkpoint for unapproved regulatory evidence, tenant-scope gaps, and sensitive compliance opinions.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={refreshHumanReviews}
+                disabled={isLoadingReviews}
+                className="px-3.5 py-2 rounded-lg border border-slate-800 bg-[#121214] hover:bg-slate-800 text-slate-200 text-xs font-medium flex items-center gap-2 cursor-pointer transition-colors"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingReviews ? 'animate-spin' : ''}`} />
+                <span>Refresh Queue</span>
+              </button>
+            </div>
+
+            {humanReviews.length === 0 ? (
+              <div className="text-center py-12 text-slate-500 bg-[#121214] rounded-xl border border-slate-800/60 p-8 space-y-2">
+                <CheckCircle2 className="w-10 h-10 text-emerald-500/70 mx-auto" />
+                <p className="font-bold text-slate-200 text-sm">All Verification Items Resolved</p>
+                <p className="text-slate-400 text-xs">There are no pending human review queries or unapproved evidence items awaiting action.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {humanReviews.map((rev, idx) => (
+                  <div
+                    key={rev.id || rev.review_id || idx}
+                    className="p-4 sm:p-5 rounded-xl border border-slate-800 bg-[#121214] flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-slate-700 transition-colors"
+                  >
+                    <div className="space-y-1.5 text-left flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 font-bold uppercase">
+                          {rev.source_status || rev.status || 'PENDING_VERIFICATION'}
+                        </span>
+                        <span className="text-xs font-mono text-slate-400 font-bold">
+                          {rev.review_id || rev.id || `REV-${idx + 1}`}
+                        </span>
+                        {(rev.project_id || targetProjectId) && (
+                          <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">
+                            {rev.project_id || targetProjectId}
+                          </span>
+                        )}
+                        {rev.created_at && (
+                          <span className="text-[11px] text-slate-500 font-mono">
+                            {new Date(rev.created_at).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-sm font-semibold text-slate-100 leading-snug">
+                        {rev.query || rev.question || rev.query_text || rev.summary || 'Unverified Query Evidence'}
+                      </p>
+
+                      {rev.reason && (
+                        <p className="text-xs text-slate-400">
+                          <strong className="text-slate-300">Routing Trigger:</strong> {rev.reason}
+                        </p>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenResolveModal(rev)}
+                      className="px-4 py-2.5 rounded-xl bg-[#e6a13d] hover:bg-[#d8932f] text-slate-950 font-bold text-xs shrink-0 cursor-pointer transition-colors shadow-md self-start md:self-auto"
+                    >
+                      Review &amp; Resolve
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* RESOLUTION MODAL (DEF-27) */}
+      {selectedReviewForModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#161619] border border-slate-800 rounded-2xl w-full max-w-lg p-6 space-y-5 shadow-2xl text-left">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-amber-400" />
+                <span>Compliance Verification Resolution</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setSelectedReviewForModal(null)}
+                className="text-slate-400 hover:text-white p-1 text-lg font-bold"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <span className="text-slate-400 font-mono text-[11px] uppercase font-bold">Query / Evidence Item:</span>
+                <p className="text-xs sm:text-sm text-slate-200 bg-[#121214] p-3.5 rounded-xl border border-slate-800 mt-1.5 font-medium leading-relaxed">
+                  {selectedReviewForModal.query || selectedReviewForModal.question || selectedReviewForModal.query_text || 'Regulatory query'}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-2">
+                  Compliance Officer Determination:
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setResolveDecision('APPROVED')}
+                    className={`py-2.5 px-3 rounded-xl font-bold text-xs border transition-colors cursor-pointer text-center ${
+                      resolveDecision === 'APPROVED'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/60 ring-1 ring-emerald-500/30'
+                        : 'bg-[#121214] text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    &check; Approve for Corpus
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResolveDecision('REJECTED')}
+                    className={`py-2.5 px-3 rounded-xl font-bold text-xs border transition-colors cursor-pointer text-center ${
+                      resolveDecision === 'REJECTED'
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/60 ring-1 ring-rose-500/30'
+                        : 'bg-[#121214] text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    &times; Reject / Insufficient
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1.5">
+                  Resolution Notes &amp; Audit Justification:
+                </label>
+                <textarea
+                  rows={3}
+                  value={resolveNotes}
+                  onChange={(e) => setResolveNotes(e.target.value)}
+                  placeholder="Record formal statutory reference, supervisory policy rationale, or rejection justification..."
+                  className="w-full bg-[#121214] border border-slate-800 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/60 leading-relaxed"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setSelectedReviewForModal(null)}
+                className="px-4 py-2 rounded-xl border border-slate-800 text-slate-400 hover:text-white text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingResolve}
+                onClick={handleResolveSubmit}
+                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 text-xs font-bold transition-colors cursor-pointer shadow-md"
+              >
+                {isSubmittingResolve ? 'Recording Resolution...' : 'Confirm Resolution'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TOAST NOTIFICATION */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 animate-slideUp">
+          <div
+            className={`px-4 py-3 rounded-xl border shadow-xl text-xs font-semibold flex items-center gap-2 ${
+              toastMessage.type === 'error'
+                ? 'bg-rose-950/90 border-rose-800 text-rose-200'
+                : 'bg-emerald-950/90 border-emerald-800 text-emerald-200'
+            }`}
+          >
+            {toastMessage.type === 'error' ? (
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            )}
+            <span>{toastMessage.text}</span>
+          </div>
         </div>
       )}
 
@@ -1051,6 +1413,209 @@ export default function AiRagFindingsView({
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* VIEW 3: DEDICATED HUMAN REVIEW QUEUE (DEF-27)                              */}
+      {/* ========================================================================= */}
+      {activeTabMode === 'review' && (
+        <div className="space-y-6">
+          <div className="rounded-2xl border border-slate-800/90 bg-[#161619] p-6 sm:p-7 shadow-xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
+              <div>
+                <h2 className="text-base sm:text-lg font-bold text-white flex items-center gap-2">
+                  <ShieldAlert className="w-5 h-5 text-amber-400" />
+                  <span>Regulatory Compliance Human Verification Queue</span>
+                  {humanReviews.length > 0 && (
+                    <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                      {humanReviews.length} Active
+                    </span>
+                  )}
+                </h2>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Mandatory human review checkpoint for unapproved regulatory evidence, tenant-scope gaps, and sensitive compliance opinions.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={refreshHumanReviews}
+                disabled={isLoadingReviews}
+                className="px-3.5 py-2 rounded-lg border border-slate-800 bg-[#121214] hover:bg-slate-800 text-slate-200 text-xs font-medium flex items-center gap-2 cursor-pointer transition-colors"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingReviews ? 'animate-spin' : ''}`} />
+                <span>Refresh Queue</span>
+              </button>
+            </div>
+
+            {humanReviews.length === 0 ? (
+              <div className="text-center py-12 text-slate-500 bg-[#121214] rounded-xl border border-slate-800/60 p-8 space-y-2">
+                <CheckCircle2 className="w-10 h-10 text-emerald-500/70 mx-auto" />
+                <p className="font-bold text-slate-200 text-sm">All Verification Items Resolved</p>
+                <p className="text-slate-400 text-xs">There are no pending human review queries or unapproved evidence items awaiting action.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {humanReviews.map((rev, idx) => (
+                  <div
+                    key={rev.id || rev.review_id || idx}
+                    className="p-4 sm:p-5 rounded-xl border border-slate-800 bg-[#121214] flex flex-col md:flex-row md:items-center justify-between gap-4 hover:border-slate-700 transition-colors"
+                  >
+                    <div className="space-y-1.5 text-left flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-amber-500/10 text-amber-300 border border-amber-500/20 font-bold uppercase">
+                          {rev.source_status || rev.status || 'PENDING_VERIFICATION'}
+                        </span>
+                        <span className="text-xs font-mono text-slate-400 font-bold">
+                          {rev.review_id || rev.id || `REV-${idx + 1}`}
+                        </span>
+                        {(rev.project_id || targetProjectId) && (
+                          <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-1.5 py-0.5 rounded border border-slate-700">
+                            {rev.project_id || targetProjectId}
+                          </span>
+                        )}
+                        {rev.created_at && (
+                          <span className="text-[11px] text-slate-500 font-mono">
+                            {new Date(rev.created_at).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="text-sm font-semibold text-slate-100 leading-snug">
+                        {rev.query || rev.question || rev.query_text || rev.summary || 'Unverified Query Evidence'}
+                      </p>
+
+                      {rev.reason && (
+                        <p className="text-xs text-slate-400">
+                          <strong className="text-slate-300">Routing Trigger:</strong> {rev.reason}
+                        </p>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleOpenResolveModal(rev)}
+                      className="px-4 py-2.5 rounded-xl bg-[#e6a13d] hover:bg-[#d8932f] text-slate-950 font-bold text-xs shrink-0 cursor-pointer transition-colors shadow-md self-start md:self-auto"
+                    >
+                      Review &amp; Resolve
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* RESOLUTION MODAL (DEF-27) */}
+      {selectedReviewForModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#161619] border border-slate-800 rounded-2xl w-full max-w-lg p-6 space-y-5 shadow-2xl text-left">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <ShieldAlert className="w-5 h-5 text-amber-400" />
+                <span>Compliance Verification Resolution</span>
+              </h3>
+              <button
+                type="button"
+                onClick={() => setSelectedReviewForModal(null)}
+                className="text-slate-400 hover:text-white p-1 text-lg font-bold"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <span className="text-slate-400 font-mono text-[11px] uppercase font-bold">Query / Evidence Item:</span>
+                <p className="text-xs sm:text-sm text-slate-200 bg-[#121214] p-3.5 rounded-xl border border-slate-800 mt-1.5 font-medium leading-relaxed">
+                  {selectedReviewForModal.query || selectedReviewForModal.question || selectedReviewForModal.query_text || 'Regulatory query'}
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-2">
+                  Compliance Officer Determination:
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setResolveDecision('APPROVED')}
+                    className={`py-2.5 px-3 rounded-xl font-bold text-xs border transition-colors cursor-pointer text-center ${
+                      resolveDecision === 'APPROVED'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/60 ring-1 ring-emerald-500/30'
+                        : 'bg-[#121214] text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    &check; Approve for Corpus
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setResolveDecision('REJECTED')}
+                    className={`py-2.5 px-3 rounded-xl font-bold text-xs border transition-colors cursor-pointer text-center ${
+                      resolveDecision === 'REJECTED'
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/60 ring-1 ring-rose-500/30'
+                        : 'bg-[#121214] text-slate-400 border-slate-800 hover:border-slate-700'
+                    }`}
+                  >
+                    &times; Reject / Insufficient
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1.5">
+                  Resolution Notes &amp; Audit Justification:
+                </label>
+                <textarea
+                  rows={3}
+                  value={resolveNotes}
+                  onChange={(e) => setResolveNotes(e.target.value)}
+                  placeholder="Record formal statutory reference, supervisory policy rationale, or rejection justification..."
+                  className="w-full bg-[#121214] border border-slate-800 rounded-xl p-3 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/60 leading-relaxed"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setSelectedReviewForModal(null)}
+                className="px-4 py-2 rounded-xl border border-slate-800 text-slate-400 hover:text-white text-xs font-semibold cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingResolve}
+                onClick={handleResolveSubmit}
+                className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 text-xs font-bold transition-colors cursor-pointer shadow-md"
+              >
+                {isSubmittingResolve ? 'Recording Resolution...' : 'Confirm Resolution'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TOAST NOTIFICATION */}
+      {toastMessage && (
+        <div className="fixed bottom-6 right-6 z-50 animate-slideUp">
+          <div
+            className={`px-4 py-3 rounded-xl border shadow-xl text-xs font-semibold flex items-center gap-2 ${
+              toastMessage.type === 'error'
+                ? 'bg-rose-950/90 border-rose-800 text-rose-200'
+                : 'bg-emerald-950/90 border-emerald-800 text-emerald-200'
+            }`}
+          >
+            {toastMessage.type === 'error' ? (
+              <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+            ) : (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            )}
+            <span>{toastMessage.text}</span>
+          </div>
         </div>
       )}
 

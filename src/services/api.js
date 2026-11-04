@@ -45,7 +45,7 @@ export async function apiCall(endpoint, method = 'GET', body = null) {
       } catch (e) {
         // Fallback to text
       }
-      // Handle inactive account or revoked session immediately (DEF-24)
+      // Handle inactive account or revoked session immediately (DEF-24, DEF-36)
       const errLower = (errorMessage || '').toLowerCase();
       const isDeactivatedOrUnauthorized =
         response.status === 401 ||
@@ -57,14 +57,18 @@ export async function apiCall(endpoint, method = 'GET', body = null) {
 
       if (isDeactivatedOrUnauthorized && typeof window !== 'undefined') {
         clearToken();
+        const deactMsg = errLower.includes('deactivated') || errLower.includes('revoked')
+          ? 'Your account has been deactivated by an administrator.'
+          : errorMessage;
         try {
           localStorage.removeItem('currentUser');
           localStorage.removeItem('finreg_current_user');
           localStorage.removeItem('finreg_projects');
+          sessionStorage.setItem('auth_deactivated_notice', deactMsg);
         } catch (_) {}
         window.dispatchEvent(
           new CustomEvent('auth:unauthorized', {
-            detail: { message: errorMessage, status: response.status },
+            detail: { message: deactMsg, status: response.status },
           })
         );
       }

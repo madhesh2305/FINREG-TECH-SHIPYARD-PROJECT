@@ -1,4 +1,4 @@
-import { getToken } from './api';
+import { getToken, apiCall } from './api';
 
 const RAG_BASE_URL =
   (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_RAG_API_URL) ||
@@ -538,3 +538,25 @@ export async function compareAdvisorPositions({ project_id, advisor_1_id, adviso
     },
   };
 }
+
+/**
+ * DEF-27: Human Review Endpoints
+ */
+export async function getHumanReviews(projectId = null) {
+  const url = projectId ? `/rag/human-reviews?project_id=${projectId}` : `/rag/human-reviews`;
+  try {
+    return await apiCall(url, 'GET');
+  } catch (err) {
+    console.warn('[ragService] getHumanReviews error:', err.message);
+    return [];
+  }
+}
+
+export async function resolveHumanReview(reviewId, decision, notes) {
+  return await apiCall(`/rag/human-reviews/${reviewId}/resolve`, 'POST', {
+    decision,
+    resolution_notes: notes,
+  });
+}
+
+export const submitRagQuery = submitRegulatoryQuery;

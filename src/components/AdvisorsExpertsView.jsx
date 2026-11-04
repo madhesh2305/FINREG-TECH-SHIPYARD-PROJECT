@@ -1,11 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Check, ArrowLeft, UserX, RefreshCw } from 'lucide-react';
-import { sendAdvisorInvitation, getAdvisors } from '../services/advisorService';
+import {
+  sendAdvisorInvitation,
+  getAdvisors,
+  getProjectAdvisorInvitations,
+  getProjectMembers,
+} from '../services/advisorService';
 
 // Master advisors list initialized to empty array (ready for live registered advisors / backend data)
 const DEFAULT_ADVISORS = [];
 
-export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, availableProjects = [] }) {
+export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, availableProjects = [], activeProject }) {
   const [activeSubTab, setActiveSubTab] = useState('Find Advisors'); // 'Find Advisors' | 'My Invited Advisors'
   const [searchQuery, setSearchQuery] = useState('');
   const [expertiseFilter, setExpertiseFilter] = useState('All expertise');
@@ -37,32 +42,60 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
   const fetchLiveAdvisors = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const live = await getAdvisors();
+      const pid = activeProject?.id || activeProject?.project_id || availableProjects[0]?.id || availableProjects[0]?.project_id;
+      const [live, invites, members] = await Promise.all([
+        getAdvisors(),
+        pid ? getProjectAdvisorInvitations(pid).catch(() => []) : Promise.resolve([]),
+        pid ? getProjectMembers(pid).catch(() => []) : Promise.resolve([]),
+      ]);
+
+      const pendingEmails = new Set(
+        (Array.isArray(invites) ? invites : [])
+          .filter((inv) => (inv.status || '').toUpperCase() === 'PENDING')
+          .map((inv) => (inv.advisor_email || inv.email || '').toLowerCase())
+      );
+      const memberEmails = new Set(
+        (Array.isArray(members) ? members : [])
+          .map((m) => (m.email || m.user_email || '').toLowerCase())
+      );
+
       if (Array.isArray(live)) {
         setAdvisors(
-          live.map((u) => ({
-            id: u.advisor_profile_id || u.user_id,
-            user_id: u.user_id,
-            name: u.full_name || 'Advisor',
-            avatar: (u.full_name || 'AD')
-              .split(' ')
-              .filter(Boolean)
-              .map((n) => n[0])
-              .join('')
-              .slice(0, 2)
-              .toUpperCase(),
-            specialty: u.specialization || u.professional_title || 'Regulatory Compliance & Advisory',
-            firm: u.organization_name || 'Independent Advisory',
-            jurisdiction: 'UK / EU',
-            status: 'Available',
-            statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
-            dotColor: 'bg-emerald-500',
-            isInvited: false,
-            bio: u.bio || 'Registered compliance advisor specializing in regulatory risk and governance.',
-            organization: u.organization_name || 'Independent Advisory',
-            areasOfSupport: ['Policy design', 'Control validation', 'Regulatory interpretation', 'Board assurance'],
-            email: u.email,
-          }))
+          live.map((u) => {
+            const emailLower = (u.email || '').toLowerCase();
+            const isMember = memberEmails.has(emailLower);
+            const isPending = pendingEmails.has(emailLower);
+
+            return {
+              id: u.advisor_profile_id || u.user_id,
+              user_id: u.user_id,
+              name: u.full_name || 'Advisor',
+              avatar: (u.full_name || 'AD')
+                .split(' ')
+                .filter(Boolean)
+                .map((n) => n[0])
+                .join('')
+                .slice(0, 2)
+                .toUpperCase(),
+              specialty: u.specialization || u.professional_title || 'Regulatory Compliance & Advisory',
+              firm: u.organization_name || 'Independent Advisory',
+              jurisdiction: 'UK / EU',
+              status: isMember ? 'Active' : isPending ? 'Pending' : 'Available',
+              statusColor: isMember
+                ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80'
+                : isPending
+                ? 'bg-amber-950/60 text-amber-300 border-amber-800/80'
+                : 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
+              dotColor: isMember ? 'bg-emerald-500' : isPending ? 'bg-amber-400' : 'bg-emerald-500',
+              isMember,
+              isPending,
+              isInvited: isMember || isPending,
+              bio: u.bio || 'Registered compliance advisor specializing in regulatory risk and governance.',
+              organization: u.organization_name || 'Independent Advisory',
+              areasOfSupport: ['Policy design', 'Control validation', 'Regulatory interpretation', 'Board assurance'],
+              email: u.email,
+            };
+          })
         );
       }
     } catch (err) {
@@ -70,13 +103,13 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [activeProject, availableProjects]);
 
   useEffect(() => {
     fetchLiveAdvisors();
   }, [fetchLiveAdvisors, activeSubTab]);
 
-  const invitedCount = advisors.filter((a) => a.isInvited).length;
+  const invitedCount = advisors.filter((a) => a.isMember || a.isPending || a.isInvited).length;
   const isLimitReached = invitedCount >= 2;
 
   // Filtering Logic
@@ -106,9 +139,9 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
 
   // Open Invite Modal for specific advisor
   const handleOpenInviteModal = (adv) => {
-    if (isLimitReached && !adv.isInvited) return;
+    if (isLimitReached || adv.isMember || adv.isPending) return;
     setModalAdvisor(adv);
-    setModalProject(projectOptions[0]?.name || 'AML Compliance Framework');
+    setModalProject(projectOptions[0]?.name || activeProject?.name || 'AML Compliance Framework');
     setModalRole('Regulatory Reviewer');
     setModalMessage(
       'We would value your review of our control framework and source interpretation.'
@@ -118,11 +151,11 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
 
   // Submit Modal Invitation Form -> Sends invitation via live backend POST /projects/{projectId}/advisor-invitations
   const handleSendInvitation = async (e) => {
-    e.preventDefault();
-    if (!modalAdvisor) return;
+    if (e) e.preventDefault();
+    if (!modalAdvisor || isSubmittingInvite) return;
 
     setIsSubmittingInvite(true);
-    const targetProjectObj = projectOptions.find((p) => p.name === modalProject) || projectOptions[0];
+    const targetProjectObj = projectOptions.find((p) => p.name === modalProject) || activeProject || projectOptions[0];
     const targetProjectId = targetProjectObj?.id || targetProjectObj?.project_id || 1;
 
     try {
@@ -132,18 +165,33 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
         invitation_notes: modalMessage,
       });
 
-      // Update local state to mark advisor as invited
-      setAdvisors((prevAdvisors) =>
-        prevAdvisors.map((a) => (a.id === modalAdvisor.id ? { ...a, isInvited: true } : a))
-      );
-
       setToastMsg(`Invitation issued to ${modalAdvisor.name}! Persisted in PostgreSQL database.`);
       setTimeout(() => setToastMsg(null), 3500);
       setIsInviteModalOpen(false);
       if (onInviteAdvisor) onInviteAdvisor(modalAdvisor);
+      await fetchLiveAdvisors();
     } catch (err) {
       console.warn('sendAdvisorInvitation error:', err);
-      setToastMsg(`Failed to send invitation: ${err.message || 'API error'}`);
+      const errMsg = err.message || '';
+      const isConflict =
+        errMsg.includes('409') ||
+        errMsg.toLowerCase().includes('already exists') ||
+        errMsg.toLowerCase().includes('active invitation');
+
+      if (isConflict) {
+        setToastMsg('Cannot invite: An active invitation or membership already exists for this advisor.');
+        // Mark advisor as pending immediately to disable button and prevent duplicate submission
+        setAdvisors((prevAdvisors) =>
+          prevAdvisors.map((a) =>
+            a.id === modalAdvisor.id || a.email === modalAdvisor.email
+              ? { ...a, isPending: true, isInvited: true }
+              : a
+          )
+        );
+      } else {
+        setToastMsg(`Failed to send invitation: ${errMsg || 'API error'}`);
+      }
+      setIsInviteModalOpen(false);
       setTimeout(() => setToastMsg(null), 4000);
     } finally {
       setIsSubmittingInvite(false);
@@ -222,13 +270,21 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
           </div>
 
           {/* Top Right Action Button */}
-          {currentAdv.isInvited ? (
+          {currentAdv.isMember ? (
             <button
               type="button"
-              onClick={() => handleCancelInvitation(currentAdv)}
-              className="px-6 py-3 rounded-xl font-bold text-xs sm:text-sm border border-rose-500/40 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-rose-100 transition-colors cursor-pointer self-start sm:self-center shadow-sm"
+              disabled
+              className="px-6 py-3 rounded-xl font-bold text-xs sm:text-sm border border-emerald-800/80 bg-emerald-950/60 text-emerald-400 cursor-not-allowed opacity-80 self-start sm:self-center"
             >
-              Cancel invitation
+              Active Member
+            </button>
+          ) : currentAdv.isPending || currentAdv.isInvited ? (
+            <button
+              type="button"
+              disabled
+              className="px-6 py-3 rounded-xl font-bold text-xs sm:text-sm border border-amber-800/80 bg-amber-950/60 text-amber-300 cursor-not-allowed opacity-80 self-start sm:self-center"
+            >
+              Pending Invite
             </button>
           ) : isLimitReached ? (
             <button
@@ -643,25 +699,21 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
                     View profile
                   </button>
 
-                  {activeSubTab === 'My Invited Advisors' ? (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCancelInvitation(adv);
-                      }}
-                      className="px-3.5 py-2 rounded-xl text-xs font-bold border border-rose-500/40 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 hover:text-rose-100 transition-colors cursor-pointer shadow-sm"
-                    >
-                      Cancel invitation
-                    </button>
-                  ) : adv.isInvited ? (
+                  {adv.isMember ? (
                     <button
                       type="button"
                       disabled
-                      className="px-4 py-2 rounded-xl text-xs font-bold border border-slate-700/80 bg-slate-800/90 text-slate-400 cursor-not-allowed opacity-80"
-                      title="Advisor already invited"
+                      className="px-4 py-2 rounded-xl text-xs font-bold border border-emerald-800/80 bg-emerald-950/60 text-emerald-400 cursor-not-allowed opacity-80"
                     >
-                      Invited
+                      Active Member
+                    </button>
+                  ) : adv.isPending || adv.isInvited ? (
+                    <button
+                      type="button"
+                      disabled
+                      className="px-4 py-2 rounded-xl text-xs font-bold border border-amber-800/80 bg-amber-950/60 text-amber-300 cursor-not-allowed opacity-80"
+                    >
+                      Pending Invite
                     </button>
                   ) : isLimitReached ? (
                     <button
