@@ -120,7 +120,8 @@ export default function AiRagFindingsView({
     setIsSubmittingResolve(true);
     try {
       const reviewId = selectedReviewForModal.id || selectedReviewForModal.review_id;
-      await resolveHumanReview(reviewId, resolveDecision, resolveNotes);
+      const pid = targetProjectId || selectedReviewForModal.project_id;
+      await resolveHumanReview(pid, reviewId, resolveDecision, resolveNotes);
       setToastMessage({ type: 'success', text: `Review ${reviewId} successfully resolved (${resolveDecision}).` });
       setSelectedReviewForModal(null);
       await refreshHumanReviews();

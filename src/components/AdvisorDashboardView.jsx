@@ -28,6 +28,7 @@ import {
   getAdvisorInboxInvitations,
   acceptAdvisorInvitation,
 } from '../services/advisorService';
+import { getProjects } from '../services/projectService';
 import { ADVISOR_PROFILES } from './AdvisorExpertiseView';
 
 const ADVISOR_REVIEWS_STORAGE_KEY = 'finreg_advisor_reviews';
@@ -96,14 +97,11 @@ export default function AdvisorDashboardView({
     try {
       await acceptAdvisorInvitation(projId, invId);
       showToast(`Invitation for project "${invitation.project_name || invitation.projectName || projId}" accepted!`);
-      setInboxInvitations((prev) =>
-        prev.map((i) =>
-          i.id === invId || i.invitation_id === invId
-            ? { ...i, status: 'ACCEPTED', status_display: 'Accepted' }
-            : i
-        )
-      );
+      await fetchAssignedProjects();
       await fetchInboxInvitations();
+      if (projId) {
+        setSelectedProject(projId);
+      }
     } catch (err) {
       console.error('Failed to accept invitation:', err);
       showToast(`Failed to accept invitation: ${err.message || 'API error'}`);
@@ -143,101 +141,67 @@ export default function AdvisorDashboardView({
   // Seeded advisor projects initialized to empty array
   const SEEDED_ADVISOR_PROJECTS = [];
 
-  // Load dynamically assigned projects for this specific advisor account
-  const [assignedProjectsFullList, setAssignedProjectsFullList] = useState(() => {
+  // Live Assigned Projects from PostgreSQL backend (DEF-34 & FE-05)
+  const [assignedProjectsFullList, setAssignedProjectsFullList] = useState([]);
+  const [isLoadingProjects, setIsLoadingProjects] = useState(false);
+
+  const fetchAssignedProjects = async () => {
+    setIsLoadingProjects(true);
     try {
-      const email = (currentUser?.email || '').toLowerCase();
-      const name = currentUser?.name || '';
-      const rawAssignments = localStorage.getItem('finreg_advisor_assignments');
-      const assignments = rawAssignments ? JSON.parse(rawAssignments) : [];
-
-      const myAssignments = assignments.filter((a) => {
-        const matchesEmail = email && a.advisorEmail && a.advisorEmail.toLowerCase() === email;
-        const matchesName = name && a.advisorName && a.advisorName.toLowerCase() === name.toLowerCase();
-        const matchesId = a.advisorId && (a.advisorId === currentUser?.id);
-        return matchesEmail || matchesName || matchesId;
-      });
-
-      if (myAssignments.length > 0) {
-        return myAssignments.map((a) => ({
-          id: a.projectId || 'PRJ-001',
-          name: a.project || a.projectName || 'Assigned Project',
-          company: a.company || 'Northbank Financial',
-          domain: a.role || currentExpertise?.domain || 'Regulatory Advisory',
+      const live = await getProjects();
+      if (Array.isArray(live)) {
+        const mapped = live.map((p) => ({
+          id: p.id || p.project_id,
+          project_id: p.id || p.project_id,
+          name: p.name || `Project ${p.id || p.project_id}`,
+          company: p.company || p.jurisdiction || 'FinRegTech Platform',
+          domain: p.domain || p.type || currentExpertise?.cleanDomain || 'Regulatory Advisory',
           nextAction: 'Review project requirements & provide compliance guidance',
-          type: a.projectType || 'AML / CTF',
-          status: 'In Progress',
-          statusColor: 'bg-amber-950/40 text-amber-400 border-amber-800/50',
-          dotColor: 'bg-amber-400',
-          owner: a.invitedBy || 'Project Owner',
-          lastUpdated: 'Recently assigned',
+          type: p.type || p.project_type || 'AML / CTF',
+          status: p.status || 'In Progress',
+          statusColor: p.status === 'Completed' || p.status === 'Active'
+            ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/50'
+            : 'bg-amber-950/40 text-amber-400 border-amber-800/50',
+          dotColor: p.status === 'Completed' || p.status === 'Active' ? 'bg-emerald-400' : 'bg-amber-400',
+          owner: p.owner || p.creator_name || 'Project Owner',
+          lastUpdated: p.updated_at
+            ? new Date(p.updated_at).toLocaleDateString('en-GB')
+            : p.created_at
+            ? new Date(p.created_at).toLocaleDateString('en-GB')
+            : 'Recently updated',
         }));
-      }
-
-      return [];
-    } catch (e) {
-      return [];
-    }
-  });
-
-  // Re-sync assignments whenever currentUser updates
-  useEffect(() => {
-    try {
-      const email = (currentUser?.email || userProfile?.email || '').toLowerCase();
-      const name = currentUser?.name || userProfile?.name || '';
-      const rawAssignments = localStorage.getItem('finreg_advisor_assignments');
-      const assignments = rawAssignments ? JSON.parse(rawAssignments) : [];
-
-      const myAssignments = assignments.filter((a) => {
-        const matchesEmail = email && a.advisorEmail && a.advisorEmail.toLowerCase() === email;
-        const matchesName = name && a.advisorName && a.advisorName.toLowerCase() === name.toLowerCase();
-        const matchesId = a.advisorId && (a.advisorId === currentUser?.id || a.advisorId === userProfile?.id);
-        return matchesEmail || matchesName || matchesId;
-      });
-
-      if (myAssignments.length > 0) {
-        setAssignedProjectsFullList(
-          myAssignments.map((a) => ({
-            id: a.projectId || 'PRJ-001',
-            name: a.project || a.projectName || 'Assigned Project',
-            company: a.company || 'Northbank Financial',
-            domain: a.role || currentExpertise?.domain || 'Regulatory Advisory',
-            nextAction: 'Review project requirements & provide compliance guidance',
-            type: a.projectType || 'AML / CTF',
-            status: 'In Progress',
-            statusColor: 'bg-amber-950/40 text-amber-400 border-amber-800/50',
-            dotColor: 'bg-amber-400',
-            owner: a.invitedBy || 'Project Owner',
-            lastUpdated: 'Recently assigned',
-          }))
-        );
+        setAssignedProjectsFullList(mapped);
       } else {
         setAssignedProjectsFullList([]);
       }
-    } catch (e) {}
-  }, [currentUser, userProfile, currentExpertise]);
+    } catch (err) {
+      console.warn('[AdvisorDashboardView] Failed to load assigned projects:', err);
+      setAssignedProjectsFullList([]);
+    } finally {
+      setIsLoadingProjects(false);
+    }
+  };
 
-  // Authoritative active project with safe fallback defaults
+  useEffect(() => {
+    fetchAssignedProjects();
+  }, [currentUser]);
+
+  // Authoritative active project based on selected project or first assigned
   const activeProject =
-    assignedProjectsFullList.find((p) => p.id === selectedProject) ||
-    assignedProjectsFullList[0] || {
-      id: 'PRJ-001',
-      name: 'Regulatory Compliance Framework',
-      company: 'Northbank Financial',
-      domain: currentExpertise?.cleanDomain || 'Financial Crime Compliance',
-      status: 'In Progress',
-      statusColor: 'bg-amber-950/40 text-amber-400 border-amber-800/50',
-      dotColor: 'bg-amber-400',
-      owner: 'Project Owner',
-      lastUpdated: 'Recently assigned',
-    };
+    assignedProjectsFullList.find((p) => String(p.id) === String(selectedProject)) ||
+    assignedProjectsFullList[0] ||
+    null;
 
   // Real Reviews List loaded live from PostgreSQL backend
   const [reviewsList, setReviewsList] = useState([]);
 
   const loadProjectAdviceList = async (pid) => {
+    if (!pid) {
+      setReviewsList([]);
+      return;
+    }
     try {
-      const live = await getProjectAdvice(pid || 1);
+      const live = await getProjectAdvice(pid);
       if (Array.isArray(live)) {
         const mapped = live.map((item) => ({
           id: `ADV-${item.advice_id}`,
@@ -269,15 +233,22 @@ export default function AdvisorDashboardView({
           expertise: currentExpertise.name,
         }));
         setReviewsList(mapped);
+      } else {
+        setReviewsList([]);
       }
     } catch (err) {
       console.warn('[AdvisorDashboardView] Failed to load advice:', err.message);
+      setReviewsList([]);
     }
   };
 
   useEffect(() => {
-    const pid = activeProject?.id || activeProject?.project_id || 1;
-    loadProjectAdviceList(pid);
+    const pid = activeProject?.id || activeProject?.project_id;
+    if (pid) {
+      loadProjectAdviceList(pid);
+    } else {
+      setReviewsList([]);
+    }
   }, [activeProject]);
 
   // Handle Advice Submission with live API persistence to PostgreSQL
@@ -289,7 +260,12 @@ export default function AdvisorDashboardView({
       return;
     }
 
-    const targetProjId = activeProject?.id || activeProject?.project_id || 1;
+    const targetProjId = activeProject?.id || activeProject?.project_id;
+    if (!targetProjId) {
+      showToast('No active project selected. Please select an assigned project before submitting advice.');
+      return;
+    }
+
     const reqTitle = selectedRequirement?.title || selectedRequirement?.requirement || 'Advisory Compliance Review';
     const title = reqTitle.length >= 3 ? reqTitle : `Review: ${reqTitle}`;
 
@@ -1039,12 +1015,12 @@ export default function AdvisorDashboardView({
                   </button>
 
                   <span className="text-xs font-mono text-slate-500 uppercase tracking-widest block mb-1">
-                    {activeProject?.id || 'PRJ-001'}
+                    {activeProject?.id ? `PRJ-${activeProject.id}` : ''}
                   </span>
 
                   <div className="flex items-center justify-between gap-4">
                     <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-                      {activeProject?.name || 'Regulatory Compliance Framework'}
+                      {activeProject?.name || 'Assigned Project'}
                     </h1>
                     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${activeProject?.statusColor || 'bg-amber-950/40 text-amber-400 border-amber-800/50'}`}>
                       <span className={`w-1.5 h-1.5 rounded-full ${activeProject?.dotColor || 'bg-amber-400'}`} />

@@ -1,4 +1,4 @@
-import { apiCall } from './api';
+import { apiCall, getToken } from './api';
 
 /**
  * Fetches all authorized user projects from live PostgreSQL backend.
@@ -142,4 +142,36 @@ export async function uploadProjectAttachment(projectId, file, category = 'ADVIS
   formData.append('category', category);
 
   return await apiCall(`/projects/${projectId}/attachments`, 'POST', formData);
+}
+
+/**
+ * Downloads a project attachment as an authenticated blob (DEF-FE-03)
+ */
+export async function downloadProjectAttachment(projectId, attachmentId, filename = 'document.pdf') {
+  const token = getToken();
+  const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
+  const response = await fetch(`${BASE_URL}/projects/${projectId}/attachments/${attachmentId}`, {
+    headers: {
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
+  });
+
+  if (!response.ok) {
+    let errMsg = `HTTP ${response.status}`;
+    try {
+      const errData = await response.json();
+      errMsg = errData.detail || errData.message || errMsg;
+    } catch (_) {}
+    throw new Error(`Failed to download attachment: ${errMsg}`);
+  }
+
+  const blob = await response.blob();
+  const blobUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = filename || 'document.pdf';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  window.URL.revokeObjectURL(blobUrl);
 }

@@ -9,6 +9,7 @@ import {
   getProjectWorkflowStep,
   getProjectAuditEvents,
   updateProjectStatus,
+  downloadProjectAttachment,
 } from '../services/projectService';
 import { getCurrentUser, logoutUser } from '../services/authService';
 import { getAdvisors, getEligibleAdvisors, selectProjectAdvisor, getProjectMembers } from '../services/advisorService';
@@ -296,6 +297,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   // Real Project Attachments (PDF uploads via backend /projects/{projectId}/attachments)
   const [projectAttachments, setProjectAttachments] = useState([]);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
+  const [downloadingDocId, setDownloadingDocId] = useState(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -342,6 +344,28 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
       setIsUploadingDoc(false);
       if (fileInputRef.current) fileInputRef.current.value = '';
       setTimeout(() => setToastMessage(null), 4000);
+    }
+  };
+
+  // FE-03: Authenticated PDF Attachment Download with Bearer Token
+  const handleDownloadAttachment = async (doc) => {
+    const pid = currentProject?.id || currentProject?.project_id;
+    const attId = doc?.attachment_id || doc?.id;
+    if (!pid || !attId) {
+      setToastMessage('Unable to download: project or attachment identifier missing.');
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+    setDownloadingDocId(attId);
+    try {
+      const filename = doc.original_filename || doc.name || 'document.pdf';
+      await downloadProjectAttachment(pid, attId, filename);
+      setToastMessage(`Downloaded "${filename}" successfully.`);
+    } catch (err) {
+      setToastMessage(`Download failed: ${err.message}`);
+    } finally {
+      setDownloadingDocId(null);
+      setTimeout(() => setToastMessage(null), 3500);
     }
   };
 
@@ -2268,15 +2292,15 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                               </span>
                             </div>
                           </div>
-                          <a
-                            href={`http://localhost:8000/api/v1/projects/${currentProject?.id || currentProject?.project_id || 1}/attachments/${doc.attachment_id}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-slate-400 hover:text-amber-300 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                          <button
+                            type="button"
+                            disabled={downloadingDocId === (doc.attachment_id || doc.id)}
+                            onClick={() => handleDownloadAttachment(doc)}
+                            className="text-slate-400 hover:text-amber-300 disabled:opacity-50 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
                           >
-                            <span>Download</span>
+                            <span>{downloadingDocId === (doc.attachment_id || doc.id) ? 'Downloading...' : 'Download'}</span>
                             <ArrowRight className="w-4 h-4" />
-                          </a>
+                          </button>
                         </div>
                       ))
                     ) : (

@@ -1,4 +1,4 @@
-import { apiCall, setToken, clearToken, getToken } from './api';
+import { apiCall, setToken, clearToken, getToken, clearApiCache } from './api';
 
 const CURRENT_USER_KEY = 'finreg_current_user';
 const LOCAL_ACCOUNTS_KEY = 'finreg_local_accounts';
@@ -279,6 +279,7 @@ export async function logoutUser() {
     await apiCall('/auth/logout', 'POST');
   } catch (e) {}
   clearToken();
+  clearApiCache();
   try {
     localStorage.removeItem(CURRENT_USER_KEY);
     localStorage.removeItem('currentUser');

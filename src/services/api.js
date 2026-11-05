@@ -1,10 +1,5 @@
 const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
 
-// Token Management Helpers
-export const getToken = () => localStorage.getItem('authToken');
-export const setToken = (token) => localStorage.setItem('authToken', token);
-export const clearToken = () => localStorage.removeItem('authToken');
-
 // In-flight request deduplication map for concurrent GET requests
 const inFlightGetRequests = new Map();
 
@@ -14,6 +9,15 @@ const CACHEABLE_GET_PREFIXES = ['/projects', '/advisors', '/admin/users', '/admi
 
 export const clearApiCache = () => {
   fastGetCache.clear();
+  inFlightGetRequests.clear();
+};
+
+// Token Management Helpers
+export const getToken = () => localStorage.getItem('authToken');
+export const setToken = (token) => localStorage.setItem('authToken', token);
+export const clearToken = () => {
+  localStorage.removeItem('authToken');
+  clearApiCache();
 };
 
 /**
