@@ -6,7 +6,7 @@ from app.db.base import Base, PK_BIGINT
 class Project(Base):
     __tablename__ = "projects"
     __table_args__ = (
-        CheckConstraint("status IN ('ACTIVE', 'ARCHIVED')", name="chk_projects_status"),
+        CheckConstraint("status IN ('ACTIVE', 'ARCHIVED', 'DISABLED')", name="chk_projects_status"),
         {"schema": "project_management"}
     )
 

@@ -38,7 +38,7 @@ class ConflictError(HTTPException):
 
 class ValidationError(HTTPException):
     def __init__(self, detail: str = "Invalid request payload"):
-        code = getattr(status, "HTTP_422_UNPROCESSABLE_CONTENT", status.HTTP_422_UNPROCESSABLE_ENTITY)
+        code = getattr(status, "HTTP_422_UNPROCESSABLE_CONTENT", 422)
         super().__init__(
             status_code=code,
             detail=detail

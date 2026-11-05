@@ -47,3 +47,8 @@ def test_advisor_invitation_lifecycle(client: TestClient, builder_auth_headers: 
     revoke_resp = client.post(f"/api/v1/projects/1/advisor-invitations/{invitation_id}/revoke", headers=builder_auth_headers)
     assert revoke_resp.status_code == 200
     assert revoke_resp.json()["invitation_status"] == "REVOKED"
+
+def test_advisor_me_invitations_alias(client: TestClient, advisor_auth_headers: dict):
+    response = client.get("/api/v1/advisors/me/invitations", headers=advisor_auth_headers)
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)

@@ -64,3 +64,9 @@ def test_outsider_cannot_access_project(client: TestClient, outsider_auth_header
     response = client.get("/api/v1/projects/1", headers=outsider_auth_headers)
     assert response.status_code == 403
     assert "not an active member" in response.json()["detail"].lower()
+
+def test_list_projects_status_filter_disabled(client: TestClient, builder_auth_headers: dict):
+    # Verify GET /api/v1/projects?status=DISABLED accepts DISABLED and returns 200 (BUG-03, BUG-04)
+    response = client.get("/api/v1/projects?status=DISABLED", headers=builder_auth_headers)
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)

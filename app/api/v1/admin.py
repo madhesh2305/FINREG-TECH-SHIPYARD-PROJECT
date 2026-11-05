@@ -370,7 +370,7 @@ def update_project_status(
         raise ValidationError("Project status must be ACTIVE, DISABLED, or ARCHIVED.")
 
     # Canonical status in PostgreSQL projects table (enforces chk_projects_status)
-    db_status = "ARCHIVED" if raw_status in ("DISABLED", "ARCHIVED") else "ACTIVE"
+    db_status = raw_status
     old_status = project.status
     project.status = db_status
     project.updated_at = datetime.now(timezone.utc)

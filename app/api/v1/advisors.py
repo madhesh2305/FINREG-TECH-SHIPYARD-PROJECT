@@ -9,7 +9,8 @@ from app.schemas.advisor import (
     AdvisorProfileResponse,
     AdvisorInvitationCreate,
     AdvisorInvitationResponse,
-    AdvisorSelectionRequest
+    AdvisorSelectionRequest,
+    AdvisorInboxInvitation
 )
 from app.security.authentication import get_current_user
 from app.security.authorization import require_project_member, require_project_owner
@@ -57,6 +58,20 @@ def get_advisors(
 ):
     advisors = list_advisors(db=db)
     return [_to_advisor_response(a) for a in advisors]
+
+@router.get(
+    "/advisors/me/invitations",
+    response_model=List[AdvisorInboxInvitation],
+    status_code=status.HTTP_200_OK,
+    summary="Get Current Advisor Inbox Invitations",
+    description="Returns all active and pending invitations addressed to the authenticated advisor (alias for /users/me/invitations, DEF-34)."
+)
+def get_advisor_me_invitations(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    from app.api.v1.users import get_my_invitations
+    return get_my_invitations(current_user=current_user, db=db)
 
 @router.get(
     "/advisors/{advisorId}",

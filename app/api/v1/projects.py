@@ -40,7 +40,7 @@ def get_summary(
     description="Lists only projects where the authenticated user has an active project membership. Cross-project data is filtered at database query level."
 )
 def get_projects(
-    status_filter: Optional[str] = Query(None, alias="status", pattern="^(ACTIVE|ARCHIVED)$"),
+    status_filter: Optional[str] = Query(None, alias="status", pattern="^(ACTIVE|ARCHIVED|DISABLED)$"),
     search: Optional[str] = Query(None, description="Search term for name or project code"),
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)

@@ -124,7 +124,10 @@ def list_user_projects(db: Session, user: User, status: Optional[str] = None, se
         query = db.query(Project).filter(Project.project_id.in_(db.query(combined_ids)))
 
     if status:
-        query = query.filter(Project.status == status)
+        if status == "DISABLED":
+            query = query.filter(Project.status.in_(["DISABLED", "ARCHIVED"]))
+        else:
+            query = query.filter(Project.status == status)
 
     if search:
         pattern = f"%{search}%"
