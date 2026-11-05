@@ -972,7 +972,7 @@ export default function AdvisorDashboardView({
                                 )}
                               </td>
                               <td className="px-5 py-4 text-slate-300 font-medium">
-                                {inv.inviting_builder || inv.invited_by_name || inv.created_by_email || 'Project Builder'}
+                                {inv.inviting_user || inv.inviting_builder || inv.invited_by_name || inv.created_by_email || 'Project Builder'}
                               </td>
                               <td className="px-5 py-4">
                                 <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-amber-400 font-mono text-[10px] uppercase font-bold">

@@ -72,36 +72,13 @@ export default function AiRagFindingsView({
   const targetJurisdiction = activeProject?.jurisdiction || 'United Kingdom - FCA';
   const targetRegulatoryArea = activeProject?.type || 'AML / CTF & MLR 2017';
 
-  // 1. Initial health check and automatic initial query run
+  // 1. Initial health check and load human reviews on mount (on-demand RAG execution)
   useEffect(() => {
     let isMounted = true;
     async function init() {
-      const health = await checkRAGHealth();
-      if (isMounted) setHealthStatus(health);
-
-      // Execute baseline default query demonstration
-      setIsQuerying(true);
       try {
-        const initialRes = await submitRegulatoryQuery({
-          project_id: useTenantScope ? targetProjectId : null,
-          query: queryInput,
-        });
-        if (isMounted) setQueryResult(initialRes);
-      } catch (err) {
-        if (isMounted) setQueryError(err.message);
-      } finally {
-        if (isMounted) setIsQuerying(false);
-      }
-
-      // Execute baseline comparison demonstration
-      try {
-        const initialCmp = await compareAdvisorPositions({
-          project_id: targetProjectId,
-          advisor_1_id: 'ADV-101',
-          advisor_2_id: 'ADV-102',
-          topic: compareTopic,
-        });
-        if (isMounted) setCompareResult(initialCmp);
+        const health = await checkRAGHealth();
+        if (isMounted) setHealthStatus(health);
       } catch (e) {}
 
       // Fetch pending human reviews (DEF-27)
@@ -117,7 +94,7 @@ export default function AiRagFindingsView({
     return () => {
       isMounted = false;
     };
-  }, [activeProject]);
+  }, [activeProject, targetProjectId]);
 
   const refreshHumanReviews = async () => {
     setIsLoadingReviews(true);
@@ -185,13 +162,11 @@ export default function AiRagFindingsView({
 
   // Run Advisor Comparison Handler
   const handleCompareSubmit = async () => {
+    if (isComparing) return;
     setIsComparing(true);
     try {
       const cmp = await compareAdvisorPositions({
         project_id: targetProjectId,
-        advisor_1_id: 'ADV-101',
-        advisor_2_id: 'ADV-102',
-        topic: compareTopic,
       });
       setCompareResult(cmp);
     } catch (err) {
@@ -271,7 +246,12 @@ export default function AiRagFindingsView({
 
           <button
             type="button"
-            onClick={() => setActiveTabMode('compare')}
+            onClick={() => {
+              setActiveTabMode('compare');
+              if (!compareResult && !isComparing) {
+                handleCompareSubmit();
+              }
+            }}
             className={`px-5 py-3 text-xs sm:text-sm font-bold flex items-center gap-2 border-b-2 transition-colors cursor-pointer ${
               activeTabMode === 'compare'
                 ? 'border-amber-500 text-amber-400 bg-amber-500/5'
@@ -426,8 +406,30 @@ export default function AiRagFindingsView({
             </div>
           )}
 
+          {/* QUERY IN PROGRESS LOADING */}
+          {isQuerying && (
+            <div className="rounded-2xl border border-slate-800/90 bg-[#161619] p-10 text-center shadow-xl space-y-3 animate-fadeIn">
+              <RefreshCw className="w-8 h-8 text-amber-400 animate-spin mx-auto" />
+              <h3 className="text-base font-bold text-white">Performing Semantic Regulatory Retrieval...</h3>
+              <p className="text-xs text-slate-400">
+                Searching statutory corpora, policy attachments, and calculating grounded relevance scores.
+              </p>
+            </div>
+          )}
+
+          {/* QUERY READY PROMPT */}
+          {!queryResult && !isQuerying && !queryError && (
+            <div className="rounded-2xl border border-slate-800/90 bg-[#161619] p-8 text-center shadow-xl space-y-3 animate-fadeIn">
+              <Sparkles className="w-8 h-8 text-amber-400 mx-auto opacity-80" />
+              <h3 className="text-base font-bold text-white">Grounded Regulatory Analysis Ready</h3>
+              <p className="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">
+                Enter your compliance question above and click <strong>Analyze with Grounded RAG</strong> to retrieve relevant statutory provisions, verify candidate evidence, and inspect citations.
+              </p>
+            </div>
+          )}
+
           {/* QUERY RESULTS WORKSPACE */}
-          {queryResult && (
+          {queryResult && !isQuerying && (
             <div className="space-y-6">
               {/* RESULT STATUS & METRICS ROW */}
               <div className="rounded-2xl border border-slate-800/90 bg-[#161619] p-6 shadow-xl space-y-5">
@@ -1242,8 +1244,30 @@ export default function AiRagFindingsView({
             </div>
           </div>
 
+          {/* COMPARISON LOADING */}
+          {isComparing && (
+            <div className="rounded-2xl border border-slate-800/90 bg-[#161619] p-10 text-center shadow-xl space-y-3 animate-fadeIn">
+              <RefreshCw className="w-8 h-8 text-amber-400 animate-spin mx-auto" />
+              <h3 className="text-base font-bold text-white">Comparing Advisor Positions...</h3>
+              <p className="text-xs text-slate-400">
+                Retrieving independent advisor opinions, detecting regulatory conflicts, and mapping statutory references.
+              </p>
+            </div>
+          )}
+
+          {/* COMPARISON PROMPT */}
+          {!compareResult && !isComparing && (
+            <div className="rounded-2xl border border-slate-800/90 bg-[#161619] p-8 text-center shadow-xl space-y-3 animate-fadeIn">
+              <GitCompare className="w-8 h-8 text-amber-400 mx-auto opacity-80" />
+              <h3 className="text-base font-bold text-white">Compare Advisor Recommendations</h3>
+              <p className="text-xs sm:text-sm text-slate-400 max-w-lg mx-auto">
+                Select a regulatory topic above and click <strong>Compare</strong> to perform side-by-side opinion analysis and conflict detection.
+              </p>
+            </div>
+          )}
+
           {/* COMPARISON RESULTS WORKSPACE */}
-          {compareResult && (
+          {compareResult && !isComparing && (
             <div className="space-y-6">
               {/* SIDE-BY-SIDE ADVISOR PANELS (Section 5) */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

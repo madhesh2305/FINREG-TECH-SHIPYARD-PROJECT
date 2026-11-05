@@ -41,10 +41,27 @@ export async function updateProject(projectId, updatePayload) {
 }
 
 /**
- * Updates project lifecycle status: PATCH /projects/{projectId}/status
+ * Updates project lifecycle status: PATCH /admin/projects/{projectId}/status (DEF-38)
  */
 export async function updateProjectStatus(projectId, status) {
-  return await apiCall(`/projects/${projectId}/status`, 'PATCH', { status: status.toUpperCase() });
+  return await apiCall(`/admin/projects/${projectId}/status`, 'PATCH', { 
+    status: status.toUpperCase(),
+    reason: 'Administrative oversight action',
+  });
+}
+
+/**
+ * Disables a project: POST /admin/projects/{projectId}/disable (DEF-38)
+ */
+export async function disableProject(projectId) {
+  return await apiCall(`/admin/projects/${projectId}/disable`, 'POST');
+}
+
+/**
+ * Re-activates an enabled project: POST /admin/projects/{projectId}/activate (DEF-38)
+ */
+export async function activateProject(projectId) {
+  return await apiCall(`/admin/projects/${projectId}/activate`, 'POST');
 }
 
 /**

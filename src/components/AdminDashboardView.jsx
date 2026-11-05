@@ -262,6 +262,18 @@ export default function AdminDashboardView({
     }
   };
 
+  // DEF-38: Handle Project Re-activation / Enabling
+  const handleConfirmActivateProject = async (project) => {
+    const pid = project.id || project.project_id;
+    try {
+      await updateProjectStatus(pid, 'ACTIVE');
+      showToast(`Project ${project.name || pid} has been re-activated.`);
+      await reloadProjects();
+    } catch (err) {
+      showToast(`Failed to activate project: ${err.message || 'API error'}`);
+    }
+  };
+
   const filteredUsers = users.filter((u) => {
     const matchesSearch =
       searchUserQuery.trim() === '' ||
@@ -1506,7 +1518,15 @@ export default function AdminDashboardView({
                               >
                                 View overview
                               </button>
-                              {proj.rawStatus !== 'DISABLED' && proj.status !== 'Disabled' ? (
+                              {proj.rawStatus === 'DISABLED' || proj.status === 'Disabled' ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleConfirmActivateProject(proj)}
+                                  className="px-3 py-1 rounded-md border border-emerald-800/80 bg-emerald-950/40 hover:bg-emerald-900/50 text-emerald-300 text-xs font-semibold cursor-pointer transition-colors"
+                                >
+                                  Enable Project
+                                </button>
+                              ) : (
                                 <button
                                   type="button"
                                   onClick={() => setDisablingProject(proj)}
@@ -1514,10 +1534,6 @@ export default function AdminDashboardView({
                                 >
                                   Disable Project
                                 </button>
-                              ) : (
-                                <span className="text-xs text-slate-500 font-medium">
-                                  Locked
-                                </span>
                               )}
                             </div>
                           </td>
