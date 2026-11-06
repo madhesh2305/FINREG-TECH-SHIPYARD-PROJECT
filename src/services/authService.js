@@ -76,7 +76,7 @@ const DEFAULT_LOCAL_ACCOUNTS = {
 /**
  * Retrieves standalone frontend registered accounts
  */
-function getLocalAccounts() {
+export function getLocalAccounts() {
   try {
     const raw = localStorage.getItem(LOCAL_ACCOUNTS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
@@ -89,7 +89,7 @@ function getLocalAccounts() {
 /**
  * Saves an account for standalone frontend authentication
  */
-function saveLocalAccount(email, password, user) {
+export function saveLocalAccount(email, password, user) {
   try {
     const accounts = getLocalAccounts();
     accounts[email.toLowerCase().trim()] = { password, user };
@@ -398,5 +398,10 @@ export async function logoutUser() {
 }
 
 export function getRegisteredUsers() {
-  return [];
+  try {
+    const accounts = getLocalAccounts();
+    return Object.values(accounts).map((acc) => acc.user).filter(Boolean);
+  } catch (e) {
+    return [];
+  }
 }

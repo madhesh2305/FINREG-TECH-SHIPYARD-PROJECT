@@ -106,26 +106,37 @@ export default function AdminDashboardView({
   const [deactivatingUser, setDeactivatingUser] = useState(null);
   const [showStatusRecordedBanner, setShowStatusRecordedBanner] = useState(false);
 
-  // Reload live users from PostgreSQL
+  // Reload live users from PostgreSQL and company-provisioned directory
   const reloadUsers = async () => {
     try {
       const list = await getAdminUsers();
       if (Array.isArray(list)) {
         setUsers(
-          list.map((u, idx) => ({
-            id: u.user_id ? `USR-${String(u.user_id).padStart(3, '0')}` : `USR-${String(idx + 1).padStart(3, '0')}`,
-            user_id: u.user_id,
-            name: u.full_name || 'User',
-            email: u.email || '',
-            role: u.platform_role ? u.platform_role.charAt(0).toUpperCase() + u.platform_role.slice(1).toLowerCase() : 'Builder',
-            status: u.is_active ? 'Active' : 'Inactive',
-            registered: u.created_at
-              ? new Date(u.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-              : 'Recently',
-            lastLogin: u.updated_at
-              ? new Date(u.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-              : 'Recently',
-          }))
+          list.map((u, idx) => {
+            const rawRole = (u.platform_role || u.role || 'BUILDER').toUpperCase();
+            const roleDisplay = rawRole.includes('ADMIN')
+              ? 'Admin'
+              : rawRole.includes('ADVISOR')
+              ? 'Advisor'
+              : 'Builder';
+            const isActive = u.is_active !== false && u.status !== 'Inactive';
+            return {
+              id: u.id || (u.user_id ? `USR-${String(u.user_id).padStart(3, '0')}` : `USR-${String(idx + 1).padStart(3, '0')}`),
+              user_id: u.user_id || u.id,
+              name: u.full_name || u.name || 'User',
+              email: u.email || '',
+              role: roleDisplay,
+              platform_role: rawRole,
+              status: isActive ? 'Active' : 'Inactive',
+              is_active: isActive,
+              registered: u.created_at
+                ? new Date(u.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                : 'Recently',
+              lastLogin: u.updated_at
+                ? new Date(u.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                : 'Recently',
+            };
+          })
         );
       }
     } catch (err) {
@@ -165,20 +176,27 @@ export default function AdminDashboardView({
     }
   };
 
-  // DEF-36: Deactivate User Enforcement
+  // DEF-36: Deactivate User Enforcement with self-deactivation protection
   const handleConfirmDeactivate = async (userId) => {
     const targetUser = deactivatingUser || users.find((u) => u.id === userId || u.user_id === userId);
     const rawId = targetUser?.user_id || targetUser?.id || userId;
 
+    if (currentUser && (targetUser?.email === currentUser.email || rawId === currentUser.user_id || rawId === currentUser.id)) {
+      showToast('Cannot deactivate your own administrator account');
+      setDeactivatingUser(null);
+      return;
+    }
+
     try {
-      await updateUserStatus(rawId, 'INACTIVE');
+      await updateUserStatus(rawId, 'INACTIVE', targetUser?.email);
       setUsers((prev) =>
         prev.map((u) => (u.id === userId || u.user_id === rawId ? { ...u, status: 'Inactive', is_active: false } : u))
       );
       setShowStatusRecordedBanner(true);
-      showToast('Account deactivated and active sessions revoked');
+      showToast(`Account deactivated for ${targetUser?.name || 'user'}`);
       setDeactivatingUser(null);
       await reloadUsers();
+      await fetchAdminAuditLogsData();
     } catch (err) {
       showToast(`Failed to deactivate user: ${err.message || 'API error'}`);
     }
@@ -191,8 +209,13 @@ export default function AdminDashboardView({
     const nextActive = targetUser.status !== 'Active';
     const nextStatus = nextActive ? 'Active' : 'Inactive';
 
+    if (!nextActive && currentUser && (targetUser?.email === currentUser.email || rawId === currentUser.user_id || rawId === currentUser.id)) {
+      showToast('Cannot deactivate your own administrator account');
+      return;
+    }
+
     try {
-      await updateUserStatus(rawId, nextActive ? 'ACTIVE' : 'INACTIVE');
+      await updateUserStatus(rawId, nextActive ? 'ACTIVE' : 'INACTIVE', targetUser.email);
       setUsers((prev) =>
         prev.map((u) => {
           if (u.id === userId || u.user_id === rawId) {
@@ -204,6 +227,7 @@ export default function AdminDashboardView({
       setShowStatusRecordedBanner(true);
       showToast(`Account status updated to ${nextStatus} for ${targetUser.name}`);
       await reloadUsers();
+      await fetchAdminAuditLogsData();
     } catch (err) {
       showToast(`Failed to update status: ${err.message || 'API error'}`);
     }
@@ -217,10 +241,11 @@ export default function AdminDashboardView({
     setIsSubmittingProvision(true);
     try {
       await provisionAdmin(provisionForm);
-      showToast('Administrator account provisioned successfully');
+      showToast(`Administrator account provisioned successfully for ${provisionForm.full_name || provisionForm.email}`);
       setIsProvisionAdminModalOpen(false);
       setProvisionForm({ email: '', full_name: '', password: '' });
       await reloadUsers();
+      await fetchAdminAuditLogsData();
     } catch (err) {
       showToast(`Provisioning failed: ${err.message || 'API error'}`);
     } finally {
@@ -234,10 +259,11 @@ export default function AdminDashboardView({
     setIsSubmittingRoleChange(true);
     const uid = changingRoleUser.user_id || changingRoleUser.id;
     try {
-      await updateUserRole(uid, selectedNewRole);
+      await updateUserRole(uid, selectedNewRole, changingRoleUser.email);
       showToast(`Role updated to ${selectedNewRole} for ${changingRoleUser.name}`);
       setChangingRoleUser(null);
       await reloadUsers();
+      await fetchAdminAuditLogsData();
     } catch (err) {
       showToast(`Failed to update role: ${err.message || 'API error'}`);
     } finally {
@@ -277,14 +303,20 @@ export default function AdminDashboardView({
   const filteredUsers = users.filter((u) => {
     const matchesSearch =
       searchUserQuery.trim() === '' ||
-      u.name.toLowerCase().includes(searchUserQuery.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchUserQuery.toLowerCase());
+      (u.name || '').toLowerCase().includes(searchUserQuery.toLowerCase()) ||
+      (u.email || '').toLowerCase().includes(searchUserQuery.toLowerCase());
 
+    const rUpper = (u.role || u.platform_role || '').toUpperCase();
     const matchesRole =
-      selectedRoleFilter === 'All roles' || u.role.toLowerCase() === selectedRoleFilter.toLowerCase();
+      selectedRoleFilter === 'All roles' ||
+      (selectedRoleFilter === 'Builder' && rUpper.includes('BUILDER')) ||
+      (selectedRoleFilter === 'Advisor' && rUpper.includes('ADVISOR')) ||
+      (selectedRoleFilter === 'Admin' && rUpper.includes('ADMIN'));
 
     const matchesStatus =
-      selectedStatusFilter === 'All statuses' || u.status.toLowerCase() === selectedStatusFilter.toLowerCase();
+      selectedStatusFilter === 'All statuses' ||
+      (selectedStatusFilter === 'Active' && (u.status === 'Active' || u.is_active === true)) ||
+      (selectedStatusFilter === 'Inactive' && (u.status === 'Inactive' || u.is_active === false));
 
     return matchesSearch && matchesRole && matchesStatus;
   });
@@ -515,23 +547,34 @@ export default function AdminDashboardView({
 
         if (usersData.status === 'fulfilled' && Array.isArray(usersData.value)) {
           setUsers(
-            usersData.value.map((u, idx) => ({
-              id: u.user_id ? `USR-${String(u.user_id).padStart(3, '0')}` : `USR-${String(idx + 1).padStart(3, '0')}`,
-              user_id: u.user_id,
-              name: u.full_name || 'User',
-              email: u.email || '',
-              role: u.platform_role ? u.platform_role.charAt(0).toUpperCase() + u.platform_role.slice(1).toLowerCase() : 'Builder',
-              status: u.is_active ? 'Active' : 'Inactive',
-              registered: u.created_at
-                ? new Date(u.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                : 'Recently',
-              lastLogin: u.updated_at
-                ? new Date(u.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
-                : 'Recently',
-            }))
+            usersData.value.map((u, idx) => {
+              const rawRole = (u.platform_role || u.role || 'BUILDER').toUpperCase();
+              const roleDisplay = rawRole.includes('ADMIN')
+                ? 'Admin'
+                : rawRole.includes('ADVISOR')
+                ? 'Advisor'
+                : 'Builder';
+              const isActive = u.is_active !== false && u.status !== 'Inactive';
+              return {
+                id: u.id || (u.user_id ? `USR-${String(u.user_id).padStart(3, '0')}` : `USR-${String(idx + 1).padStart(3, '0')}`),
+                user_id: u.user_id || u.id,
+                name: u.full_name || u.name || 'User',
+                email: u.email || '',
+                role: roleDisplay,
+                platform_role: rawRole,
+                status: isActive ? 'Active' : 'Inactive',
+                is_active: isActive,
+                registered: u.created_at
+                  ? new Date(u.created_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                  : 'Recently',
+                lastLogin: u.updated_at
+                  ? new Date(u.updated_at).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })
+                  : 'Recently',
+              };
+            })
           );
-        } else if (usersData.status === 'rejected') {
-          setUsers([]);
+        } else {
+          await reloadUsers();
         }
 
         if (projectsData.status === 'fulfilled' && Array.isArray(projectsData.value)) {
@@ -1156,6 +1199,39 @@ export default function AdminDashboardView({
                 </p>
               </div>
 
+              {/* Role Quick Selector Filter Tabs for Role & Admin Management */}
+              <div className="flex flex-wrap items-center gap-2">
+                {[
+                  { label: 'All Users', role: 'All roles', count: users.length },
+                  { label: 'Administrators', role: 'Admin', count: users.filter((u) => (u.role || u.platform_role || '').toUpperCase().includes('ADMIN')).length },
+                  { label: 'Compliance Advisors', role: 'Advisor', count: users.filter((u) => (u.role || u.platform_role || '').toUpperCase().includes('ADVISOR')).length },
+                  { label: 'Builders', role: 'Builder', count: users.filter((u) => (u.role || u.platform_role || '').toUpperCase().includes('BUILDER')).length },
+                ].map((tab) => {
+                  const isSelected = selectedRoleFilter === tab.role;
+                  return (
+                    <button
+                      key={tab.role}
+                      type="button"
+                      onClick={() => setSelectedRoleFilter(tab.role)}
+                      className={`px-3.5 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all flex items-center gap-2 ${
+                        isSelected
+                          ? 'bg-[#e6a13d] text-slate-950 shadow-md font-bold'
+                          : 'bg-[#16181d] text-slate-400 hover:text-white border border-slate-800 hover:border-slate-700'
+                      }`}
+                    >
+                      <span>{tab.label}</span>
+                      <span
+                        className={`text-[10px] px-1.5 py-0.5 rounded-full ${
+                          isSelected ? 'bg-slate-950/20 text-slate-900 font-extrabold' : 'bg-slate-800 text-slate-400'
+                        }`}
+                      >
+                        {tab.count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* Search & Filter Bar matching Image 1 */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
                 <div className="relative flex-1">
@@ -1328,16 +1404,31 @@ export default function AdminDashboardView({
           {activeTab === 'Roles & Permissions' && (
             <div className="space-y-6 animate-fadeIn text-left">
               {/* Header Titles matching Image 1 */}
-              <div>
-                <span className="text-[11px] font-mono font-bold tracking-widest text-slate-500 uppercase block mb-1">
-                  LEAST-PRIVILEGE ACCESS
-                </span>
-                <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-                  Roles &amp; Permissions
-                </h1>
-                <p className="text-xs sm:text-sm text-slate-400 mt-2 font-normal leading-relaxed max-w-4xl">
-                  Platform roles are centrally assigned and administrative changes are audited.
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+                <div>
+                  <span className="text-[11px] font-mono font-bold tracking-widest text-slate-500 uppercase block mb-1">
+                    LEAST-PRIVILEGE ACCESS
+                  </span>
+                  <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
+                    Roles &amp; Permissions
+                  </h1>
+                  <p className="text-xs sm:text-sm text-slate-400 mt-2 font-normal leading-relaxed max-w-4xl">
+                    Platform roles are centrally assigned and administrative changes are audited.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRoleFilter('Admin');
+                    setActiveTab('User Management');
+                    setIsProvisionAdminModalOpen(true);
+                  }}
+                  className="px-4 py-2.5 rounded-md bg-[#e6a13d] hover:bg-[#d8932f] text-slate-950 font-bold text-xs sm:text-sm flex items-center justify-center gap-2 cursor-pointer transition-colors shadow-md whitespace-nowrap shrink-0 self-start sm:self-auto"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Provision Administrator</span>
+                </button>
               </div>
 
               {/* Roles Table Card matching Image 1 */}
@@ -1350,48 +1441,76 @@ export default function AdminDashboardView({
                         <th className="py-3 px-4">PERMITTED ACTIONS</th>
                         <th className="py-3 px-4">ACCESS BOUNDARY</th>
                         <th className="py-3 px-4">STATUS</th>
+                        <th className="py-3 px-4 text-right">ADMINISTRATION</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/60 font-medium">
                       {rolesList.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="py-8 text-center text-slate-500 text-sm">
+                          <td colSpan={5} className="py-8 text-center text-slate-500 text-sm">
                             No role definitions configured yet. Configured platform roles and permission boundaries will appear here.
                           </td>
                         </tr>
                       ) : (
-                        rolesList.map((role) => (
-                          <tr key={role.id || role.name} className="hover:bg-slate-800/20 transition-colors">
-                            <td className="py-4 px-4 font-bold text-white text-sm">
-                              {role.name}
-                            </td>
-                            <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                              {Array.isArray(role.permittedActions) ? (
-                                <div className="flex flex-wrap gap-1.5">
-                                  {role.permittedActions.map((act, i) => (
-                                    <span
-                                      key={i}
-                                      className="px-2 py-0.5 rounded bg-slate-800 text-amber-300 border border-slate-700 font-mono text-[11px]"
-                                    >
-                                      {act}
-                                    </span>
-                                  ))}
-                                </div>
-                              ) : (
-                                <span>{role.permittedActions}</span>
-                              )}
-                            </td>
-                            <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
-                              {role.accessBoundary}
-                            </td>
-                            <td className="py-4 px-4">
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#12281b] border border-emerald-800/50 text-emerald-400">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                                <span>{role.status || 'Active definition'}</span>
-                              </span>
-                            </td>
-                          </tr>
-                        ))
+                        rolesList.map((role) => {
+                          const isAdm = (role.name || '').toLowerCase().includes('admin');
+                          const isAdv = (role.name || '').toLowerCase().includes('advisor');
+                          const targetRoleFilter = isAdm ? 'Admin' : isAdv ? 'Advisor' : 'Builder';
+                          const userCount = users.filter((u) => {
+                            const r = (u.role || u.platform_role || '').toUpperCase();
+                            if (isAdm) return r.includes('ADMIN');
+                            if (isAdv) return r.includes('ADVISOR');
+                            return r.includes('BUILDER');
+                          }).length;
+
+                          return (
+                            <tr key={role.id || role.name} className="hover:bg-slate-800/20 transition-colors">
+                              <td className="py-4 px-4 font-bold text-white text-sm">
+                                <div>{role.name}</div>
+                                <span className="text-[11px] text-slate-500 font-mono font-normal">
+                                  {userCount} user{userCount !== 1 ? 's' : ''} assigned
+                                </span>
+                              </td>
+                              <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
+                                {Array.isArray(role.permittedActions) ? (
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {role.permittedActions.map((act, i) => (
+                                      <span
+                                        key={i}
+                                        className="px-2 py-0.5 rounded bg-slate-800 text-amber-300 border border-slate-700 font-mono text-[11px]"
+                                      >
+                                        {act}
+                                      </span>
+                                    ))}
+                                  </div>
+                                ) : (
+                                  <span>{role.permittedActions}</span>
+                                )}
+                              </td>
+                              <td className="py-4 px-4 text-slate-300 font-medium text-xs sm:text-sm">
+                                {role.accessBoundary}
+                              </td>
+                              <td className="py-4 px-4">
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-[#12281b] border border-emerald-800/50 text-emerald-400">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                                  <span>{role.status || 'Active definition'}</span>
+                                </span>
+                              </td>
+                              <td className="py-4 px-4 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSelectedRoleFilter(targetRoleFilter);
+                                    setActiveTab('User Management');
+                                  }}
+                                  className="px-3 py-1.5 rounded-lg border border-slate-700 bg-[#16181d] hover:bg-slate-800 hover:border-amber-500/50 text-amber-400 text-xs font-semibold cursor-pointer transition-colors whitespace-nowrap"
+                                >
+                                  Manage {isAdm ? 'Admins' : isAdv ? 'Advisors' : 'Builders'} ({userCount}) →
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
