@@ -372,30 +372,41 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   // DEF-28 & DEF-33: Handle New Project Creation via POST /projects
   const handleCreateProjectSubmit = async (e) => {
     if (e) e.preventDefault();
-    if (!newProjectName || !newProjectType || isSubmittingCreateProject) return;
+    if (!newProjectName.trim() || !newProjectType || isSubmittingCreateProject) return;
 
     setIsSubmittingCreateProject(true);
     const creatorName = currentUser?.name || 'Project Owner';
     const creatorEmail = (currentUser?.email || '').toLowerCase();
 
     const payload = {
-      name: newProjectName,
+      name: newProjectName.trim(),
+      project_name: newProjectName.trim(),
       type: newProjectType,
-      description: newProjectDescription || 'Newly created regulatory project.',
-      jurisdiction: newProjectJurisdiction || 'United Kingdom - FCA',
+      regulatory_scope: newProjectType,
+      description: newProjectDescription.trim() || 'Newly created regulatory project.',
+      jurisdiction: newProjectJurisdiction.trim() || 'United Kingdom - FCA',
       owner: creatorName,
+      owner_name: creatorName,
       ownerEmail: creatorEmail,
+      assigned_advisor: selectedAdvisorForProject
+        ? selectedAdvisorForProject.full_name || selectedAdvisorForProject.name || 'Compliance Specialist'
+        : null,
     };
 
     try {
       const createdProject = await createProject(payload);
 
       // DEF-33: Assign selected advisor if specified
-      if (selectedAdvisorForProject && createdProject?.id) {
+      if (selectedAdvisorForProject && (createdProject?.id || createdProject?.project_id)) {
+        const projId = createdProject.id || createdProject.project_id;
         try {
           const advId = selectedAdvisorForProject.id || selectedAdvisorForProject.advisor_id || selectedAdvisorForProject.user_id;
-          await selectProjectAdvisor(createdProject.id, {
+          const advEmail = selectedAdvisorForProject.email || selectedAdvisorForProject.contact_email;
+          await selectProjectAdvisor(projId, {
             advisor_id: advId,
+            user_id: advId,
+            advisor_email: advEmail,
+            email: advEmail,
             access_level: 'REGULATORY',
           });
         } catch (advErr) {
@@ -403,7 +414,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
         }
       }
 
-      // DEF-28: Immediately re-fetch live projects from PostgreSQL
+      // DEF-28: Immediately re-fetch live projects from PostgreSQL / local vault
       const liveProjects = await getProjects();
       setAllProjects(Array.isArray(liveProjects) ? liveProjects : []);
 
@@ -428,16 +439,24 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   };
 
 
-  // Filtered projects computation
+  // Filtered projects computation with safe string normalization
   const filteredProjects = allProjects.filter((project) => {
+    const projName = String(project.name || project.project_name || '').toLowerCase();
+    const projType = String(project.type || '').toLowerCase();
+    const projId = String(project.id || project.project_id || '').toLowerCase();
+    const projOwner = String(project.owner || project.owner_name || '').toLowerCase();
+    const q = (searchQuery || '').toLowerCase();
+
     const matchesSearch =
-      project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      project.owner.toLowerCase().includes(searchQuery.toLowerCase());
+      projName.includes(q) ||
+      projType.includes(q) ||
+      projId.includes(q) ||
+      projOwner.includes(q);
 
     const matchesStatus =
-      statusFilter === 'All Statuses' || project.status === statusFilter;
+      statusFilter === 'All Statuses' ||
+      project.status === statusFilter ||
+      (statusFilter === 'In Progress' && (project.status === 'ACTIVE' || project.status === 'Active'));
 
     const matchesType =
       typeFilter === 'All Types' || project.type === typeFilter;
@@ -1397,16 +1416,16 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                                 {project.type}
                               </td>
                               <td className="py-4 px-5">
-                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold border ${project.statusColor}`}>
-                                  <span className={`w-1.5 h-1.5 rounded-full ${project.dotColor}`} />
-                                  {project.status}
+                                <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold border ${project.statusColor || 'bg-amber-950/40 text-amber-400 border-amber-800/50'}`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${project.dotColor || 'bg-amber-400'}`} />
+                                  {project.status || 'In Progress'}
                                 </span>
                               </td>
                               <td className="py-4 px-5 text-slate-600 dark:text-slate-300">
-                                {project.lastUpdated}
+                                {project.lastUpdated || 'Recently'}
                               </td>
                               <td className="py-4 px-5 font-medium text-slate-700 dark:text-slate-200">
-                                {project.owner}
+                                {project.owner || 'Project Owner'}
                               </td>
                               <td className="py-4 px-5 text-right">
                                 <button
@@ -1459,15 +1478,15 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                       >
                         <div className="flex items-center justify-between mb-3">
                           <span className="font-mono text-xs font-bold text-slate-500 dark:text-slate-300">{project.id}</span>
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-bold border ${project.statusColor}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${project.dotColor}`} />
-                            {project.status}
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded text-[11px] font-bold border ${project.statusColor || 'bg-amber-950/40 text-amber-400 border-amber-800/50'}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${project.dotColor || 'bg-amber-400'}`} />
+                            {project.status || 'In Progress'}
                           </span>
                         </div>
                         <h3 className="font-bold text-base text-slate-900 dark:text-slate-100 mb-1">{project.name}</h3>
                         <p className="text-xs text-slate-500 dark:text-slate-300 mb-4">{project.type}</p>
                         <div className="flex items-center justify-between pt-3 border-t border-slate-200 dark:border-slate-800 text-xs">
-                          <span className="text-slate-500 dark:text-slate-300 font-medium">{project.owner}</span>
+                          <span className="text-slate-500 dark:text-slate-300 font-medium">{project.owner || 'Project Owner'}</span>
                           <button
                             type="button"
                             onClick={(e) => {

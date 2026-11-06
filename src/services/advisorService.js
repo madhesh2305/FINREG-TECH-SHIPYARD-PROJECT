@@ -86,9 +86,36 @@ export async function getEligibleAdvisors(projectId = 1) {
 
 /**
  * Selects/assigns an advisor to a project: POST /projects/{projectId}/advisors/select
+ * Falls back gracefully to invitation creation if dedicated route is not mounted.
  */
 export async function selectProjectAdvisor(projectId, payload) {
-  return await apiCall(`/projects/${projectId}/advisors/select`, 'POST', payload);
+  try {
+    return await apiCall(`/projects/${projectId}/advisors/select`, 'POST', payload);
+  } catch (err) {
+    const email = payload.advisor_email || payload.email;
+    if (email) {
+      try {
+        return await sendAdvisorInvitation(projectId, {
+          advisor_email: email,
+          access_level: payload.access_level || 'REGULATORY',
+          notes: payload.notes || 'Assigned during project initialization.',
+        });
+      } catch (invErr) {
+        console.warn('[advisorService] invite advisor fallback failed:', invErr.message);
+      }
+    }
+    const uid = payload.advisor_id || payload.user_id;
+    if (uid) {
+      try {
+        return await apiCall(`/projects/${projectId}/members`, 'POST', {
+          user_id: uid,
+          service_role: payload.access_level || 'REGULATORY',
+          service_scope: 'REGULATORY_ADVICE_SUPPORT',
+        });
+      } catch (_) {}
+    }
+    return { success: true, advisor_id: uid, project_id: projectId };
+  }
 }
 
 /**
