@@ -156,15 +156,17 @@ export default function LoginForm({ isDarkMode = true }) {
       const effectiveRole = (user.platform_role || user.role || desiredRole).toUpperCase();
       if (effectiveRole.includes('ADVISOR')) {
         setUserRole('ADVISOR');
+        setLoginError('');
+        setStep('advisor-expertise');
       } else if (effectiveRole.includes('ADMIN')) {
         setUserRole('ADMIN');
+        setLoginError('');
+        setStep('dashboard');
       } else {
         setUserRole('BUILDER');
+        setLoginError('');
+        setStep('dashboard');
       }
-
-      // DEF-02: Ensure login errors are completely cleared on successful authentication
-      setLoginError('');
-      setStep('dashboard');
     } catch (err) {
       setLoginError(err.message || 'Invalid email or password. Please verify your credentials or sign up.');
     } finally {
@@ -209,14 +211,23 @@ export default function LoginForm({ isDarkMode = true }) {
       setSignupOrg('');
       setSignupRole('Builder');
 
-      const effectiveRole = (res.user.platform_role || res.user.role || '').toUpperCase();
-      if (effectiveRole.includes('ADVISOR')) setUserRole('ADVISOR');
-      else if (effectiveRole.includes('ADMIN')) setUserRole('ADMIN');
-      else setUserRole('BUILDER');
-
-      setTimeout(() => {
-        setStep('dashboard');
-      }, 1200);
+      const effectiveRole = (res.user.platform_role || res.user.role || signupRole || '').toUpperCase();
+      if (effectiveRole.includes('ADVISOR')) {
+        setUserRole('ADVISOR');
+        setTimeout(() => {
+          setStep('advisor-expertise');
+        }, 1200);
+      } else if (effectiveRole.includes('ADMIN')) {
+        setUserRole('ADMIN');
+        setTimeout(() => {
+          setStep('dashboard');
+        }, 1200);
+      } else {
+        setUserRole('BUILDER');
+        setTimeout(() => {
+          setStep('dashboard');
+        }, 1200);
+      }
     } catch (err) {
       // DEF-13: Report success only after confirmed record; show error when saving fails
       setSignupError(err.message || 'Failed to register account. Please check your details and retry.');
@@ -248,11 +259,15 @@ export default function LoginForm({ isDarkMode = true }) {
     }
   };
 
-  // Auto-advance from 'verifying' (Credentials Verified) after 4 seconds
+  // Auto-advance from 'verifying' (Credentials Verified) after 1.2 seconds
   useEffect(() => {
     if (step === 'verifying') {
       const timer = setTimeout(() => {
-        setStep('dashboard');
+        if (userRole === 'ADVISOR') {
+          setStep('advisor-expertise');
+        } else {
+          setStep('dashboard');
+        }
       }, 1200);
       return () => clearTimeout(timer);
     }
@@ -280,12 +295,14 @@ export default function LoginForm({ isDarkMode = true }) {
     );
   }
 
-  // STEP 4.5: ADVISOR EXPERTISE CONFIGURATION (media_1791949806618_d36c812d.png & media_1791949816973_0a1a9589.png)
+  // STEP 4.5: ADVISOR EXPERTISE CONFIGURATION (media_1793976544662_719bd4c5.png & media_1793976670380_f03e0032.png)
   if (step === 'advisor-expertise') {
     return (
       <AdvisorExpertiseView
         isDarkMode={isDarkMode}
-        initialSelectedId={activeExpertise ? activeExpertise.id : 'legal-partner'}
+        currentUser={currentUser}
+        initialSelectedId={activeExpertise ? activeExpertise.id : null}
+        onBackToLogin={() => setStep('login')}
         onSelectExpertise={(profile) => {
           setActiveExpertise(profile);
           setStep('dashboard');
@@ -918,7 +935,11 @@ export default function LoginForm({ isDarkMode = true }) {
               isDarkMode={isDarkMode}
               userRole={userRole}
               onProceed={() => {
-                setStep('dashboard');
+                if (userRole === 'ADVISOR') {
+                  setStep('advisor-expertise');
+                } else {
+                  setStep('dashboard');
+                }
               }}
             />
           )}
