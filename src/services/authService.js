@@ -3,6 +3,21 @@ import { apiCall, setToken, clearToken, getToken, clearApiCache } from './api';
 const CURRENT_USER_KEY = 'finreg_current_user';
 const LOCAL_ACCOUNTS_KEY = 'finreg_local_accounts';
 
+export function normalizeRole(r) {
+  if (!r) return 'BUILDER';
+  const s = String(r).toUpperCase();
+  if (s.includes('ADVISOR')) return 'ADVISOR';
+  if (s.includes('ADMIN')) return 'ADMIN';
+  return 'BUILDER';
+}
+
+export function getRoleLabel(role) {
+  const norm = normalizeRole(role);
+  if (norm === 'ADVISOR') return 'an Advisor';
+  if (norm === 'ADMIN') return 'an Administrator';
+  return 'a Builder / Project Owner';
+}
+
 /**
  * Retrieves standalone frontend registered accounts
  */
@@ -136,6 +151,18 @@ export async function loginUser(email, password, roleHint = 'BUILDER') {
   }
 
   if (data && data.access_token) {
+    const rawRole = data.platform_role || 'BUILDER';
+    const accountRole = normalizeRole(rawRole);
+    const requestedRole = normalizeRole(roleHint);
+
+    // Strictly enforce role integrity: user can only log in as their registered role
+    if (roleHint && accountRole !== requestedRole) {
+      clearToken();
+      throw new Error(
+        `Access denied: This account is registered as ${getRoleLabel(accountRole)} and cannot sign in as ${getRoleLabel(requestedRole)}. Please select the ${getRoleLabel(accountRole).replace(/^(a|an)\s+/i, '')} role to sign in.`
+      );
+    }
+
     const token = data.access_token;
     setToken(token);
 
@@ -145,8 +172,8 @@ export async function loginUser(email, password, roleHint = 'BUILDER') {
       name: data.full_name || cleanEmail.split('@')[0],
       full_name: data.full_name || cleanEmail.split('@')[0],
       email: data.email || cleanEmail,
-      role: data.platform_role || 'BUILDER',
-      platform_role: data.platform_role || 'BUILDER',
+      role: accountRole,
+      platform_role: accountRole,
     };
 
     saveLocalAccount(cleanEmail, cleanPassword, user);
@@ -165,30 +192,49 @@ export async function loginUser(email, password, roleHint = 'BUILDER') {
     if (localAcc.user && (localAcc.user.is_active === false || localAcc.user.status === 'Inactive')) {
       throw new Error('Your account has been deactivated. Please contact your administrator.');
     }
+
+    // Strictly enforce role integrity for saved account
+    const accountRole = normalizeRole(localAcc.user.role || localAcc.user.platform_role || '');
+    const requestedRole = normalizeRole(roleHint);
+
+    if (roleHint && accountRole !== requestedRole) {
+      throw new Error(
+        `Access denied: This account is registered as ${getRoleLabel(accountRole)} and cannot sign in as ${getRoleLabel(requestedRole)}. Please select the ${getRoleLabel(accountRole).replace(/^(a|an)\s+/i, '')} role to sign in.`
+      );
+    }
+
     const token = `session_token_${Date.now()}`;
     setToken(token);
     const user = {
       ...localAcc.user,
-      role: localAcc.user.role || localAcc.user.platform_role || roleHint,
-      platform_role: localAcc.user.platform_role || localAcc.user.role || roleHint,
+      role: accountRole,
+      platform_role: accountRole,
     };
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
     return { access_token: token, token_type: 'bearer', user };
   }
 
   // Auto-provision demo account for standalone frontend testing
-  let inferredRole = roleHint || 'BUILDER';
-  if (cleanEmail.includes('admin')) inferredRole = 'ADMIN';
-  else if (cleanEmail.includes('advisor') || cleanEmail.includes('vance') || cleanEmail.includes('reid')) inferredRole = 'ADVISOR';
+  let designatedRole = null;
+  if (cleanEmail.includes('admin')) designatedRole = 'ADMIN';
+  else if (cleanEmail.includes('advisor') || cleanEmail.includes('vance') || cleanEmail.includes('reid')) designatedRole = 'ADVISOR';
 
+  const requestedRole = normalizeRole(roleHint);
+  if (designatedRole && designatedRole !== requestedRole) {
+    throw new Error(
+      `Access denied: This account is designated as ${getRoleLabel(designatedRole)} and cannot sign in as ${getRoleLabel(requestedRole)}. Please select the ${getRoleLabel(designatedRole).replace(/^(a|an)\s+/i, '')} role to sign in.`
+    );
+  }
+
+  const finalRole = designatedRole || requestedRole;
   const standaloneUser = {
     id: `usr_${Date.now()}`,
     user_id: Date.now(),
     name: cleanEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
     full_name: cleanEmail.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()),
     email: cleanEmail,
-    role: inferredRole,
-    platform_role: inferredRole,
+    role: finalRole,
+    platform_role: finalRole,
     organization: 'FinRegTech Platform',
   };
 

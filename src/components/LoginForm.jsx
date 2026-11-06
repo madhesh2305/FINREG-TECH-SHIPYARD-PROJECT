@@ -104,6 +104,15 @@ export default function LoginForm({ isDarkMode = true }) {
         throw new Error('Your account has been deactivated. Please contact your administrator.');
       }
 
+      const regRole = (user.platform_role || user.role || '').toUpperCase();
+      if (!regRole.includes('ADMIN')) {
+        throw new Error(
+          `Access denied: This account is registered as ${
+            regRole.includes('ADVISOR') ? 'an Advisor' : 'a Builder / Project Owner'
+          } and cannot sign in as Administrator.`
+        );
+      }
+
       user.role = 'ADMIN';
       user.platform_role = 'ADMIN';
 
@@ -147,24 +156,48 @@ export default function LoginForm({ isDarkMode = true }) {
         throw new Error('Your account has been deactivated. Please contact your administrator.');
       }
 
-            const authoritativeRole = (user.platform_role || user.role || desiredRole).toUpperCase();
+      const registeredRole = (user.platform_role || user.role || '').toUpperCase();
+      const isAdvisor = registeredRole.includes('ADVISOR');
+      const isAdmin = registeredRole.includes('ADMIN');
+      const isBuilder = !isAdvisor && !isAdmin;
+
+      if (desiredRole === 'BUILDER' && !isBuilder) {
+        throw new Error(
+          `Access denied: This account is registered as ${
+            isAdvisor ? 'an Advisor' : 'an Administrator'
+          } and cannot sign in as Builder / Project Owner. Please switch your selected role to ${
+            isAdvisor ? 'Advisor' : 'Administrator'
+          }.`
+        );
+      }
+      if (desiredRole === 'ADVISOR' && !isAdvisor) {
+        throw new Error(
+          `Access denied: This account is registered as ${
+            isAdmin ? 'an Administrator' : 'a Builder / Project Owner'
+          } and cannot sign in as Advisor. Please switch your selected role to ${
+            isAdmin ? 'Administrator' : 'Builder / Project Owner'
+          }.`
+        );
+      }
+      if (desiredRole === 'ADMIN' && !isAdmin) {
+        throw new Error(
+          `Access denied: This account is registered as ${
+            isAdvisor ? 'an Advisor' : 'a Builder / Project Owner'
+          } and cannot sign in as Administrator.`
+        );
+      }
+
+      const authoritativeRole = isAdvisor ? 'ADVISOR' : isAdmin ? 'ADMIN' : 'BUILDER';
       user.role = authoritativeRole;
       user.platform_role = authoritativeRole;
 
       setCurrentUser(user);
+      setUserRole(authoritativeRole);
+      setLoginError('');
 
-      const effectiveRole = (user.platform_role || user.role || desiredRole).toUpperCase();
-      if (effectiveRole.includes('ADVISOR')) {
-        setUserRole('ADVISOR');
-        setLoginError('');
+      if (authoritativeRole === 'ADVISOR') {
         setStep('advisor-expertise');
-      } else if (effectiveRole.includes('ADMIN')) {
-        setUserRole('ADMIN');
-        setLoginError('');
-        setStep('dashboard');
       } else {
-        setUserRole('BUILDER');
-        setLoginError('');
         setStep('dashboard');
       }
     } catch (err) {
