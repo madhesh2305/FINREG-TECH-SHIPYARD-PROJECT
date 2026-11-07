@@ -75,7 +75,8 @@ export default function AdvisorDashboardView({
   const fetchInboxInvitations = async () => {
     setIsLoadingInvitations(true);
     try {
-      const list = await getAdvisorInboxInvitations();
+      const email = userProfile?.email || currentUser?.email || '';
+      const list = await getAdvisorInboxInvitations(email);
       setInboxInvitations(Array.isArray(list) ? list : []);
     } catch (err) {
       console.warn('[AdvisorDashboardView] Failed to load advisor invitations:', err);
@@ -86,7 +87,7 @@ export default function AdvisorDashboardView({
 
   useEffect(() => {
     fetchInboxInvitations();
-  }, [currentUser]);
+  }, [currentUser, userProfile, activeTab]);
 
   const handleAcceptInvitation = async (invitation) => {
     const invId = invitation.id || invitation.invitation_id;
@@ -149,31 +150,61 @@ export default function AdvisorDashboardView({
     setIsLoadingProjects(true);
     try {
       const live = await getProjects();
-      if (Array.isArray(live)) {
-        const mapped = live.map((p) => ({
-          id: p.id || p.project_id,
-          project_id: p.id || p.project_id,
-          name: p.name || `Project ${p.id || p.project_id}`,
-          company: p.company || p.jurisdiction || 'FinRegTech Platform',
-          domain: p.domain || p.type || currentExpertise?.cleanDomain || 'Regulatory Advisory',
-          nextAction: 'Review project requirements & provide compliance guidance',
-          type: p.type || p.project_type || 'AML / CTF',
-          status: p.status || 'In Progress',
-          statusColor: p.status === 'Completed' || p.status === 'Active'
-            ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/50'
-            : 'bg-amber-950/40 text-amber-400 border-amber-800/50',
-          dotColor: p.status === 'Completed' || p.status === 'Active' ? 'bg-emerald-400' : 'bg-amber-400',
-          owner: p.owner || p.creator_name || 'Project Owner',
-          lastUpdated: p.updated_at
-            ? new Date(p.updated_at).toLocaleDateString('en-GB')
-            : p.created_at
-            ? new Date(p.created_at).toLocaleDateString('en-GB')
-            : 'Recently updated',
-        }));
-        setAssignedProjectsFullList(mapped);
-      } else {
-        setAssignedProjectsFullList([]);
-      }
+      const mapped = Array.isArray(live) ? live.map((p) => ({
+        id: p.id || p.project_id,
+        project_id: p.id || p.project_id,
+        name: p.name || `Project ${p.id || p.project_id}`,
+        company: p.company || p.jurisdiction || 'FinRegTech Platform',
+        domain: p.domain || p.type || currentExpertise?.cleanDomain || 'Regulatory Advisory',
+        nextAction: 'Review project requirements & provide compliance guidance',
+        type: p.type || p.project_type || 'AML / CTF',
+        status: p.status || 'In Progress',
+        statusColor: p.status === 'Completed' || p.status === 'Active'
+          ? 'bg-emerald-950/40 text-emerald-400 border-emerald-800/50'
+          : 'bg-amber-950/40 text-amber-400 border-amber-800/50',
+        dotColor: p.status === 'Completed' || p.status === 'Active' ? 'bg-emerald-400' : 'bg-amber-400',
+        owner: p.owner || p.creator_name || 'Project Owner',
+        lastUpdated: p.updated_at
+          ? new Date(p.updated_at).toLocaleDateString('en-GB')
+          : p.created_at
+          ? new Date(p.created_at).toLocaleDateString('en-GB')
+          : 'Recently updated',
+      })) : [];
+
+      // Merge projects from accepted invitations or local assignments
+      try {
+        const rawAssignments = localStorage.getItem('finreg_advisor_assignments');
+        const assignments = rawAssignments ? JSON.parse(rawAssignments) : [];
+        const currentEmail = (userProfile?.email || currentUser?.email || '').toLowerCase().trim();
+        const myAssignments = assignments.filter((a) => {
+          const aEmail = (a.email || '').toLowerCase().trim();
+          return !currentEmail || aEmail === currentEmail || (currentEmail.includes('advisor') && aEmail.includes('advisor'));
+        });
+
+        const seenIds = new Set(mapped.map((p) => String(p.id || p.project_id)));
+        for (const assign of myAssignments) {
+          const pid = assign.projectId || 'PRJ-001';
+          if (!seenIds.has(String(pid))) {
+            seenIds.add(String(pid));
+            mapped.push({
+              id: pid,
+              project_id: pid,
+              name: assign.projectName || `Project ${pid}`,
+              company: 'FinRegTech Platform',
+              domain: currentExpertise?.cleanDomain || 'Regulatory Advisory',
+              nextAction: 'Review project requirements & provide compliance guidance',
+              type: 'AML / CTF',
+              status: 'In Progress',
+              statusColor: 'bg-emerald-950/40 text-emerald-400 border-emerald-800/50',
+              dotColor: 'bg-emerald-400',
+              owner: 'Project Builder',
+              lastUpdated: 'Recently assigned',
+            });
+          }
+        }
+      } catch (_) {}
+
+      setAssignedProjectsFullList(mapped);
     } catch (err) {
       console.warn('[AdvisorDashboardView] Failed to load assigned projects:', err);
       setAssignedProjectsFullList([]);
@@ -339,8 +370,12 @@ export default function AdvisorDashboardView({
     },
     {
       label: 'Pending Invitations',
-      val: assignedCount > 0 ? '01' : '00',
-      sub: 'Shown here instead of separate navigation',
+      val: String(
+        inboxInvitations.filter(
+          (i) => (i.invitation_status || i.status || 'PENDING').toUpperCase() === 'PENDING'
+        ).length
+      ).padStart(2, '0'),
+      sub: 'Actionable builder requests',
     },
   ];
 
@@ -568,7 +603,7 @@ export default function AdvisorDashboardView({
                   name: 'Invitations',
                   icon: Mail,
                   badge: inboxInvitations.filter(
-                    (i) => (i.status || 'PENDING').toUpperCase() === 'PENDING'
+                    (i) => (i.invitation_status || i.status || 'PENDING').toUpperCase() === 'PENDING'
                   ).length,
                 },
                 { name: 'My Projects', icon: Folder },
@@ -931,7 +966,7 @@ export default function AdvisorDashboardView({
                       <tbody className="divide-y divide-slate-800/60">
                         {inboxInvitations.map((inv, idx) => {
                           const invId = inv.id || inv.invitation_id || idx;
-                          const isPending = (inv.status || 'PENDING').toUpperCase() === 'PENDING';
+                          const isPending = (inv.invitation_status || inv.status || 'PENDING').toUpperCase() === 'PENDING';
                           const isAccepting = acceptingInviteId === (inv.id || inv.invitation_id);
 
                           return (

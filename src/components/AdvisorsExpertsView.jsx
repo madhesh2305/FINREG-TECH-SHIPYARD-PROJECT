@@ -195,9 +195,15 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
       );
 
       // 2. Dispatch invitation via service (handles both PostgreSQL backend and persistent local storage)
+      const projName = modalProject || targetProjectObj?.name || targetProjectObj?.project_name || 'AML Compliance Framework';
+      const invitingBuilder = targetProjectObj?.owner || targetProjectObj?.owner_name || activeProject?.owner || 'Jun Developer';
+
       await sendAdvisorInvitation(targetProjectId, {
         advisor_email: modalAdvisor.email,
         advisor_name: modalAdvisor.name,
+        project_name: projName,
+        project_id: targetProjectId,
+        inviting_user: invitingBuilder,
         access_level: modalRole?.toUpperCase().includes('READ') ? 'READ_ONLY' : 'CONTRIBUTOR',
         invitation_notes: modalMessage,
       });
