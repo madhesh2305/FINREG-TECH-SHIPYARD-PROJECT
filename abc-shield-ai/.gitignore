@@ -1,0 +1,30 @@
+# Environment & secrets
+.env
+*.env
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# ChromaDB runtime databases and binary index caches (reproduced via scripts/seed_canonical_vectors.py)
+data/processed/chroma_db/
+data/staging/madhesh_handover/step6/chroma_db/
+*.sqlite3
+*.bin
+*.log
+*.tmp
+
+# Scratch & temporary
+scratch/
+
+# OS artifacts
+.DS_Store
+Thumbs.db

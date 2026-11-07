@@ -1,0 +1,1 @@
+Historical/reference files only. Do not ingest these alongside the canonical corpus. The canonical source register, corpus, and RAG test pack are in Source_Register/, Regulatory_Research/, and RAG Research/ respectively. Source statuses in the canonical register are based on Sir's reviewed TTVCOM file.

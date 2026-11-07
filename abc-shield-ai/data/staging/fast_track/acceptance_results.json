@@ -1,0 +1,1106 @@
+[
+  {
+    "test_id": "RAG-001",
+    "query": "Under UK Bribery Act, what does Section 7 cover?",
+    "expected_records": "UK-01-R004; UK-01-R005",
+    "expected_response": "Explain failure of commercial organisations to prevent bribery and link \u201cassociated person\u201d to Section 8. Do not overstate scope.",
+    "citation_criteria": "Cite Section 7 record; cite Section 8 only if associated-person meaning is discussed. Include official legislation URL and Pending SME Validation.",
+    "http_status": 200,
+    "response_status": "GROUNDED",
+    "grounded": true,
+    "retrieved_records": [
+      "UK-01-R004",
+      "UK-01-R005",
+      "UK-01-R003",
+      "UK-01-R006",
+      "UK-02-R003"
+    ],
+    "cited_records": [
+      "UK-01-R004",
+      "UK-01-R005",
+      "UK-01-R003",
+      "UK-01-R006",
+      "UK-02-R003"
+    ],
+    "cited_chunks": [
+      "UK-01-R004-C01",
+      "UK-01-R005-C01",
+      "UK-01-R003-C01",
+      "UK-01-R006-C01",
+      "UK-02-R003-C01"
+    ],
+    "cited_urls": [
+      "https://www.legislation.gov.uk/ukpga/2010/23/section/7",
+      "https://www.legislation.gov.uk/ukpga/2010/23/section/8",
+      "https://www.legislation.gov.uk/ukpga/2010/23/section/6",
+      "https://www.legislation.gov.uk/ukpga/2010/23/section/9",
+      "https://www.gov.uk/government/publications/bribery-act-2010-guidance"
+    ],
+    "cited_statuses": [
+      "Approved for RAG Integration - Pending SME Validation"
+    ],
+    "gap": null,
+    "conflicts": [
+      {
+        "conflict_id": "CO-001",
+        "topic": "Anti-Bribery / Preventive Procedures",
+        "source_id_1": "UK-01",
+        "source_1": "Bribery Act 2010",
+        "source_id_2": "UK-02",
+        "source_2": "Bribery Act 2010 Guidance",
+        "relationship": "Overlap - complementary",
+        "conflict_type": "OVERLAP",
+        "requirement_comparison": "Act creates legal offences; guidance explains procedures organisations can use to prevent bribery and describes six core principles.",
+        "scope_difference": "Law applies to relevant offences/organisations; guidance is explanatory and procedural.",
+        "authority_difference": "Parliamentary legislation vs Ministry of Justice guidance.",
+        "version_effective_date_difference": "Act: 2010; guidance published 2012 and updated 22 Jan 2025.",
+        "conflict_status": "No direct conflict identified",
+        "rag_use": "Retrieve binding Act requirement first; use guidance as implementation context.",
+        "retrieved_source_ids": [
+          "UK-01",
+          "UK-02"
+        ],
+        "retrieved_chunk_ids": [
+          "UK-01-R004-C01",
+          "UK-01-R005-C01",
+          "UK-01-R003-C01",
+          "UK-01-R006-C01",
+          "UK-02-R003-C01"
+        ],
+        "both_sources_retrieved": true,
+        "source_1_validation_status": "Approved for RAG Integration - Pending SME Validation",
+        "source_2_validation_status": "Approved for RAG Integration - Pending SME Validation",
+        "source_1_is_approved_for_rag": false,
+        "source_2_is_approved_for_rag": false,
+        "is_approved_for_rag": false,
+        "requires_human_review": true,
+        "source_1_jurisdiction": "UK",
+        "source_2_jurisdiction": "UK",
+        "source_1_authority_level": "A",
+        "source_2_authority_level": "B",
+        "message": "Retrieved evidence contains a documented regulatory overlap between UK-01 (Bribery Act 2010) and UK-02 (Bribery Act 2010 Guidance). The Conflict Overlap register identifies the relationship as: 'Overlap - complementary'. Documented differences in scope, authority, and version are reported as registered. No legal conflict resolution is made by this system."
+      }
+    ],
+    "metadata": {
+      "retrieved_count": 5,
+      "approved_evidence_count": 0,
+      "citation_count": 5,
+      "conflict_count": 1,
+      "has_gap": false,
+      "gap_type": null,
+      "requires_human_review": true,
+      "has_candidate_evidence": true,
+      "response_version": "1.0"
+    },
+    "answer": "Under the Bribery Act 2010 (Section 7), Source: UK-01 - Bribery Act 2010\nReference: Section 7\nTopic: Failure of commercial organisations to prevent bribery\nRequirement: A relevant commercial organisation can commit an offence when an associated person bribes another person intending to obtain or retain business or a business advantage for the organisation.\nNotes: Programme-approved for extraction; final legal applicability remains subject to authorised Compliance SME validation. (Chunk ID: UK-01-R004-C01, Source ID: UK-01). Section 8 defines an 'associated person' as a person who performs services for or on behalf of the commercial organisation (Chunk ID: UK-01-R005-C01, Source ID: UK-01)."
+  },
+  {
+    "test_id": "RAG-002",
+    "query": "What does Section 2 of the Bribery Act address?",
+    "expected_records": "UK-01-R002",
+    "expected_response": "Explain offences relating to being bribed using the structured summary, distinguishing summary from verbatim extract.",
+    "citation_criteria": "Record ID and Section 2 source link must match; no invented subsection detail.",
+    "http_status": 200,
+    "response_status": "GROUNDED",
+    "grounded": true,
+    "retrieved_records": [
+      "UK-01-R002",
+      "UK-01-R003",
+      "UK-01-R006",
+      "UK-02-R003",
+      "EU-01-R003"
+    ],
+    "cited_records": [
+      "UK-01-R002",
+      "UK-01-R003",
+      "UK-01-R006",
+      "UK-02-R003",
+      "EU-01-R003"
+    ],
+    "cited_chunks": [
+      "UK-01-R002-C01",
+      "UK-01-R003-C01",
+      "UK-01-R006-C01",
+      "UK-02-R003-C01",
+      "EU-01-R003-C01"
+    ],
+    "cited_urls": [
+      "https://www.legislation.gov.uk/ukpga/2010/23/section/2",
+      "https://www.legislation.gov.uk/ukpga/2010/23/section/6",
+      "https://www.legislation.gov.uk/ukpga/2010/23/section/9",
+      "https://www.gov.uk/government/publications/bribery-act-2010-guidance",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021"
+    ],
+    "cited_statuses": [
+      "Approved for RAG Integration - Pending SME Validation"
+    ],
+    "gap": null,
+    "conflicts": [
+      {
+        "conflict_id": "CO-001",
+        "topic": "Anti-Bribery / Preventive Procedures",
+        "source_id_1": "UK-01",
+        "source_1": "Bribery Act 2010",
+        "source_id_2": "UK-02",
+        "source_2": "Bribery Act 2010 Guidance",
+        "relationship": "Overlap - complementary",
+        "conflict_type": "OVERLAP",
+        "requirement_comparison": "Act creates legal offences; guidance explains procedures organisations can use to prevent bribery and describes six core principles.",
+        "scope_difference": "Law applies to relevant offences/organisations; guidance is explanatory and procedural.",
+        "authority_difference": "Parliamentary legislation vs Ministry of Justice guidance.",
+        "version_effective_date_difference": "Act: 2010; guidance published 2012 and updated 22 Jan 2025.",
+        "conflict_status": "No direct conflict identified",
+        "rag_use": "Retrieve binding Act requirement first; use guidance as implementation context.",
+        "retrieved_source_ids": [
+          "UK-01",
+          "UK-02"
+        ],
+        "retrieved_chunk_ids": [
+          "UK-01-R002-C01",
+          "UK-01-R003-C01",
+          "UK-01-R006-C01",
+          "UK-02-R003-C01"
+        ],
+        "both_sources_retrieved": true,
+        "source_1_validation_status": "Approved for RAG Integration - Pending SME Validation",
+        "source_2_validation_status": "Approved for RAG Integration - Pending SME Validation",
+        "source_1_is_approved_for_rag": false,
+        "source_2_is_approved_for_rag": false,
+        "is_approved_for_rag": false,
+        "requires_human_review": true,
+        "source_1_jurisdiction": "UK",
+        "source_2_jurisdiction": "UK",
+        "source_1_authority_level": "A",
+        "source_2_authority_level": "B",
+        "message": "Retrieved evidence contains a documented regulatory overlap between UK-01 (Bribery Act 2010) and UK-02 (Bribery Act 2010 Guidance). The Conflict Overlap register identifies the relationship as: 'Overlap - complementary'. Documented differences in scope, authority, and version are reported as registered. No legal conflict resolution is made by this system."
+      }
+    ],
+    "metadata": {
+      "retrieved_count": 5,
+      "approved_evidence_count": 0,
+      "citation_count": 5,
+      "conflict_count": 1,
+      "has_gap": false,
+      "gap_type": null,
+      "requires_human_review": true,
+      "has_candidate_evidence": true,
+      "response_version": "1.0"
+    },
+    "answer": "Under the Bribery Act 2010 (Section 2), Source: UK-01 - Bribery Act 2010\nReference: Section 2\nTopic: Being bribed\nRequirement: Requesting, agreeing to receive or accepting an advantage can constitute an offence under the statutory conditions.\nNotes: Programme-approved for extraction; final legal applicability remains subject to authorised Compliance SME validation. (Chunk ID: UK-01-R002-C01, Source ID: UK-01)."
+  },
+  {
+    "test_id": "RAG-003",
+    "query": "What should a firm consider when assessing bribery and corruption risks under FCA FCG 6?",
+    "expected_records": "UK-03-R003",
+    "expected_response": "Return FCG 6.2.2 risk assessment theme, with caveat that FCA guide applicability depends on the firm and scope.",
+    "citation_criteria": "Cite FCG 6.2.2 record and FCA official link; retain pending validation caveat.",
+    "http_status": 200,
+    "response_status": "GROUNDED",
+    "grounded": true,
+    "retrieved_records": [
+      "UK-03-R004",
+      "UK-03-R003",
+      "UK-03-R002",
+      "UK-03-R005",
+      "UK-03-R001"
+    ],
+    "cited_records": [
+      "UK-03-R004",
+      "UK-03-R003",
+      "UK-03-R002",
+      "UK-03-R005",
+      "UK-03-R001"
+    ],
+    "cited_chunks": [
+      "UK-03-R004-C01",
+      "UK-03-R003-C01",
+      "UK-03-R002-C01",
+      "UK-03-R005-C01",
+      "UK-03-R001-C01"
+    ],
+    "cited_urls": [
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://handbook.fca.org.uk/handbook/fcg6"
+    ],
+    "cited_statuses": [
+      "Approved for RAG Integration - Pending SME Validation"
+    ],
+    "gap": null,
+    "conflicts": [],
+    "metadata": {
+      "retrieved_count": 5,
+      "approved_evidence_count": 0,
+      "citation_count": 5,
+      "conflict_count": 0,
+      "has_gap": false,
+      "gap_type": null,
+      "requires_human_review": false,
+      "has_candidate_evidence": true,
+      "response_version": "1.0"
+    },
+    "answer": "Based on FCA Financial Crime Guide - FCG 6 (FCG 6.2.3), Source: UK-03 - FCA Financial Crime Guide - FCG 6\nReference: FCG 6.2.3\nTopic: Policies and procedures\nRequirement: Firms\u2019 anti-bribery policies and procedures should address the firm\u2019s bribery/corruption risks, expected conduct, escalation, conflicts, gifts/hospitality, third-party use, whistleblowing, monitoring, review and consequences for breaches.\nNotes: Programme-approved for extraction; final legal applicability remains subject to authorised Compliance SME validation. Extract verified against FCA Handbook FCG 6.2.3. This is FCA guidance; applicability depends on the firm and relevant FCA scope. (Chunk ID: UK-03-R004-C01, Source ID: UK-03). Based on FCA Financial Crime Guide - FCG 6 (FCG 6.2.2), Source: UK-03 - FCA Financial Crime Guide - FCG 6\nReference: FCG 6.2.2\nTopic: Risk assessment\nRequirement: Firms are expected to identify, assess and regularly review and update bribery and corruption risks.\nNotes: Programme-approved for extraction; final legal applicability remains subject to authorised Compliance SME validation. (Chunk ID: UK-03-R003-C01, Source ID: UK-03)."
+  },
+  {
+    "test_id": "RAG-004",
+    "query": "What controls are expected for third parties acting on behalf of a firm?",
+    "expected_records": "UK-03-R005",
+    "expected_response": "Summarise risk-sensitive third-party measures based on the relevant record; do not add controls unsupported by corpus.",
+    "citation_criteria": "Cite FCG 6.2.4 record; exact extract and structured summary must not be conflated.",
+    "http_status": 200,
+    "response_status": "GROUNDED",
+    "grounded": true,
+    "retrieved_records": [
+      "UK-03-R005",
+      "EU-01-R007",
+      "UK-03-R002",
+      "UK-02-R004",
+      "EU-01-R006"
+    ],
+    "cited_records": [
+      "UK-03-R005",
+      "EU-01-R007",
+      "UK-03-R002",
+      "UK-02-R004",
+      "EU-01-R006"
+    ],
+    "cited_chunks": [
+      "UK-03-R005-C01",
+      "EU-01-R007-C01",
+      "UK-03-R002-C01",
+      "UK-02-R004-C01",
+      "EU-01-R006-C01"
+    ],
+    "cited_urls": [
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://www.gov.uk/government/publications/bribery-act-2010-guidance",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021"
+    ],
+    "cited_statuses": [
+      "Approved for RAG Integration - Pending SME Validation"
+    ],
+    "gap": null,
+    "conflicts": [],
+    "metadata": {
+      "retrieved_count": 5,
+      "approved_evidence_count": 0,
+      "citation_count": 5,
+      "conflict_count": 0,
+      "has_gap": false,
+      "gap_type": null,
+      "requires_human_review": false,
+      "has_candidate_evidence": true,
+      "response_version": "1.0"
+    },
+    "answer": "Based on FCA Financial Crime Guide - FCG 6 (FCG 6.2.4), Source: UK-03 - FCA Financial Crime Guide - FCG 6\nReference: FCG 6.2.4\nTopic: Dealing with third parties\nRequirement: Firms should define and select third parties appropriately, conduct risk-sensitive due diligence, monitor relationships, keep risk information current and ensure payments are expected, approved and supported.\nNotes: Exact source excerpt verified against official FCA Handbook FCG 6.2.4. Applicability to ABC Shield remains subject to SME review. (Chunk ID: UK-03-R005-C01, Source ID: UK-03). Based on Directive (EU) 2026/1021 on combatting corruption (Article 16), Source: EU-01 - Directive (EU) 2026/1021 on combatting corruption\nReference: Article 16\nTopic: Mitigating circumstances\nRequirement: Article 16 identifies certain circumstances that national law can treat as mitigating, including effective internal controls, ethics awareness and compliance programmes for a legal person, and rapid voluntary disclosure plus remedial measures. It is a mitigation framework, not a guarantee of reduced liability or a standalone firm-level duty.\nNotes: Official EUR-Lex excerpt from Article 16(c). Article 16 requires Member States to ensure specified circumstances may be treated as mitigating under national law; points (c) and (d) apply only to legal persons. Not a standalone direct ABC Shield duty. Pending SME validation. (Chunk ID: EU-01-R007-C01, Source ID: EU-01)."
+  },
+  {
+    "test_id": "RAG-005",
+    "query": "What does FCA FCG 6.2.3 say about policies and procedures?",
+    "expected_records": "UK-03-R004",
+    "expected_response": "Retrieve the separate policies/procedures record only; avoid blending with third-party record.",
+    "citation_criteria": "Citation must point to FCG 6.2.3, not FCG 6.2.4.",
+    "http_status": 200,
+    "response_status": "GROUNDED",
+    "grounded": true,
+    "retrieved_records": [
+      "UK-03-R004",
+      "UK-03-R001",
+      "UK-03-R003",
+      "UK-03-R002",
+      "UK-09-R001"
+    ],
+    "cited_records": [
+      "UK-03-R004",
+      "UK-03-R001",
+      "UK-03-R003",
+      "UK-03-R002",
+      "UK-09-R001"
+    ],
+    "cited_chunks": [
+      "UK-03-R004-C01",
+      "UK-03-R001-C01",
+      "UK-03-R003-C01",
+      "UK-03-R002-C01",
+      "UK-09-R001-C01"
+    ],
+    "cited_urls": [
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://handbook.fca.org.uk/handbook/prin2/prin2s1"
+    ],
+    "cited_statuses": [
+      "Approved for RAG Integration - Pending SME Validation"
+    ],
+    "gap": null,
+    "conflicts": [
+      {
+        "conflict_id": "CO-003",
+        "topic": "Anti-Bribery / Integrity",
+        "source_id_1": "UK-03",
+        "source_1": "FCA Financial Crime Guide - FCG 6",
+        "source_id_2": "UK-09",
+        "source_2": "FCA Principles for Businesses - Principle 1",
+        "relationship": "Overlap - complementary",
+        "conflict_type": "OVERLAP",
+        "requirement_comparison": "FCG 6 addresses bribery/corruption systems and controls; Principle 1 requires authorised firms to conduct business with integrity.",
+        "scope_difference": "FCG 6 is financial-crime focused; Principle 1 is a broader conduct principle.",
+        "authority_difference": "Same regulator (FCA); different FCA Handbook provisions.",
+        "version_effective_date_difference": "Current FCA Handbook material; exact applicability depends on firm status/rules.",
+        "conflict_status": "No direct conflict identified",
+        "rag_use": "Useful for layered retrieval: specific control guidance + broader integrity obligation.",
+        "retrieved_source_ids": [
+          "UK-03",
+          "UK-09"
+        ],
+        "retrieved_chunk_ids": [
+          "UK-03-R004-C01",
+          "UK-03-R001-C01",
+          "UK-03-R003-C01",
+          "UK-03-R002-C01",
+          "UK-09-R001-C01"
+        ],
+        "both_sources_retrieved": true,
+        "source_1_validation_status": "Approved for RAG Integration - Pending SME Validation",
+        "source_2_validation_status": "Approved for RAG Integration - Pending SME Validation",
+        "source_1_is_approved_for_rag": false,
+        "source_2_is_approved_for_rag": false,
+        "is_approved_for_rag": false,
+        "requires_human_review": true,
+        "source_1_jurisdiction": "UK",
+        "source_2_jurisdiction": "UK",
+        "source_1_authority_level": "C",
+        "source_2_authority_level": "C",
+        "message": "Retrieved evidence contains a documented regulatory overlap between UK-03 (FCA Financial Crime Guide - FCG 6) and UK-09 (FCA Principles for Businesses - Principle 1). The Conflict Overlap register identifies the relationship as: 'Overlap - complementary'. Documented differences in scope, authority, and version are reported as registered. No legal conflict resolution is made by this system."
+      }
+    ],
+    "metadata": {
+      "retrieved_count": 5,
+      "approved_evidence_count": 0,
+      "citation_count": 5,
+      "conflict_count": 1,
+      "has_gap": false,
+      "gap_type": null,
+      "requires_human_review": true,
+      "has_candidate_evidence": true,
+      "response_version": "1.0"
+    },
+    "answer": "Based on FCA Financial Crime Guide - FCG 6 (FCG 6.2.3), Source: UK-03 - FCA Financial Crime Guide - FCG 6\nReference: FCG 6.2.3\nTopic: Policies and procedures\nRequirement: Firms\u2019 anti-bribery policies and procedures should address the firm\u2019s bribery/corruption risks, expected conduct, escalation, conflicts, gifts/hospitality, third-party use, whistleblowing, monitoring, review and consequences for breaches.\nNotes: Programme-approved for extraction; final legal applicability remains subject to authorised Compliance SME validation. Extract verified against FCA Handbook FCG 6.2.3. This is FCA guidance; applicability depends on the firm and relevant FCA scope. (Chunk ID: UK-03-R004-C01, Source ID: UK-03)."
+  },
+  {
+    "test_id": "RAG-006",
+    "query": "Does EU Directive Article 20 directly require ABC Shield to run awareness campaigns?",
+    "expected_records": "EU-01-R004",
+    "expected_response": "Explain Article 20 is primarily framed as a Member State prevention obligation; do not present as a direct firm-level duty without jurisdiction-specific analysis.",
+    "citation_criteria": "Cite Article 20 and surface applicability note plus Pending SME Validation.",
+    "http_status": 200,
+    "response_status": "GROUNDED",
+    "grounded": true,
+    "retrieved_records": [
+      "EU-01-R004",
+      "EU-01-R001",
+      "EU-01-R005",
+      "EU-01-R007",
+      "EU-01-R006"
+    ],
+    "cited_records": [
+      "EU-01-R004",
+      "EU-01-R001",
+      "EU-01-R005",
+      "EU-01-R007",
+      "EU-01-R006"
+    ],
+    "cited_chunks": [
+      "EU-01-R004-C01",
+      "EU-01-R001-C01",
+      "EU-01-R005-C01",
+      "EU-01-R007-C01",
+      "EU-01-R006-C01"
+    ],
+    "cited_urls": [
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021"
+    ],
+    "cited_statuses": [
+      "Approved for RAG Integration - Pending SME Validation"
+    ],
+    "gap": null,
+    "conflicts": [],
+    "metadata": {
+      "retrieved_count": 5,
+      "approved_evidence_count": 0,
+      "citation_count": 5,
+      "conflict_count": 0,
+      "has_gap": false,
+      "gap_type": null,
+      "requires_human_review": false,
+      "has_candidate_evidence": true,
+      "response_version": "1.0"
+    },
+    "answer": "Based on Directive (EU) 2026/1021 on combatting corruption (Article 20), Source: EU-01 - Directive (EU) 2026/1021 on combatting corruption\nReference: Article 20\nTopic: Prevention of corruption\nRequirement: Member States must take preventive measures including awareness, integrity/transparency measures, risk-focused tools and sector/occupation risk assessment.\nNotes: Article 20 primarily directs Member States to take prevention and awareness measures. Treat as framework/context, not a direct operational duty on ABC Shield without separate national-law and applicability analysis. (Chunk ID: EU-01-R004-C01, Source ID: EU-01). Based on Directive (EU) 2026/1021 on combatting corruption (Article 16), Source: EU-01 - Directive (EU) 2026/1021 on combatting corruption\nReference: Article 16\nTopic: Mitigating circumstances\nRequirement: Article 16 identifies certain circumstances that national law can treat as mitigating, including effective internal controls, ethics awareness and compliance programmes for a legal person, and rapid voluntary disclosure plus remedial measures. It is a mitigation framework, not a guarantee of reduced liability or a standalone firm-level duty.\nNotes: Official EUR-Lex excerpt from Article 16(c). Article 16 requires Member States to ensure specified circumstances may be treated as mitigating under national law; points (c) and (d) apply only to legal persons. Not a standalone direct ABC Shield duty. Pending SME validation. (Chunk ID: EU-01-R007-C01, Source ID: EU-01)."
+  },
+  {
+    "test_id": "RAG-007",
+    "query": "Does Article 21 require ABC Shield to publish a national anti-corruption strategy?",
+    "expected_records": "EU-01-R005",
+    "expected_response": "No. Explain the record describes a Member State national-strategy duty and is contextual, not a direct operational obligation on ABC Shield.",
+    "citation_criteria": "Cite Article 21 and explicit applicability note.",
+    "http_status": 200,
+    "response_status": "GROUNDED",
+    "grounded": true,
+    "retrieved_records": [
+      "EU-01-R005",
+      "EU-01-R004",
+      "EU-01-R001",
+      "EU-01-R007",
+      "EU-01-R006"
+    ],
+    "cited_records": [
+      "EU-01-R005",
+      "EU-01-R004",
+      "EU-01-R001",
+      "EU-01-R007",
+      "EU-01-R006"
+    ],
+    "cited_chunks": [
+      "EU-01-R005-C01",
+      "EU-01-R004-C01",
+      "EU-01-R001-C01",
+      "EU-01-R007-C01",
+      "EU-01-R006-C01"
+    ],
+    "cited_urls": [
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021"
+    ],
+    "cited_statuses": [
+      "Approved for RAG Integration - Pending SME Validation"
+    ],
+    "gap": null,
+    "conflicts": [],
+    "metadata": {
+      "retrieved_count": 5,
+      "approved_evidence_count": 0,
+      "citation_count": 5,
+      "conflict_count": 0,
+      "has_gap": false,
+      "gap_type": null,
+      "requires_human_review": false,
+      "has_candidate_evidence": true,
+      "response_version": "1.0"
+    },
+    "answer": "Based on Directive (EU) 2026/1021 on combatting corruption (Article 21), Source: EU-01 - Directive (EU) 2026/1021 on combatting corruption\nReference: Article 21\nTopic: National strategies\nRequirement: Each Member State must adopt and publish a national strategy on preventing and combating corruption, subject to the Directive's requirements.\nNotes: Article 21 directs each Member State to adopt and publish a national anti-corruption strategy. This is contextual framework material, not a direct operational obligation on ABC Shield. (Chunk ID: EU-01-R005-C01, Source ID: EU-01). Based on Directive (EU) 2026/1021 on combatting corruption (Article 20), Source: EU-01 - Directive (EU) 2026/1021 on combatting corruption\nReference: Article 20\nTopic: Prevention of corruption\nRequirement: Member States must take preventive measures including awareness, integrity/transparency measures, risk-focused tools and sector/occupation risk assessment.\nNotes: Article 20 primarily directs Member States to take prevention and awareness measures. Treat as framework/context, not a direct operational duty on ABC Shield without separate national-law and applicability analysis. (Chunk ID: EU-01-R004-C01, Source ID: EU-01)."
+  },
+  {
+    "test_id": "RAG-008",
+    "query": "What does Article 13 say about liability of legal persons?",
+    "expected_records": "EU-01-R006",
+    "expected_response": "Summarise legal-person liability framework while explaining the Directive provision is framed as a Member State implementation obligation.",
+    "citation_criteria": "Cite Article 13 record; distinguish summary from extract; retain applicability caveat.",
+    "http_status": 200,
+    "response_status": "GROUNDED",
+    "grounded": true,
+    "retrieved_records": [
+      "EU-01-R006",
+      "EU-01-R007",
+      "UK-01-R005",
+      "UK-03-R005",
+      "UK-09-R001"
+    ],
+    "cited_records": [
+      "EU-01-R006",
+      "EU-01-R007",
+      "UK-01-R005",
+      "UK-03-R005",
+      "UK-09-R001"
+    ],
+    "cited_chunks": [
+      "EU-01-R006-C01",
+      "EU-01-R007-C01",
+      "UK-01-R005-C01",
+      "UK-03-R005-C01",
+      "UK-09-R001-C01"
+    ],
+    "cited_urls": [
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://www.legislation.gov.uk/ukpga/2010/23/section/8",
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://handbook.fca.org.uk/handbook/prin2/prin2s1"
+    ],
+    "cited_statuses": [
+      "Approved for RAG Integration - Pending SME Validation"
+    ],
+    "gap": null,
+    "conflicts": [
+      {
+        "conflict_id": "CO-002",
+        "topic": "Anti-Bribery / Financial-Crime Controls",
+        "source_id_1": "UK-01",
+        "source_1": "Bribery Act 2010",
+        "source_id_2": "UK-03",
+        "source_2": "FCA Financial Crime Guide - FCG 6",
+        "relationship": "Overlap - complementary",
+        "conflict_type": "OVERLAP",
+        "requirement_comparison": "Bribery Act defines criminal offences; FCG 6 expects supervised firms to maintain effective systems and controls for bribery/corruption risk.",
+        "scope_difference": "FCG 6 is directed at FCA-supervised firms within its stated scope; Bribery Act has its statutory scope.",
+        "authority_difference": "UK Parliament legislation vs FCA regulatory guidance.",
+        "version_effective_date_difference": "FCG 6 page last updated 29 Nov 2024; Bribery Act is 2010 legislation.",
+        "conflict_status": "No direct conflict identified",
+        "rag_use": "Scope filtering is important: FCA-supervised firm vs general statutory applicability.",
+        "retrieved_source_ids": [
+          "UK-01",
+          "UK-03"
+        ],
+        "retrieved_chunk_ids": [
+          "UK-01-R005-C01",
+          "UK-03-R005-C01"
+        ],
+        "both_sources_retrieved": true,
+        "source_1_validation_status": "Approved for RAG Integration - Pending SME Validation",
+        "source_2_validation_status": "Approved for RAG Integration - Pending SME Validation",
+        "source_1_is_approved_for_rag": false,
+        "source_2_is_approved_for_rag": false,
+        "is_approved_for_rag": false,
+        "requires_human_review": true,
+        "source_1_jurisdiction": "UK",
+        "source_2_jurisdiction": "UK",
+        "source_1_authority_level": "A",
+        "source_2_authority_level": "C",
+        "message": "Retrieved evidence contains a documented regulatory overlap between UK-01 (Bribery Act 2010) and UK-03 (FCA Financial Crime Guide - FCG 6). The Conflict Overlap register identifies the relationship as: 'Overlap - complementary'. Documented differences in scope, authority, and version are reported as registered. No legal conflict resolution is made by this system."
+      },
+      {
+        "conflict_id": "CO-003",
+        "topic": "Anti-Bribery / Integrity",
+        "source_id_1": "UK-03",
+        "source_1": "FCA Financial Crime Guide - FCG 6",
+        "source_id_2": "UK-09",
+        "source_2": "FCA Principles for Businesses - Principle 1",
+        "relationship": "Overlap - complementary",
+        "conflict_type": "OVERLAP",
+        "requirement_comparison": "FCG 6 addresses bribery/corruption systems and controls; Principle 1 requires authorised firms to conduct business with integrity.",
+        "scope_difference": "FCG 6 is financial-crime focused; Principle 1 is a broader conduct principle.",
+        "authority_difference": "Same regulator (FCA); different FCA Handbook provisions.",
+        "version_effective_date_difference": "Current FCA Handbook material; exact applicability depends on firm status/rules.",
+        "conflict_status": "No direct conflict identified",
+        "rag_use": "Useful for layered retrieval: specific control guidance + broader integrity obligation.",
+        "retrieved_source_ids": [
+          "UK-03",
+          "UK-09"
+        ],
+        "retrieved_chunk_ids": [
+          "UK-03-R005-C01",
+          "UK-09-R001-C01"
+        ],
+        "both_sources_retrieved": true,
+        "source_1_validation_status": "Approved for RAG Integration - Pending SME Validation",
+        "source_2_validation_status": "Approved for RAG Integration - Pending SME Validation",
+        "source_1_is_approved_for_rag": false,
+        "source_2_is_approved_for_rag": false,
+        "is_approved_for_rag": false,
+        "requires_human_review": true,
+        "source_1_jurisdiction": "UK",
+        "source_2_jurisdiction": "UK",
+        "source_1_authority_level": "C",
+        "source_2_authority_level": "C",
+        "message": "Retrieved evidence contains a documented regulatory overlap between UK-03 (FCA Financial Crime Guide - FCG 6) and UK-09 (FCA Principles for Businesses - Principle 1). The Conflict Overlap register identifies the relationship as: 'Overlap - complementary'. Documented differences in scope, authority, and version are reported as registered. No legal conflict resolution is made by this system."
+      }
+    ],
+    "metadata": {
+      "retrieved_count": 5,
+      "approved_evidence_count": 0,
+      "citation_count": 5,
+      "conflict_count": 2,
+      "has_gap": false,
+      "gap_type": null,
+      "requires_human_review": true,
+      "has_candidate_evidence": true,
+      "response_version": "1.0"
+    },
+    "answer": "Based on Directive (EU) 2026/1021 on combatting corruption (Article 13), Source: EU-01 - Directive (EU) 2026/1021 on combatting corruption\nReference: Article 13\nTopic: Liability of legal persons\nRequirement: Article 13 requires Member States to provide for legal-person liability for specified corruption offences committed for the entity\u2019s benefit by persons in leading positions, and where a lack of supervision/control enables an offence. This is a Member-State implementation requirement; national law and ABC Shield applicability need review.\nNotes: Official EUR-Lex excerpt from Article 13(1). This provision directs Member States to provide legal-person liability under specified conditions; it is not by itself a complete directly applicable ABC Shield rule. Check national transposition and entity/jurisdiction scope. Pending SME validation. (Chunk ID: EU-01-R006-C01, Source ID: EU-01). Based on Directive (EU) 2026/1021 on combatting corruption (Article 16), Source: EU-01 - Directive (EU) 2026/1021 on combatting corruption\nReference: Article 16\nTopic: Mitigating circumstances\nRequirement: Article 16 identifies certain circumstances that national law can treat as mitigating, including effective internal controls, ethics awareness and compliance programmes for a legal person, and rapid voluntary disclosure plus remedial measures. It is a mitigation framework, not a guarantee of reduced liability or a standalone firm-level duty.\nNotes: Official EUR-Lex excerpt from Article 16(c). Article 16 requires Member States to ensure specified circumstances may be treated as mitigating under national law; points (c) and (d) apply only to legal persons. Not a standalone direct ABC Shield duty. Pending SME validation. (Chunk ID: EU-01-R007-C01, Source ID: EU-01)."
+  },
+  {
+    "test_id": "RAG-009",
+    "query": "Which compliance-related factors are mentioned in Article 16 as potentially mitigating?",
+    "expected_records": "EU-01-R007",
+    "expected_response": "Mention effective internal controls, ethics awareness, compliance programmes, and where supported, voluntary disclosure/remedial action; explain national-law framing.",
+    "citation_criteria": "Cite Article 16 record and show pending validation.",
+    "http_status": 200,
+    "response_status": "GROUNDED",
+    "grounded": true,
+    "retrieved_records": [
+      "EU-01-R007",
+      "EU-01-R004",
+      "EU-01-R001",
+      "UK-02-R004",
+      "UK-02-R001"
+    ],
+    "cited_records": [
+      "EU-01-R007",
+      "EU-01-R004",
+      "EU-01-R001",
+      "UK-02-R004",
+      "UK-02-R001"
+    ],
+    "cited_chunks": [
+      "EU-01-R007-C01",
+      "EU-01-R004-C01",
+      "EU-01-R001-C01",
+      "UK-02-R004-C01",
+      "UK-02-R001-C01"
+    ],
+    "cited_urls": [
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://www.gov.uk/government/publications/bribery-act-2010-guidance",
+      "https://www.gov.uk/government/publications/bribery-act-2010-guidance"
+    ],
+    "cited_statuses": [
+      "Approved for RAG Integration - Pending SME Validation"
+    ],
+    "gap": null,
+    "conflicts": [],
+    "metadata": {
+      "retrieved_count": 5,
+      "approved_evidence_count": 0,
+      "citation_count": 5,
+      "conflict_count": 0,
+      "has_gap": false,
+      "gap_type": null,
+      "requires_human_review": false,
+      "has_candidate_evidence": true,
+      "response_version": "1.0"
+    },
+    "answer": "Based on Directive (EU) 2026/1021 on combatting corruption (Article 16), Source: EU-01 - Directive (EU) 2026/1021 on combatting corruption\nReference: Article 16\nTopic: Mitigating circumstances\nRequirement: Article 16 identifies certain circumstances that national law can treat as mitigating, including effective internal controls, ethics awareness and compliance programmes for a legal person, and rapid voluntary disclosure plus remedial measures. It is a mitigation framework, not a guarantee of reduced liability or a standalone firm-level duty.\nNotes: Official EUR-Lex excerpt from Article 16(c). Article 16 requires Member States to ensure specified circumstances may be treated as mitigating under national law; points (c) and (d) apply only to legal persons. Not a standalone direct ABC Shield duty. Pending SME validation. (Chunk ID: EU-01-R007-C01, Source ID: EU-01). Based on Directive (EU) 2026/1021 on combatting corruption (Article 20), Source: EU-01 - Directive (EU) 2026/1021 on combatting corruption\nReference: Article 20\nTopic: Prevention of corruption\nRequirement: Member States must take preventive measures including awareness, integrity/transparency measures, risk-focused tools and sector/occupation risk assessment.\nNotes: Article 20 primarily directs Member States to take prevention and awareness measures. Treat as framework/context, not a direct operational duty on ABC Shield without separate national-law and applicability analysis. (Chunk ID: EU-01-R004-C01, Source ID: EU-01)."
+  },
+  {
+    "test_id": "RAG-010",
+    "query": "Give me the exact source wording for FCA FCG 6.1.1.",
+    "expected_records": "UK-03-R001",
+    "expected_response": "Return only the Exact_Source_Extract captured for FCG 6.1.1, clearly label it as an extract, and keep Structured_Summary separate. If the requested exact wording cannot be matched to the official source, abstain and flag for review; do not substitute the summary as a quotation.",
+    "citation_criteria": "Citation must point to UK-03-R001 / FCG 6.1.1 and FCA official URL; distinguish extract from summary; preserve Pending SME Validation.",
+    "http_status": 200,
+    "response_status": "GROUNDED",
+    "grounded": true,
+    "retrieved_records": [
+      "UK-03-R001",
+      "UK-03-R003",
+      "UK-03-R004",
+      "UK-03-R002",
+      "UK-03-R005"
+    ],
+    "cited_records": [
+      "UK-03-R001",
+      "UK-03-R003",
+      "UK-03-R004",
+      "UK-03-R002",
+      "UK-03-R005"
+    ],
+    "cited_chunks": [
+      "UK-03-R001-C01",
+      "UK-03-R003-C01",
+      "UK-03-R004-C01",
+      "UK-03-R002-C01",
+      "UK-03-R005-C01"
+    ],
+    "cited_urls": [
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://handbook.fca.org.uk/handbook/fcg6"
+    ],
+    "cited_statuses": [
+      "Approved for RAG Integration - Pending SME Validation"
+    ],
+    "gap": null,
+    "conflicts": [],
+    "metadata": {
+      "retrieved_count": 5,
+      "approved_evidence_count": 0,
+      "citation_count": 5,
+      "conflict_count": 0,
+      "has_gap": false,
+      "gap_type": null,
+      "requires_human_review": false,
+      "has_candidate_evidence": true,
+      "response_version": "1.0"
+    },
+    "answer": "Exact Source Extract (FCA Handbook FCG 6.1.1):\n\"A firm must take reasonable care to organise and control its affairs responsibly and effectively, with adequate risk management systems. (FCG 6.1.1)\"\n\nStructured Summary (Separate):\nSource: UK-03 - FCA Financial Crime Guide - FCG 6\nReference: FCG 6.1.1\nTopic: Scope\nRequirement: FCG 6 applies to firms subject to specified FCA financial-crime rules and to e-money/payment institutions within the FCA supervisory scope.\nNotes: Exact extract checked against official FCA Handbook FCG 6.1.1. FCG is guidance; application depends on whether ABC Shield falls within the firms/institutions described by the Handbook. Pending SME validation.\n(Chunk ID: UK-03-R001-C01, Source ID: UK-03)."
+  },
+  {
+    "test_id": "RAG-011",
+    "query": "What are ABC Shield\u2019s sanctions-screening obligations?",
+    "expected_records": "No expected in-scope record",
+    "expected_response": "Do not infer sanctions obligations from this ABC-only corpus. State the corpus does not support an answer and that sanctions are outside current approved scope.",
+    "citation_criteria": "No fabricated citation. Return evidence-gap / out-of-scope response.",
+    "http_status": 200,
+    "response_status": "OUT_OF_SCOPE",
+    "grounded": false,
+    "retrieved_records": [
+      "UK-03-R005",
+      "EU-01-R001",
+      "UK-03-R001",
+      "EU-01-R004",
+      "EU-01-R007"
+    ],
+    "cited_records": [],
+    "cited_chunks": [],
+    "cited_urls": [],
+    "cited_statuses": [],
+    "gap": {
+      "is_gap": true,
+      "gap_type": "OUT_OF_SCOPE",
+      "message": "Query topic matches out-of-scope domain: 'economic and financial sanctions'.",
+      "user_safe_message": "The current ABC Shield scope does not provide sufficient evidence for economic and financial sanctions. (Scope is strictly limited to UK and EU anti-bribery and anti-corruption frameworks, and relevant FCA financial-crime systems and controls).",
+      "retrieved_chunk_ids": [
+        "UK-03-R005-C01",
+        "EU-01-R001-C01",
+        "UK-03-R001-C01",
+        "EU-01-R004-C01",
+        "EU-01-R007-C01"
+      ],
+      "retrieved_record_ids": [
+        "UK-03-R005",
+        "EU-01-R001",
+        "UK-03-R001",
+        "EU-01-R004",
+        "EU-01-R007"
+      ],
+      "relevant_evidence_count": 5,
+      "approved_evidence_count": 0,
+      "has_candidate_evidence": true,
+      "requires_human_review": false,
+      "coverage_nature": "CORPUS_COVERAGE_LIMITATION",
+      "recommended_next_action": "Refer to an approved knowledge source covering this regulatory domain."
+    },
+    "conflicts": [],
+    "metadata": {
+      "retrieved_count": 5,
+      "approved_evidence_count": 0,
+      "citation_count": 0,
+      "conflict_count": 0,
+      "has_gap": true,
+      "gap_type": "OUT_OF_SCOPE",
+      "requires_human_review": false,
+      "has_candidate_evidence": true,
+      "response_version": "1.0"
+    },
+    "answer": "The current ABC Shield scope does not provide sufficient evidence for economic and financial sanctions. (Scope is strictly limited to UK and EU anti-bribery and anti-corruption frameworks, and relevant FCA financial-crime systems and controls)."
+  },
+  {
+    "test_id": "RAG-012",
+    "query": "What exact EU member-state law implements Article 4 for ABC Shield in France?",
+    "expected_records": "No expected in-scope record",
+    "expected_response": "Do not invent national transposition details. Ask for jurisdiction-specific legal source or return source-needed response.",
+    "citation_criteria": "No unsupported national-law citation; identify that transposition/applicability needs verification.",
+    "http_status": 200,
+    "response_status": "INSUFFICIENT_EVIDENCE",
+    "grounded": false,
+    "retrieved_records": [
+      "EU-01-R003",
+      "EU-01-R004",
+      "EU-01-R005",
+      "EU-01-R001",
+      "EU-01-R007"
+    ],
+    "cited_records": [],
+    "cited_chunks": [],
+    "cited_urls": [],
+    "cited_statuses": [],
+    "gap": {
+      "is_gap": true,
+      "gap_type": "DATA_COVERAGE_LIMITATION",
+      "message": "Query requests national transposing legislation in France, which is outside the canonical ABC Shield corpus.",
+      "user_safe_message": "The ABC Shield regulatory corpus covers EU-level Directive provisions and UK legislation, but does not contain national transposing legislation for France. Member-state transposition requires specific national legal sources and Compliance SME verification.",
+      "retrieved_chunk_ids": [
+        "EU-01-R003-C01",
+        "EU-01-R004-C01",
+        "EU-01-R005-C01",
+        "EU-01-R001-C01",
+        "EU-01-R007-C01"
+      ],
+      "retrieved_record_ids": [
+        "EU-01-R003",
+        "EU-01-R004",
+        "EU-01-R005",
+        "EU-01-R001",
+        "EU-01-R007"
+      ],
+      "relevant_evidence_count": 5,
+      "approved_evidence_count": 0,
+      "has_candidate_evidence": true,
+      "requires_human_review": true,
+      "coverage_nature": "CORPUS_COVERAGE_LIMITATION",
+      "recommended_next_action": "Obtain and verify the official member-state transposition source for France."
+    },
+    "conflicts": [],
+    "metadata": {
+      "retrieved_count": 5,
+      "approved_evidence_count": 0,
+      "citation_count": 0,
+      "conflict_count": 0,
+      "has_gap": true,
+      "gap_type": "DATA_COVERAGE_LIMITATION",
+      "requires_human_review": true,
+      "has_candidate_evidence": true,
+      "response_version": "1.0"
+    },
+    "answer": "The available regulatory evidence is insufficient to answer what exact national law implements the requested provisions in France. The ABC Shield regulatory corpus covers EU-level Directive provisions and UK anti-bribery legislation, but does not contain member-state national transposing laws. National transposition details require specific local legal sources and authorised Compliance SME verification."
+  },
+  {
+    "test_id": "RAG-013",
+    "query": "Compare Section 7 of the UK Bribery Act with EU Directive Article 13.",
+    "expected_records": "UK-01-R004; EU-01-R006",
+    "expected_response": "Explain they are different legal instruments/frameworks; do not claim they are identical or that EU Directive applies directly without transposition review.",
+    "citation_criteria": "Each legal proposition cited to its own record/source; jurisdiction and status caveats included.",
+    "http_status": 200,
+    "response_status": "GROUNDED",
+    "grounded": true,
+    "retrieved_records": [
+      "UK-01-R004",
+      "EU-01-R006",
+      "UK-01-R005",
+      "EU-01-R003",
+      "EU-01-R002"
+    ],
+    "cited_records": [
+      "UK-01-R004",
+      "EU-01-R006",
+      "UK-01-R005",
+      "EU-01-R003",
+      "EU-01-R002"
+    ],
+    "cited_chunks": [
+      "UK-01-R004-C01",
+      "EU-01-R006-C01",
+      "UK-01-R005-C01",
+      "EU-01-R003-C01",
+      "EU-01-R002-C01"
+    ],
+    "cited_urls": [
+      "https://www.legislation.gov.uk/ukpga/2010/23/section/7",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://www.legislation.gov.uk/ukpga/2010/23/section/8",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021"
+    ],
+    "cited_statuses": [
+      "Approved for RAG Integration - Pending SME Validation"
+    ],
+    "gap": null,
+    "conflicts": [],
+    "metadata": {
+      "retrieved_count": 5,
+      "approved_evidence_count": 0,
+      "citation_count": 5,
+      "conflict_count": 0,
+      "has_gap": false,
+      "gap_type": null,
+      "requires_human_review": false,
+      "has_candidate_evidence": true,
+      "response_version": "1.0"
+    },
+    "answer": "Comparison between Section 7 of the UK Bribery Act 2010 and Article 13 of Directive (EU) 2026/1021: Under the UK Bribery Act 2010 (Section 7), commercial organisations commit a strict-liability criminal offence if an associated person bribes another to obtain or retain business, subject to the statutory defence of having adequate procedures in place. In contrast, Article 13 of EU Directive 2026/1021 requires Member States to provide for legal-person liability for corruption offences committed for the entity's benefit by leading persons or due to lack of supervision. These are separate legal instruments with distinct scopes: the UK Bribery Act is direct primary UK legislation, whereas the EU Directive establishes minimum standards requiring national transposition in EU Member States and does not apply directly to ABC Shield without jurisdiction-specific transposition review. (Chunk ID: UK-01-R004-C01, Source ID: UK-01; Chunk ID: EU-01-R006-C01, Source ID: EU-01)."
+  },
+  {
+    "test_id": "RAG-014",
+    "query": "Is this regulatory corpus SME-approved?",
+    "expected_records": "Corpus metadata / all 25 records",
+    "expected_response": "Answer no: records remain Pending SME Validation; do not claim SME validation or production approval.",
+    "citation_criteria": "Answer must preserve exact validation status.",
+    "http_status": 200,
+    "response_status": "GROUNDED",
+    "grounded": true,
+    "retrieved_records": [
+      "UK-03-R003",
+      "UK-09-R001",
+      "UK-02-R006",
+      "UK-03-R002",
+      "UK-02-R005"
+    ],
+    "cited_records": [
+      "UK-03-R003",
+      "UK-09-R001",
+      "UK-02-R006",
+      "UK-03-R002",
+      "UK-02-R005"
+    ],
+    "cited_chunks": [
+      "UK-03-R003-C01",
+      "UK-09-R001-C01",
+      "UK-02-R006-C01",
+      "UK-03-R002-C01",
+      "UK-02-R005-C01"
+    ],
+    "cited_urls": [
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://handbook.fca.org.uk/handbook/prin2/prin2s1",
+      "https://www.gov.uk/government/publications/bribery-act-2010-guidance",
+      "https://handbook.fca.org.uk/handbook/fcg6",
+      "https://www.gov.uk/government/publications/bribery-act-2010-guidance"
+    ],
+    "cited_statuses": [
+      "Approved for RAG Integration - Pending SME Validation"
+    ],
+    "gap": null,
+    "conflicts": [
+      {
+        "conflict_id": "CO-003",
+        "topic": "Anti-Bribery / Integrity",
+        "source_id_1": "UK-03",
+        "source_1": "FCA Financial Crime Guide - FCG 6",
+        "source_id_2": "UK-09",
+        "source_2": "FCA Principles for Businesses - Principle 1",
+        "relationship": "Overlap - complementary",
+        "conflict_type": "OVERLAP",
+        "requirement_comparison": "FCG 6 addresses bribery/corruption systems and controls; Principle 1 requires authorised firms to conduct business with integrity.",
+        "scope_difference": "FCG 6 is financial-crime focused; Principle 1 is a broader conduct principle.",
+        "authority_difference": "Same regulator (FCA); different FCA Handbook provisions.",
+        "version_effective_date_difference": "Current FCA Handbook material; exact applicability depends on firm status/rules.",
+        "conflict_status": "No direct conflict identified",
+        "rag_use": "Useful for layered retrieval: specific control guidance + broader integrity obligation.",
+        "retrieved_source_ids": [
+          "UK-03",
+          "UK-09"
+        ],
+        "retrieved_chunk_ids": [
+          "UK-03-R003-C01",
+          "UK-09-R001-C01",
+          "UK-03-R002-C01"
+        ],
+        "both_sources_retrieved": true,
+        "source_1_validation_status": "Approved for RAG Integration - Pending SME Validation",
+        "source_2_validation_status": "Approved for RAG Integration - Pending SME Validation",
+        "source_1_is_approved_for_rag": false,
+        "source_2_is_approved_for_rag": false,
+        "is_approved_for_rag": false,
+        "requires_human_review": true,
+        "source_1_jurisdiction": "UK",
+        "source_2_jurisdiction": "UK",
+        "source_1_authority_level": "C",
+        "source_2_authority_level": "C",
+        "message": "Retrieved evidence contains a documented regulatory overlap between UK-03 (FCA Financial Crime Guide - FCG 6) and UK-09 (FCA Principles for Businesses - Principle 1). The Conflict Overlap register identifies the relationship as: 'Overlap - complementary'. Documented differences in scope, authority, and version are reported as registered. No legal conflict resolution is made by this system."
+      }
+    ],
+    "metadata": {
+      "retrieved_count": 5,
+      "approved_evidence_count": 0,
+      "citation_count": 5,
+      "conflict_count": 1,
+      "has_gap": false,
+      "gap_type": null,
+      "requires_human_review": true,
+      "has_candidate_evidence": true,
+      "response_version": "1.0"
+    },
+    "answer": "No. The records in the regulatory corpus are not yet SME-approved for production use. All 25 canonical records currently carry the validation status 'Approved for RAG Integration - Pending SME Validation' (with is_approved_for_rag set to False), indicating they are candidate records awaiting formal compliance SME sign-off."
+  },
+  {
+    "test_id": "RAG-015",
+    "query": "What is the meaning of an associated person for Section 7?",
+    "expected_records": "UK-01-R005",
+    "expected_response": "Use Section 8 summary and avoid expanding beyond the statutory meaning captured in the record.",
+    "citation_criteria": "Citation must be Section 8; source link must be the UK Bribery Act official link.",
+    "http_status": 200,
+    "response_status": "GROUNDED",
+    "grounded": true,
+    "retrieved_records": [
+      "UK-01-R005",
+      "UK-01-R004",
+      "UK-01-R003",
+      "EU-01-R006",
+      "UK-03-R002"
+    ],
+    "cited_records": [
+      "UK-01-R005",
+      "UK-01-R004",
+      "UK-01-R003",
+      "EU-01-R006",
+      "UK-03-R002"
+    ],
+    "cited_chunks": [
+      "UK-01-R005-C01",
+      "UK-01-R004-C01",
+      "UK-01-R003-C01",
+      "EU-01-R006-C01",
+      "UK-03-R002-C01"
+    ],
+    "cited_urls": [
+      "https://www.legislation.gov.uk/ukpga/2010/23/section/8",
+      "https://www.legislation.gov.uk/ukpga/2010/23/section/7",
+      "https://www.legislation.gov.uk/ukpga/2010/23/section/6",
+      "https://eur-lex.europa.eu/legal-content/EN/TXT/?uri=CELEX:32026L1021",
+      "https://handbook.fca.org.uk/handbook/fcg6"
+    ],
+    "cited_statuses": [
+      "Approved for RAG Integration - Pending SME Validation"
+    ],
+    "gap": null,
+    "conflicts": [
+      {
+        "conflict_id": "CO-002",
+        "topic": "Anti-Bribery / Financial-Crime Controls",
+        "source_id_1": "UK-01",
+        "source_1": "Bribery Act 2010",
+        "source_id_2": "UK-03",
+        "source_2": "FCA Financial Crime Guide - FCG 6",
+        "relationship": "Overlap - complementary",
+        "conflict_type": "OVERLAP",
+        "requirement_comparison": "Bribery Act defines criminal offences; FCG 6 expects supervised firms to maintain effective systems and controls for bribery/corruption risk.",
+        "scope_difference": "FCG 6 is directed at FCA-supervised firms within its stated scope; Bribery Act has its statutory scope.",
+        "authority_difference": "UK Parliament legislation vs FCA regulatory guidance.",
+        "version_effective_date_difference": "FCG 6 page last updated 29 Nov 2024; Bribery Act is 2010 legislation.",
+        "conflict_status": "No direct conflict identified",
+        "rag_use": "Scope filtering is important: FCA-supervised firm vs general statutory applicability.",
+        "retrieved_source_ids": [
+          "UK-01",
+          "UK-03"
+        ],
+        "retrieved_chunk_ids": [
+          "UK-01-R005-C01",
+          "UK-01-R004-C01",
+          "UK-01-R003-C01",
+          "UK-03-R002-C01"
+        ],
+        "both_sources_retrieved": true,
+        "source_1_validation_status": "Approved for RAG Integration - Pending SME Validation",
+        "source_2_validation_status": "Approved for RAG Integration - Pending SME Validation",
+        "source_1_is_approved_for_rag": false,
+        "source_2_is_approved_for_rag": false,
+        "is_approved_for_rag": false,
+        "requires_human_review": true,
+        "source_1_jurisdiction": "UK",
+        "source_2_jurisdiction": "UK",
+        "source_1_authority_level": "A",
+        "source_2_authority_level": "C",
+        "message": "Retrieved evidence contains a documented regulatory overlap between UK-01 (Bribery Act 2010) and UK-03 (FCA Financial Crime Guide - FCG 6). The Conflict Overlap register identifies the relationship as: 'Overlap - complementary'. Documented differences in scope, authority, and version are reported as registered. No legal conflict resolution is made by this system."
+      }
+    ],
+    "metadata": {
+      "retrieved_count": 5,
+      "approved_evidence_count": 0,
+      "citation_count": 5,
+      "conflict_count": 1,
+      "has_gap": false,
+      "gap_type": null,
+      "requires_human_review": true,
+      "has_candidate_evidence": true,
+      "response_version": "1.0"
+    },
+    "answer": "Under the Bribery Act 2010 (Section 8), Source: UK-01 - Bribery Act 2010\nReference: Section 8\nTopic: Meaning of associated person\nRequirement: Section 8 defines an associated person for the section 7 framework by reference to a person performing services for or on behalf of the organisation.\nNotes: Programme-approved for extraction; final legal applicability remains subject to authorised Compliance SME validation. (Chunk ID: UK-01-R005-C01, Source ID: UK-01)."
+  }
+]

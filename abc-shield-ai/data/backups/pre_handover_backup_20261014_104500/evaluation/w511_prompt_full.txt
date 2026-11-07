@@ -1,0 +1,806 @@
+<USER_REQUEST>
+WEEK 5 — TASK W5.11
+FINAL END-TO-END RAG VERIFICATION
+
+ROLE:
+Padma Kumar — AI/RAG & Conflict Detection Engineer
+
+PROJECT:
+ABC Shield / FinRegTech ShipYard AI/RAG
+
+CURRENT STATUS:
+
+W5.1 — RAG Integration Readiness — COMPLETE
+W5.2 — RAG → Backend Contract Alignment — COMPLETE
+W5.3 — RAG → Frontend Integration Support — COMPLETE
+W5.4 — RAG inside Advice Workflow — COMPLETE
+W5.5 — Advice Comparison — COMPLETE
+W5.6 — Conflict/Relationship Integration — COMPLETE
+W5.7 — Regulatory ↔ RAG — COMPLETE
+W5.8 — Regulatory ↔ Advice Traceability — COMPLETE
+W5.9 — RAG Evaluation & Regression — COMPLETE
+W5.10 — Integrated RAG Security Validation — COMPLETE
+
+Current full regression:
+664 / 664 tests passing.
+
+CURRENT RAG STATE:
+- 15 regulatory records
+- 15 Candidate
+- 0 Approved
+- 15 ChromaDB vectors
+- W4.11 contract preserved
+- W5.4 AdviceRAGAdapter integrated
+- W5.5 AdviceComparator integrated
+- W5.6 CO-001..CO-011 relationship integration
+- W5.8 traceability helpers integrated
+- W5.9 evaluation regression complete
+- W5.10 integrated security validation complete
+
+==================================================
+OBJECTIVE
+==================================================
+
+Perform the FINAL END-TO-END VERIFICATION of the Week 5 RAG integration.
+
+The objective is to prove that the RAG layer participates correctly in the actual product workflow rather than existing only as an isolated API/demo.
+
+The target conceptual flow is:
+
+Project
+  ↓
+Requirements / Regulatory Need
+  ↓
+Advisor 1 Advice
+  ↓
+Advisor 2 Advice
+  ↓
+RAG Evidence Retrieval
+  ↓
+Grounded Response
+  ↓
+Citations + Provenance
+  ↓
+Advice Comparison
+  ↓
+Differences / Relationships / Evidence Gaps
+  ↓
+Human Review
+  ↓
+Decision / Disposition
+  ↓
+Traceability / Audit
+
+IMPORTANT OWNERSHIP BOUNDARY:
+
+Padma owns:
+- RAG
+- retrieval
+- grounding
+- citations
+- provenance
+- evidence gaps
+- conflict/relationship detection
+- AdviceRAGAdapter
+- AdviceComparator
+- RAG traceability
+- RAG evaluation/security
+
+Vishal owns:
+- authentication
+- authorization
+- project lifecycle
+- requirement persistence
+- advisor persistence
+- PostgreSQL persistence
+- review workflow persistence
+- final decision/disposition persistence
+- backend gateway
+
+Harshini owns:
+- frontend UI
+- rendering RAG outputs
+- citations/provenance UI
+- comparison UI
+- human-review UI
+
+Madhesh owns:
+- regulatory source data
+- regulatory source governance
+- SME approval
+
+DO NOT IMPLEMENT DUPLICATE BACKEND AUTH, DATABASE, OR FRONTEND SYSTEMS.
+
+==================================================
+STEP 1 — INSPECT THE ACTUAL INTEGRATION
+==================================================
+
+Before writing tests, inspect the actual repository.
+
+Trace the current implementation from:
+
+1. QueryRequest
+2. /api/v1/query
+3. GroundedGenerator
+4. RegulatoryRetriever
+5. CitationBuilder
+6. ProvenanceRecord
+7. GapHandler
+8. ConflictDetector
+9. AdviceRAGAdapter
+10. AdviceComparator
+11. /api/v1/compare
+12. traceability helpers
+13. StructuredAIResponse
+14. W4.11 status mapping
+
+Identify the actual files/functions/classes.
+
+Do not assume illustrative files from previous reports exist.
+
+==================================================
+STEP 2 — DEFINE THE END-TO-END SCENARIO
+==================================================
+
+Use a deterministic, repository-supported scenario.
+
+Prefer an existing regulatory benchmark/advice fixture if available.
+
+The scenario should represent:
+
+Project:
+PRJ-ABC-001 or the repository's valid project fixture.
+
+Requirement:
+An existing requirement related to anti-bribery/regulatory controls.
+
+Advisor 1:
+A grounded advice statement supported by available regulatory evidence.
+
+Advisor 2:
+A different advice statement that creates a meaningful comparison.
+
+Use only existing fixtures or safe synthetic test data.
+
+Do not create fake regulatory sources.
+
+Do not alter the regulatory corpus.
+
+==================================================
+STEP 3 — VERIFY INPUT CORRELATION
+==================================================
+
+Verify that the flow preserves:
+
+- request id
+- project id
+- requirement ids
+- advisor advice ids
+- query/context
+
+through the RAG pipeline.
+
+Expected chain:
+
+Client/Backend Request
+        ↓
+QueryRequest
+        ↓
+RAG processing
+        ↓
+StructuredAIResponse
+        ↓
+AdviceRAGResult
+        ↓
+AdviceComparisonResult
+
+No correlation identifier should be silently lost.
+
+==================================================
+STEP 4 — VERIFY RAG RETRIEVAL
+==================================================
+
+Execute the selected end-to-end scenario.
+
+Verify:
+
+1. Query reaches RAG.
+2. Relevant regulatory chunks are retrieved.
+3. Retrieved chunks originate from ChromaDB.
+4. Project filtering is preserved.
+5. Candidate approval gating is preserved.
+6. Retrieval metadata is retained.
+
+Do NOT approve the Candidate records.
+
+Because the corpus currently contains:
+
+15 Candidate
+0 Approved
+
+verify the existing system behavior for candidate evidence exactly as designed.
+
+Do not change approval state to make the scenario pass.
+
+==================================================
+STEP 5 — VERIFY GROUNDED RESPONSE
+==================================================
+
+Verify:
+
+retrieved evidence
+      ↓
+GroundedGenerator
+      ↓
+structured response
+
+Check:
+
+- response status
+- answer
+- citations
+- provenance
+- candidate warning
+- evidence gaps
+- human review state where applicable
+
+Verify the answer is grounded in retrieved evidence.
+
+Do not judge legal correctness.
+
+==================================================
+STEP 6 — VERIFY CITATION + PROVENANCE
+==================================================
+
+For the actual end-to-end response verify:
+
+Answer
+ ↓
+Citation
+ ↓
+Chunk
+ ↓
+Record
+ ↓
+Source
+ ↓
+Official source
+
+Check:
+
+- citation ID
+- chunk ID
+- record ID
+- source ID
+- regulation
+- jurisdiction
+- section/article
+- official source
+- validation status
+- approval state
+
+No citation may point to evidence that was not actually retrieved.
+
+No fabricated URL may appear.
+
+==================================================
+STEP 7 — VERIFY ADVICE RAG ADAPTER
+==================================================
+
+Execute the AdviceRAGAdapter using the actual supported interface.
+
+Verify:
+
+- AdviceRAGResult is created.
+- workflow_status is correct.
+- request correlation is preserved.
+- project_id is preserved.
+- requirement_ids are preserved.
+- advisor_advice_ids are preserved.
+- underlying RAG response remains W4.11-compatible.
+- citations/provenance remain available.
+- candidate/gap/no-source behavior remains intact.
+
+==================================================
+STEP 8 — VERIFY ADVICE COMPARISON
+==================================================
+
+Execute AdviceComparator using the actual supported interface.
+
+Verify:
+
+Advisor 1
++
+Advisor 2
+↓
+Comparison
+
+Expected outputs may include:
+
+- differences
+- conflicts/relationships
+- evidence status
+- supporting evidence
+- citations
+- provenance
+- human_review_required
+
+Verify the existing taxonomy remains intact:
+
+- CONFLICT
+- OVERLAP
+- SCOPE_DIFFERENCE
+- AUTHORITY_DIFFERENCE
+- VERSION_DIFFERENCE
+
+Do NOT create a new taxonomy.
+
+==================================================
+STEP 9 — VERIFY NON-ADJUDICATION
+==================================================
+
+This is mandatory.
+
+Verify that the end-to-end comparison never produces a final legal/professional winner.
+
+The RAG layer must preserve:
+
+decision = None
+
+The system may say:
+
+- there is a difference
+- there is an overlap
+- there is a potential contradiction
+- evidence is insufficient
+- human review is required
+
+The system must NOT say:
+
+- Advisor 1 is correct
+- Advisor 2 is correct
+- Advisor 1 is legally superior
+- Advisor 2 is legally wrong
+
+==================================================
+STEP 10 — VERIFY CONFLICT / RELATIONSHIP TRACE
+==================================================
+
+If the selected scenario produces a relationship, verify:
+
+Comparison
+ ↓
+Relationship
+ ↓
+CO-001..CO-011
+ ↓
+Supporting evidence
+ ↓
+Source/chunk
+ ↓
+Citation/provenance
+
+Verify the relationship remains descriptive and evidence-connected.
+
+If the selected scenario does not naturally produce a relationship, use an existing deterministic fixture that does.
+
+Do not manipulate production logic merely to force a conflict.
+
+==================================================
+STEP 11 — VERIFY EVIDENCE GAP PATH
+==================================================
+
+The final E2E verification must include at least one safe gap/no-source scenario.
+
+Use an existing supported case.
+
+Verify:
+
+unsupported/missing evidence
+        ↓
+GapHandler
+        ↓
+GAP_DETECTED or NO_SOURCE_FOUND
+        ↓
+safe guidance
+        ↓
+human review where required
+
+Verify:
+
+- no hallucinated source
+- no fabricated citation
+- no advisor blame
+- no false claim that a regulation does not exist
+- no legal adjudication
+
+==================================================
+STEP 12 — VERIFY TRACEABILITY
+==================================================
+
+For the successful/grounded comparison scenario verify:
+
+Advice ID
+ ↓
+request_id
+ ↓
+RAG result
+ ↓
+retrieved chunk
+ ↓
+citation
+ ↓
+provenance
+ ↓
+comparison
+ ↓
+relationship/conflict
+ ↓
+human review requirement
+
+Use existing:
+
+get_evidence_trace_for_advice()
+get_conflict_trace()
+get_full_traceability_summary()
+get_evidence_trace()
+
+Do not build another traceability implementation.
+
+==================================================
+STEP 13 — VERIFY APPROVAL GATING IN THE E2E PATH
+==================================================
+
+Confirm that the integrated flow does not bypass:
+
+filter_approved_only=True
+
+Current state:
+
+15 Candidate
+0 Approved
+
+Expected:
+
+No Candidate evidence is silently represented as Approved.
+
+No comparison result may promote evidence to Approved.
+
+No traceability method may bypass approval state.
+
+==================================================
+STEP 14 — VERIFY SECURITY INTEGRATION
+==================================================
+
+Perform a lightweight final check using the already validated W5.10 controls.
+
+Do not duplicate the entire W5.10 suite.
+
+Confirm that the E2E flow preserves:
+
+- project isolation
+- payload validation
+- candidate gating
+- non-adjudication
+- safe error handling
+- citation integrity
+- provenance integrity
+- human review requirement
+
+==================================================
+STEP 15 — VERIFY FAILURE PATH
+==================================================
+
+Execute at least one controlled failure scenario.
+
+Examples:
+
+- no-source query
+- invalid request
+- unsupported requirement
+- controlled retrieval failure if existing fixtures support it
+
+Verify the failure remains structured and safe.
+
+Do not expose:
+
+- stack traces
+- secrets
+- internal filesystem paths
+- database credentials
+
+==================================================
+STEP 16 — FRONTEND/BACKEND HANDOFF VERIFICATION
+==================================================
+
+Do NOT implement frontend code.
+
+Instead verify that the actual RAG output contains the information Harshini needs to render:
+
+- answer
+- status
+- citations
+- provenance
+- candidate warning
+- conflicts/relationships
+- evidence gaps
+- human_review_required
+- comparison findings
+- correlation/request identifiers where contractually required
+
+Verify that the response is compatible with the W5.3 frontend integration guide.
+
+==================================================
+STEP 17 — BACKEND HANDOFF VERIFICATION
+==================================================
+
+Do NOT implement Vishal's persistence layer.
+
+Document exactly what the backend needs to consume from RAG:
+
+- request_id
+- project_id
+- requirement_ids
+- advisor_advice_ids
+- workflow_status
+- RAG response
+- citations
+- provenance
+- conflicts/relationships
+- evidence gaps
+- human_review_required
+- comparison result
+- trace identifiers
+
+Clearly distinguish:
+
+IMPLEMENTED BY PADMA
+
+from:
+
+REQUIRED FROM VISHAL
+
+==================================================
+STEP 18 — CREATE MINIMAL E2E TEST SUITE
+==================================================
+
+Create:
+
+tests/test_rag_end_to_end_w511.py
+
+Only add tests that prove genuine end-to-end integration.
+
+Do NOT duplicate the existing 664 tests.
+
+Prefer a small deterministic suite covering:
+
+1. grounded advice E2E
+2. advice comparison E2E
+3. citation/provenance E2E
+4. conflict/relationship E2E
+5. evidence-gap/no-source E2E
+6. traceability E2E
+7. non-adjudication E2E
+8. approval-gating E2E
+
+If an existing test already proves one of these at true E2E level, reuse it instead of duplicating it.
+
+==================================================
+STEP 19 — FULL REGRESSION
+==================================================
+
+Run focused W5.11 tests first.
+
+Then run:
+
+$env:HF_HUB_OFFLINE='1'; & "d:\FInregTech Shipyard\.venv\Scripts\python.exe" -m pytest -q
+
+Previous baseline:
+
+664 / 664 PASSED
+
+Record:
+
+- focused W5.11 tests
+- full regression
+- failures
+- errors
+- execution time
+
+Do not claim completion unless actual commands pass.
+
+==================================================
+STEP 20 — CREATE FINAL E2E REPORT
+==================================================
+
+Create:
+
+data/evaluation/W5_11_FINAL_RAG_END_TO_END_VERIFICATION_REPORT.md
+
+Report must contain:
+
+1. Objective
+2. Scope
+3. Ownership boundaries
+4. Actual integration path
+5. Selected E2E scenario
+6. Request/correlation verification
+7. Retrieval verification
+8. Grounded response verification
+9. Citation verification
+10. Provenance verification
+11. AdviceRAGAdapter verification
+12. AdviceComparator verification
+13. Conflict/relationship verification
+14. Evidence-gap verification
+15. Traceability verification
+16. Approval-gating verification
+17. Non-adjudication verification
+18. Security handoff verification
+19. Frontend handoff
+20. Backend handoff
+21. Focused test results
+22. Full regression
+23. Findings
+24. Known limitations
+25. Final status
+
+==================================================
+STEP 21 — FINAL E2E FLOW TABLE
+==================================================
+
+Include:
+
+| E2E Stage | Expected | Actual | Status |
+|---|---|---|---|
+| Request ingestion | Valid request accepted | actual | PASS/FAIL |
+| Correlation | IDs preserved | actual | PASS/FAIL |
+| Retrieval | Relevant evidence retrieved | actual | PASS/FAIL |
+| Grounding | Answer evidence-supported | actual | PASS/FAIL |
+| Citation | Evidence-linked citations | actual | PASS/FAIL |
+| Provenance | Full lineage | actual | PASS/FAIL |
+| Advice RAG | AdviceRAGResult created | actual | PASS/FAIL |
+| Comparison | Advisor differences identified | actual | PASS/FAIL |
+| Relationship | CO taxonomy preserved | actual | PASS/FAIL |
+| Evidence gap | Safe gap handling | actual | PASS/FAIL |
+| Traceability | End-to-end trace available | actual | PASS/FAIL |
+| Approval | Candidate gating preserved | actual | PASS/FAIL |
+| Human review | Required where appropriate | actual | PASS/FAIL |
+| Decision | RAG does not adjudicate | decision=None | PASS/FAIL |
+| Frontend handoff | Required display fields present | actual | PASS/FAIL |
+| Backend handoff | Required workflow fields present | actual | PASS/FAIL |
+
+Do not fabricate results.
+
+==================================================
+STEP 22 — CORPUS/VECTOR INTEGRITY
+==================================================
+
+Verify:
+
+- 15 regulatory records
+- 15 Candidate
+- 0 Approved
+- 15 ChromaDB vectors
+- same embedding model
+- no corpus mutation
+- no ChromaDB mutation
+
+==================================================
+DEFINITION OF DONE
+==================================================
+
+W5.11 is COMPLETE only if:
+
+[ ] Actual RAG integration path inspected.
+[ ] At least one grounded advice E2E path verified.
+[ ] Advice comparison E2E verified.
+[ ] Citation/provenance chain verified.
+[ ] Conflict/relationship path verified where applicable.
+[ ] Evidence-gap/no-source path verified.
+[ ] Traceability path verified.
+[ ] Approval gating verified end-to-end.
+[ ] Non-adjudication verified.
+[ ] Human review requirement verified.
+[ ] Frontend handoff verified.
+[ ] Backend handoff documented.
+[ ] Focused E2E tests pass.
+[ ] Full regression passes.
+[ ] No corpus mutation.
+[ ] No ChromaDB mutation.
+[ ] Final E2E report created.
+[ ] Known limitations documented.
+
+IMPORTANT:
+
+Do NOT mark W5.11 COMPLETE just because existing tests pass.
+
+There must be actual end-to-end execution evidence showing that the integrated RAG components work together.
+
+==================================================
+FINAL OUTPUT
+==================================================
+
+Return:
+
+W5.11 STATUS: COMPLETE / NOT COMPLETE
+
+Actual E2E flow:
+...
+
+Grounded advice scenario:
+...
+
+Advice comparison scenario:
+...
+
+Citation/provenance:
+...
+
+Conflict/relationship:
+...
+
+Evidence gap/no-source:
+...
+
+Traceability:
+...
+
+Approval gating:
+...
+
+Non-adjudication:
+...
+
+Human review:
+...
+
+Frontend handoff:
+...
+
+Backend handoff:
+...
+
+Focused W5.11 tests:
+...
+
+Full regression:
+...
+
+Failures:
+...
+
+Errors:
+...
+
+Corpus modified:
+YES / NO
+
+ChromaDB modified:
+YES / NO
+
+Known limitations:
+...
+
+Padma completed:
+...
+
+Vishal dependencies:
+...
+
+Harshini dependencies:
+...
+
+Madhesh dependencies:
+...
+
+Final E2E status:
+...
+
+If any criterion is incomplete:
+
+"W5.11 NOT COMPLETE — remaining item: ..."
+</USER_REQUEST>
+<ADDITIONAL_METADATA>
+The current local time is: 2026-10-08T19:49:36+05:30.
+</ADDITIONAL_METADATA>

@@ -1,0 +1,26 @@
+# ABC Shield / FinRegTech ShipYard - AI/RAG Module MVP Dependencies
+
+# Core Data Validation & Settings
+pydantic>=2.7.0
+pydantic-settings>=2.2.0
+
+# Vector Database & Retrieval
+chromadb>=0.5.0
+
+# Embeddings (Local / Pluggable)
+sentence-transformers>=3.0.0
+
+# LLM Provider Client (Structured outputs & grounding)
+openai>=1.30.0
+
+# API Layer
+fastapi>=0.111.0
+uvicorn>=0.30.0
+
+# Configuration & Utilities
+python-dotenv>=1.0.1
+tiktoken>=0.7.0
+
+# Testing & Evaluation
+pytest>=8.2.0
+httpx>=0.27.0
