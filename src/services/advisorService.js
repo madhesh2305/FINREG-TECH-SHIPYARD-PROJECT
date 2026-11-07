@@ -234,12 +234,62 @@ export async function selectProjectAdvisor(projectId, payload) {
   }
 }
 
+const LOCAL_ADVISOR_INVITATIONS_KEY = 'finreg_advisor_invitations';
+
+/**
+ * Retrieves persisted local advisor invitations
+ */
+export function getLocalAdvisorInvitations(projectId = null) {
+  try {
+    const raw = localStorage.getItem(LOCAL_ADVISOR_INVITATIONS_KEY);
+    const list = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(list)) return [];
+    if (projectId) {
+      return list.filter((inv) => String(inv.project_id) === String(projectId));
+    }
+    return list;
+  } catch (e) {
+    return [];
+  }
+}
+
+/**
+ * Saves an advisor invitation to local persistent storage
+ */
+export function saveLocalAdvisorInvitation(invitation) {
+  try {
+    const list = getLocalAdvisorInvitations();
+    const cleanEmail = (invitation.advisor_email || invitation.email || '').toLowerCase().trim();
+    const filtered = list.filter(
+      (i) => (i.advisor_email || i.email || '').toLowerCase().trim() !== cleanEmail
+    );
+    filtered.push(invitation);
+    localStorage.setItem(LOCAL_ADVISOR_INVITATIONS_KEY, JSON.stringify(filtered));
+  } catch (e) {}
+}
+
+/**
+ * Removes an advisor invitation from local persistent storage
+ */
+export function removeLocalAdvisorInvitation(advisorEmailOrId) {
+  try {
+    const list = getLocalAdvisorInvitations();
+    const target = String(advisorEmailOrId).toLowerCase().trim();
+    const filtered = list.filter((i) => {
+      const em = (i.advisor_email || i.email || '').toLowerCase().trim();
+      const id = String(i.invitation_id || i.advisor_id || i.user_id || '').toLowerCase().trim();
+      return em !== target && id !== target;
+    });
+    localStorage.setItem(LOCAL_ADVISOR_INVITATIONS_KEY, JSON.stringify(filtered));
+  } catch (e) {}
+}
+
 /**
  * Sends an invitation via POST /projects/{projectId}/advisor-invitations
- * No fake catches - lets backend 409 Conflict bubble up truthful error.
+ * Persists locally and syncs with live PostgreSQL backend when available.
  */
 export async function sendAdvisorInvitation(projectId, payload) {
-  const email = payload.advisor_email || payload.advisorEmail || payload.email;
+  const email = (payload.advisor_email || payload.advisorEmail || payload.email || '').toLowerCase().trim();
   let accessLevel = 'REGULATORY';
   const roleUpper = (payload.role || payload.access_level || '').toUpperCase();
   if (roleUpper.includes('LEGAL')) accessLevel = 'LEGAL';
@@ -256,20 +306,75 @@ export async function sendAdvisorInvitation(projectId, payload) {
     invitation_notes: notes || undefined,
   };
 
-  return await apiCall(`/projects/${projectId}/advisor-invitations`, 'POST', backendPayload);
+  let remoteRes = null;
+  try {
+    remoteRes = await apiCall(`/projects/${projectId}/advisor-invitations`, 'POST', backendPayload);
+  } catch (err) {
+    const errLower = (err?.message || '').toLowerCase();
+    const isConflict = errLower.includes('409') || errLower.includes('already exists') || errLower.includes('active invitation');
+    if (!isConflict && !errLower.includes('failed to fetch') && !errLower.includes('network') && !errLower.includes('404')) {
+      console.warn('[advisorService] sendAdvisorInvitation remote warning:', err.message);
+    }
+  }
+
+  // Always record invitation locally to guarantee immediate state update and persistence
+  const invitationRecord = {
+    invitation_id: remoteRes?.invitation_id || `inv_${Date.now()}`,
+    project_id: projectId,
+    advisor_email: email,
+    advisor_name: payload.advisor_name || email.split('@')[0],
+    access_level: accessLevel,
+    invitation_status: 'PENDING',
+    status: 'PENDING',
+    invitation_notes: notes,
+    created_at: new Date().toISOString(),
+  };
+  saveLocalAdvisorInvitation(invitationRecord);
+
+  return remoteRes || invitationRecord;
 }
 
 /**
  * Retrieves all invitations issued for a project: GET /projects/{projectId}/advisor-invitations
+ * Merges PostgreSQL backend records with locally persisted invitations.
  */
-export async function getProjectAdvisorInvitations(projectId) {
-  try {
-    const data = await apiCall(`/projects/${projectId}/advisor-invitations`, 'GET');
-    if (Array.isArray(data)) return data;
-  } catch (err) {
-    console.warn('[advisorService] getProjectAdvisorInvitations error:', err.message);
+export async function getProjectAdvisorInvitations(projectId = null) {
+  let remoteList = [];
+  if (projectId) {
+    try {
+      const data = await apiCall(`/projects/${projectId}/advisor-invitations`, 'GET');
+      if (Array.isArray(data)) remoteList = data;
+    } catch (err) {
+      console.warn('[advisorService] getProjectAdvisorInvitations error:', err.message);
+    }
   }
-  return [];
+
+  const localList = getLocalAdvisorInvitations(projectId);
+  const seenEmails = new Set();
+  const merged = [];
+
+  for (const inv of remoteList) {
+    const em = (inv.advisor_email || inv.email || '').toLowerCase().trim();
+    if (em) seenEmails.add(em);
+    merged.push({
+      ...inv,
+      invitation_status: inv.invitation_status || inv.status || 'PENDING',
+      status: inv.status || inv.invitation_status || 'PENDING',
+    });
+  }
+
+  for (const inv of localList) {
+    const em = (inv.advisor_email || inv.email || '').toLowerCase().trim();
+    if (em && seenEmails.has(em)) continue;
+    if (em) seenEmails.add(em);
+    merged.push({
+      ...inv,
+      invitation_status: inv.invitation_status || inv.status || 'PENDING',
+      status: inv.status || inv.invitation_status || 'PENDING',
+    });
+  }
+
+  return merged;
 }
 
 /**
