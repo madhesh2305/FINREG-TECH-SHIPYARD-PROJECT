@@ -144,29 +144,29 @@ export default function AdminDashboardView({
     }
   };
 
-  // Reload live projects from PostgreSQL
+  // Reload live projects from PostgreSQL and platform storage
   const reloadProjects = async () => {
     try {
       const data = await getProjects();
       if (Array.isArray(data)) {
         setProjectsList(
           data.map((p) => {
-            const isDis = (p.status || '').toUpperCase() === 'DISABLED';
+            const isDis = (p.status || p.rawStatus || '').toUpperCase() === 'DISABLED';
             return {
-              id: p.id || p.project_id,
+              id: p.id || p.project_id || p.project_code,
               name: p.name || p.project_name,
               owner: p.owner || p.owner_name || 'Project Owner',
               status: isDis ? 'Disabled' : (p.status || 'Active'),
-              rawStatus: (p.status || 'Active').toUpperCase(),
+              rawStatus: isDis ? 'DISABLED' : (p.rawStatus || 'ACTIVE'),
               statusColor: isDis
                 ? 'bg-slate-900 text-slate-400 border-amber-900/60'
                 : 'bg-[#281d11] text-amber-400 border-amber-800/50',
               dotColor: isDis ? 'bg-slate-500' : 'bg-amber-400',
-              assignedAdvisors: 'Assigned',
-              creationDate: p.created_at ? new Date(p.created_at).toLocaleDateString('en-GB') : 'Recently',
-              lastActivity: p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-GB') : 'Recently',
-              readiness: 'Active Review',
-              accessBoundary: 'Platform isolation enforced.',
+              assignedAdvisors: p.assignedAdvisors || p.assigned_advisor || 'Assigned',
+              creationDate: p.creationDate || (p.created_at ? new Date(p.created_at).toLocaleDateString('en-GB') : 'Recently'),
+              lastActivity: p.lastActivity || (p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-GB') : 'Recently'),
+              readiness: p.readiness || 'Active Review',
+              accessBoundary: p.accessBoundary || 'Platform isolation enforced.',
             };
           })
         );
@@ -329,13 +329,17 @@ export default function AdminDashboardView({
   const filteredProjects = projectsList.filter((proj) => {
     const matchesSearch =
       projectSearchQuery.trim() === '' ||
-      proj.name.toLowerCase().includes(projectSearchQuery.toLowerCase()) ||
-      proj.id.toLowerCase().includes(projectSearchQuery.toLowerCase()) ||
-      proj.owner.toLowerCase().includes(projectSearchQuery.toLowerCase());
+      (proj.name || '').toLowerCase().includes(projectSearchQuery.toLowerCase()) ||
+      (proj.id || '').toLowerCase().includes(projectSearchQuery.toLowerCase()) ||
+      (proj.owner || '').toLowerCase().includes(projectSearchQuery.toLowerCase());
 
+    const pStatusLower = (proj.status || '').toLowerCase();
+    const filterLower = projectStatusFilter.toLowerCase();
     const matchesStatus =
       projectStatusFilter === 'All statuses' ||
-      proj.status.toLowerCase() === projectStatusFilter.toLowerCase();
+      pStatusLower === filterLower ||
+      (filterLower === 'disabled' && (pStatusLower === 'disabled' || (proj.rawStatus || '').toUpperCase() === 'DISABLED')) ||
+      (filterLower === 'active' && pStatusLower !== 'disabled' && (proj.rawStatus || '').toUpperCase() !== 'DISABLED');
 
     return matchesSearch && matchesStatus;
   });
@@ -577,30 +581,30 @@ export default function AdminDashboardView({
           await reloadUsers();
         }
 
-        if (projectsData.status === 'fulfilled' && Array.isArray(projectsData.value)) {
+        if (projectsData.status === 'fulfilled' && Array.isArray(projectsData.value) && projectsData.value.length > 0) {
           setProjectsList(
             projectsData.value.map((p) => {
-              const isDis = (p.status || '').toUpperCase() === 'DISABLED';
+              const isDis = (p.status || p.rawStatus || '').toUpperCase() === 'DISABLED';
               return {
-                id: p.id || p.project_id,
+                id: p.id || p.project_id || p.project_code,
                 name: p.name || p.project_name,
                 owner: p.owner || p.owner_name || 'Project Owner',
                 status: isDis ? 'Disabled' : (p.status || 'Active'),
-                rawStatus: (p.status || 'Active').toUpperCase(),
+                rawStatus: isDis ? 'DISABLED' : (p.rawStatus || 'ACTIVE'),
                 statusColor: isDis
                   ? 'bg-slate-900 text-slate-400 border-amber-900/60'
                   : 'bg-[#281d11] text-amber-400 border-amber-800/50',
                 dotColor: isDis ? 'bg-slate-500' : 'bg-amber-400',
-                assignedAdvisors: 'Assigned',
-                creationDate: p.created_at ? new Date(p.created_at).toLocaleDateString('en-GB') : 'Recently',
-                lastActivity: p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-GB') : 'Recently',
-                readiness: 'Active Review',
-                accessBoundary: 'Platform isolation enforced.',
+                assignedAdvisors: p.assignedAdvisors || p.assigned_advisor || 'Assigned',
+                creationDate: p.creationDate || (p.created_at ? new Date(p.created_at).toLocaleDateString('en-GB') : 'Recently'),
+                lastActivity: p.lastActivity || (p.updated_at ? new Date(p.updated_at).toLocaleDateString('en-GB') : 'Recently'),
+                readiness: p.readiness || 'Active Review',
+                accessBoundary: p.accessBoundary || 'Platform isolation enforced.',
               };
             })
           );
-        } else if (projectsData.status === 'rejected') {
-          setProjectsList([]);
+        } else {
+          await reloadProjects();
         }
 
         await fetchRolesData();
@@ -1565,9 +1569,11 @@ export default function AdminDashboardView({
                     className="w-full sm:w-auto px-4 py-2.5 rounded-md bg-[#121316] border border-slate-800 text-xs sm:text-sm text-slate-200 focus:outline-none focus:border-amber-500/80 appearance-none pr-9 cursor-pointer transition-colors"
                   >
                     <option value="All statuses">All statuses</option>
+                    <option value="Active">Active</option>
                     <option value="In Progress">In Progress</option>
                     <option value="Under Review">Under Review</option>
                     <option value="Draft">Draft</option>
+                    <option value="Disabled">Disabled</option>
                   </select>
                   <ChevronDown className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                 </div>
