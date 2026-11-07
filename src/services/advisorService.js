@@ -1,4 +1,6 @@
 import { apiCall } from './api';
+import { getLocalAccounts, normalizeRole } from './authService';
+import { isAccountDeactivated } from './adminService';
 
 const DEFAULT_ADVISORS_LIST = [
   {
@@ -34,16 +36,103 @@ const DEFAULT_ADVISORS_LIST = [
 ];
 
 /**
- * Fetches expert advisors directory
+ * Returns all active advisor accounts created via User Registration or standalone accounts
+ */
+function getRegisteredAdvisorsList() {
+  const advisors = [];
+  try {
+    const accounts = getLocalAccounts();
+    for (const [email, acc] of Object.entries(accounts)) {
+      const u = acc.user;
+      if (!u) continue;
+      const effectiveRole = normalizeRole(u.role || u.platform_role || '');
+      if (effectiveRole !== 'ADVISOR') continue;
+
+      const cleanEmail = (u.email || email).toLowerCase().trim();
+      const userId = u.user_id || u.id;
+
+      // Skip deactivated accounts
+      if (u.is_active === false || u.status === 'Inactive' || isAccountDeactivated(cleanEmail, userId)) {
+        continue;
+      }
+
+      const advName = u.full_name || u.name || cleanEmail.split('@')[0];
+      const org = u.organization_name || u.organization || 'Independent Advisory Practice';
+      const profTitle = u.professional_title || 'Regulatory & Compliance Advisor';
+      const spec = u.specialization || 'FCA & PRA Regulatory Advisory';
+      const bio = u.bio || `Registered compliance advisor representing ${org}.`;
+
+      advisors.push({
+        advisor_profile_id: u.advisor_profile_id || userId || `adv_${cleanEmail}`,
+        id: userId || `adv_${cleanEmail}`,
+        user_id: userId,
+        full_name: advName,
+        name: advName,
+        email: cleanEmail,
+        contact_email: cleanEmail,
+        organization_name: org,
+        organization: org,
+        firm: org,
+        professional_title: profTitle,
+        specialization: spec,
+        bio: bio,
+        domain: 'UK / FCA & AML',
+        jurisdiction: 'UK / EU',
+        is_active: true,
+        status: 'Active',
+      });
+    }
+  } catch (err) {
+    console.warn('[advisorService] Error loading registered advisors:', err);
+  }
+  return advisors;
+}
+
+/**
+ * Fetches expert advisors directory - merges live backend advisors, newly registered advisors, and defaults
  */
 export async function getAdvisors() {
+  let remoteList = [];
   try {
     const data = await apiCall('/advisors', 'GET');
-    if (Array.isArray(data) && data.length > 0) return data;
+    if (Array.isArray(data)) {
+      remoteList = data;
+    }
   } catch (err) {
     console.info('[advisorService] getAdvisors API warning:', err.message);
   }
-  return DEFAULT_ADVISORS_LIST;
+
+  const registeredList = getRegisteredAdvisorsList();
+  const combined = [];
+  const seenEmails = new Set();
+
+  // 1. Process remote advisors from backend
+  for (const adv of remoteList) {
+    const em = (adv.email || adv.contact_email || '').toLowerCase().trim();
+    const uid = adv.user_id || adv.id;
+    if (isAccountDeactivated(em, uid) || adv.is_active === false) continue;
+    if (em) seenEmails.add(em);
+    combined.push(adv);
+  }
+
+  // 2. Add all registered advisors signed up by users across the platform
+  for (const adv of registeredList) {
+    const em = (adv.email || '').toLowerCase().trim();
+    if (seenEmails.has(em)) continue;
+    seenEmails.add(em);
+    combined.push(adv);
+  }
+
+  // 3. Add default seed advisors if not already present
+  for (const adv of DEFAULT_ADVISORS_LIST) {
+    const em = (adv.email || '').toLowerCase().trim();
+    if (seenEmails.has(em)) continue;
+    if (isAccountDeactivated(em, adv.user_id)) continue;
+    seenEmails.add(em);
+    combined.push(adv);
+  }
+
+  return combined;
 }
 
 /**
@@ -53,7 +142,13 @@ export async function getAdvisorDetails(advisorId) {
   try {
     return await apiCall(`/advisors/${advisorId}`, 'GET');
   } catch (err) {
-    const found = DEFAULT_ADVISORS_LIST.find((a) => a.advisor_profile_id === Number(advisorId));
+    const all = await getAdvisors();
+    const found = all.find(
+      (a) =>
+        String(a.advisor_profile_id) === String(advisorId) ||
+        String(a.id) === String(advisorId) ||
+        String(a.user_id) === String(advisorId)
+    );
     return found || DEFAULT_ADVISORS_LIST[0];
   }
 }
@@ -73,14 +168,35 @@ export async function getProjectMembers(projectId) {
 
 /**
  * Fetches eligible advisors for assignment: GET /projects/{projectId}/advisors/eligible
+ * Guarantees newly signed up advisors are immediately discoverable for project creation
  */
 export async function getEligibleAdvisors(projectId = 1) {
+  let eligible = [];
   try {
     const data = await apiCall(`/projects/${projectId}/advisors/eligible`, 'GET');
-    if (Array.isArray(data) && data.length > 0) return data;
+    if (Array.isArray(data) && data.length > 0) {
+      eligible = data;
+    }
   } catch (err) {
     console.info('[advisorService] getEligibleAdvisors fallback to /advisors');
   }
+
+  // If backend returned eligible advisors, merge any signed-up local advisors as well
+  if (eligible.length > 0) {
+    const registeredList = getRegisteredAdvisorsList();
+    const seenEmails = new Set(
+      eligible.map((a) => (a.email || a.contact_email || '').toLowerCase().trim())
+    );
+    for (const adv of registeredList) {
+      const em = (adv.email || '').toLowerCase().trim();
+      if (!seenEmails.has(em)) {
+        seenEmails.add(em);
+        eligible.push(adv);
+      }
+    }
+    return eligible;
+  }
+
   return await getAdvisors();
 }
 

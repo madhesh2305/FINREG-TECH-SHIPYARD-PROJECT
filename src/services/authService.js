@@ -197,6 +197,12 @@ export async function registerUser({ name, email, password, organization = '', r
     role: res?.platform_role || normalizedRole,
     platform_role: res?.platform_role || normalizedRole,
     organization: cleanOrg || 'Independent',
+    organization_name: cleanOrg || 'Independent Advisory Practice',
+    professional_title: normalizedRole === 'ADVISOR' ? 'Regulatory & Compliance Advisor' : undefined,
+    specialization: normalizedRole === 'ADVISOR' ? 'FCA & PRA Regulatory Advisory' : undefined,
+    bio: normalizedRole === 'ADVISOR' ? `Registered compliance advisor representing ${cleanOrg || 'Independent Advisory Practice'}.` : undefined,
+    is_active: true,
+    status: 'Active',
   };
 
   saveLocalAccount(cleanEmail, cleanPassword, createdUser);
