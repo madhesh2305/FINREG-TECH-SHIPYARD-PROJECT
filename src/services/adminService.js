@@ -130,6 +130,33 @@ function setStatusOverride(key, isActive) {
   } catch (e) {}
 }
 
+export function isAccountDeactivated(email, userId = null) {
+  try {
+    const raw = localStorage.getItem(STATUS_OVERRIDES_KEY);
+    const overrides = raw ? JSON.parse(raw) : {};
+    if (email) {
+      const e = String(email).toLowerCase().trim();
+      if (overrides[e] === false) return true;
+    }
+    if (userId) {
+      const u = String(userId).toLowerCase().trim();
+      if (overrides[u] === false) return true;
+    }
+  } catch (e) {}
+
+  try {
+    const accounts = getLocalAccounts ? getLocalAccounts() : {};
+    if (email) {
+      const acc = accounts[String(email).toLowerCase().trim()];
+      if (acc?.user && (acc.user.is_active === false || acc.user.status === 'Inactive')) {
+        return true;
+      }
+    }
+  } catch (e) {}
+
+  return false;
+}
+
 export function getProvisionedAdmins() {
   try {
     const raw = localStorage.getItem(PROVISIONED_ADMINS_KEY);
@@ -362,12 +389,23 @@ export async function updateUserStatus(userId, status, userEmail = null) {
     console.info(`[adminService] /admin/users/${userId}/status backend call not present or offline. Applying locally.`);
   }
 
-  if (userId) setStatusOverride(userId, isActive);
-  if (userEmail) setStatusOverride(userEmail, isActive);
-
-  if (userEmail && getLocalAccounts && saveLocalAccount) {
+  // Resolve email if not provided
+  let cleanMail = (userEmail || '').toLowerCase().trim();
+  if (!cleanMail && userId && getLocalAccounts) {
     const accounts = getLocalAccounts();
-    const cleanMail = userEmail.toLowerCase().trim();
+    for (const [em, a] of Object.entries(accounts)) {
+      if (String(a.user?.user_id) === String(userId) || String(a.user?.id) === String(userId)) {
+        cleanMail = em.toLowerCase().trim();
+        break;
+      }
+    }
+  }
+
+  if (userId) setStatusOverride(userId, isActive);
+  if (cleanMail) setStatusOverride(cleanMail, isActive);
+
+  if (cleanMail && getLocalAccounts && saveLocalAccount) {
+    const accounts = getLocalAccounts();
     const acc = accounts[cleanMail];
     if (acc && acc.user) {
       acc.user.is_active = isActive;
@@ -376,14 +414,49 @@ export async function updateUserStatus(userId, status, userEmail = null) {
     }
   }
 
+  // Update provisioned admins list if present
+  try {
+    const list = getProvisionedAdmins();
+    let changed = false;
+    const updated = list.map((a) => {
+      if (
+        (cleanMail && (a.email || '').toLowerCase().trim() === cleanMail) ||
+        String(a.user_id || a.id) === String(userId)
+      ) {
+        changed = true;
+        return { ...a, is_active: isActive, status: isActive ? 'Active' : 'Inactive' };
+      }
+      return a;
+    });
+    if (changed) {
+      localStorage.setItem(PROVISIONED_ADMINS_KEY, JSON.stringify(updated));
+    }
+  } catch (e) {}
+
+  // Revoke / update current session if the deactivated user is currently stored
+  try {
+    const curRaw = localStorage.getItem('finreg_current_user');
+    if (curRaw) {
+      const cur = JSON.parse(curRaw);
+      if (
+        (cleanMail && cur.email && cur.email.toLowerCase() === cleanMail) ||
+        String(cur.user_id || cur.id) === String(userId)
+      ) {
+        cur.is_active = isActive;
+        cur.status = isActive ? 'Active' : 'Inactive';
+        localStorage.setItem('finreg_current_user', JSON.stringify(cur));
+      }
+    }
+  } catch (e) {}
+
   recordAdminAuditLog({
     event_type: 'User status updated',
     action: isActive ? 'ACTIVATE_USER' : 'DEACTIVATE_USER',
     resource: `User #${userId}`,
     actor_email: 'admin@finreg.internal',
     user: 'admin@finreg.internal',
-    affectedResource: userEmail || `User #${userId}`,
-    description: `User account ${isActive ? 'activated' : 'deactivated'} for ${userEmail || userId}`,
+    affectedResource: cleanMail || `User #${userId}`,
+    description: `User account ${isActive ? 'activated' : 'deactivated'} for ${cleanMail || userId}`,
     details: `Account status set to ${statusStr}`,
   });
 

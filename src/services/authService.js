@@ -98,6 +98,36 @@ export function saveLocalAccount(email, password, user) {
 }
 
 /**
+ * Checks if an account has been deactivated by an Administrator
+ */
+export function isAccountDeactivated(email, userId = null) {
+  try {
+    const raw = localStorage.getItem('finreg_admin_status_overrides');
+    const overrides = raw ? JSON.parse(raw) : {};
+    if (email) {
+      const e = String(email).toLowerCase().trim();
+      if (overrides[e] === false) return true;
+    }
+    if (userId) {
+      const u = String(userId).toLowerCase().trim();
+      if (overrides[u] === false) return true;
+    }
+  } catch (e) {}
+
+  try {
+    const accounts = getLocalAccounts();
+    if (email) {
+      const acc = accounts[String(email).toLowerCase().trim()];
+      if (acc?.user && (acc.user.is_active === false || acc.user.status === 'Inactive')) {
+        return true;
+      }
+    }
+  } catch (e) {}
+
+  return false;
+}
+
+/**
  * Checks if an error is a network connection failure (e.g. backend server not running)
  */
 function isConnectionFailure(err) {
@@ -188,6 +218,11 @@ export async function loginUser(email, password, roleHint = 'BUILDER') {
     throw new Error('Email address and password are required.');
   }
 
+  // Strictly block deactivated accounts from logging in
+  if (isAccountDeactivated(cleanEmail)) {
+    throw new Error('Your account has been deactivated. Please contact your administrator.');
+  }
+
   let data = null;
   let isBackendOffline = false;
 
@@ -198,6 +233,11 @@ export async function loginUser(email, password, roleHint = 'BUILDER') {
       password: cleanPassword,
     });
   } catch (err) {
+    const errLower = (err?.message || '').toLowerCase();
+    if (errLower.includes('deactivate') || errLower.includes('inactive')) {
+      throw new Error('Your account has been deactivated. Please contact your administrator.');
+    }
+
     // If backend returned an explicit 401 or auth error, check if this email is a recognized local or demo account first
     const localAccounts = getLocalAccounts();
     const hasLocal = !!localAccounts[cleanEmail];
@@ -209,6 +249,12 @@ export async function loginUser(email, password, roleHint = 'BUILDER') {
   }
 
   if (data && data.access_token) {
+    // Check if account was marked inactive in backend or locally by administrator
+    if (data.is_active === false || isAccountDeactivated(cleanEmail, data.user_id)) {
+      clearToken();
+      throw new Error('Your account has been deactivated. Please contact your administrator.');
+    }
+
     const rawRole = data.platform_role || 'BUILDER';
     const accountRole = normalizeRole(rawRole);
     const requestedRole = normalizeRole(roleHint);
@@ -232,6 +278,8 @@ export async function loginUser(email, password, roleHint = 'BUILDER') {
       email: data.email || cleanEmail,
       role: accountRole,
       platform_role: accountRole,
+      is_active: data.is_active !== false,
+      status: data.is_active === false ? 'Inactive' : 'Active',
     };
 
     saveLocalAccount(cleanEmail, cleanPassword, user);
@@ -253,7 +301,13 @@ export async function loginUser(email, password, roleHint = 'BUILDER') {
     if (!passwordMatches) {
       throw new Error('Invalid email or password.');
     }
-    if (localAcc.user && (localAcc.user.is_active === false || localAcc.user.status === 'Inactive')) {
+
+    // Verify account active state in local vault & overrides
+    const isDeactivated =
+      isAccountDeactivated(cleanEmail, localAcc.user?.user_id || localAcc.user?.id) ||
+      (localAcc.user && (localAcc.user.is_active === false || localAcc.user.status === 'Inactive'));
+
+    if (isDeactivated) {
       throw new Error('Your account has been deactivated. Please contact your administrator.');
     }
 
@@ -273,12 +327,18 @@ export async function loginUser(email, password, roleHint = 'BUILDER') {
       ...localAcc.user,
       role: accountRole,
       platform_role: accountRole,
+      is_active: true,
+      status: 'Active',
     };
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
     return { access_token: token, token_type: 'bearer', user };
   }
 
-  // Auto-provision demo account for standalone frontend testing
+  // 3. Auto-provision demo account for standalone frontend testing
+  if (isAccountDeactivated(cleanEmail)) {
+    throw new Error('Your account has been deactivated. Please contact your administrator.');
+  }
+
   let designatedRole = null;
   if (cleanEmail.includes('admin')) designatedRole = 'ADMIN';
   else if (cleanEmail.includes('advisor') || cleanEmail.includes('vance') || cleanEmail.includes('reid')) designatedRole = 'ADVISOR';
@@ -300,6 +360,8 @@ export async function loginUser(email, password, roleHint = 'BUILDER') {
     role: finalRole,
     platform_role: finalRole,
     organization: 'FinRegTech Platform',
+    is_active: true,
+    status: 'Active',
   };
 
   const token = `session_token_${Date.now()}`;
@@ -346,6 +408,15 @@ export async function getCurrentUser() {
   try {
     const data = await apiCall('/users/me', 'GET');
     if (data && data.user_id) {
+      if (data.is_active === false || isAccountDeactivated(data.email, data.user_id)) {
+        clearToken();
+        try {
+          localStorage.removeItem(CURRENT_USER_KEY);
+          localStorage.removeItem('currentUser');
+        } catch (e) {}
+        return null;
+      }
+
       const user = {
         id: data.user_id,
         user_id: data.user_id,
@@ -354,19 +425,22 @@ export async function getCurrentUser() {
         email: data.email,
         role: data.platform_role || 'BUILDER',
         platform_role: data.platform_role || 'BUILDER',
+        is_active: true,
+        status: 'Active',
         memberships: data.memberships || [],
       };
       localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
       return user;
     }
   } catch (err) {
-    // If explicit 401 Unauthorized from live backend, clear session
-    if (err.message && err.message.includes('401')) {
+    const msg = (err?.message || '').toLowerCase();
+    // If explicit 401 Unauthorized or account deactivated, clear session
+    if (msg.includes('401') || msg.includes('deactivate') || msg.includes('inactive')) {
       clearToken();
       try {
         localStorage.removeItem(CURRENT_USER_KEY);
-    localStorage.removeItem('currentUser');
-    localStorage.removeItem('finreg_projects');
+        localStorage.removeItem('currentUser');
+        localStorage.removeItem('finreg_projects');
       } catch (e) {}
       return null;
     }
@@ -375,7 +449,15 @@ export async function getCurrentUser() {
 
   try {
     const cached = localStorage.getItem(CURRENT_USER_KEY);
-    if (cached) return JSON.parse(cached);
+    if (cached) {
+      const u = JSON.parse(cached);
+      if (isAccountDeactivated(u.email, u.user_id || u.id) || u.is_active === false || u.status === 'Inactive') {
+        clearToken();
+        localStorage.removeItem(CURRENT_USER_KEY);
+        return null;
+      }
+      return u;
+    }
   } catch (e) {}
 
   return null;

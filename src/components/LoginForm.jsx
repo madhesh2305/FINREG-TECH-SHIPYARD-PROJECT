@@ -11,7 +11,7 @@ import AdvisorDashboardView from './AdvisorDashboardView';
 import AdvisorExpertiseView, { ADVISOR_PROFILES } from './AdvisorExpertiseView';
 import AdminDashboardView from './AdminDashboardView';
 
-import { loginUser, registerUser, resetPassword, getCurrentUser, logoutUser } from '../services/authService';
+import { loginUser, registerUser, resetPassword, getCurrentUser, logoutUser, isAccountDeactivated } from '../services/authService';
 
 export default function LoginForm({ isDarkMode = true }) {
   // Steps: 'flash' | 'landing' | 'login' | 'signup' | 'forgot-password' | 'admin-login' | 'verifying' | 'advisor-expertise' | 'dashboard'
@@ -100,7 +100,7 @@ export default function LoginForm({ isDarkMode = true }) {
       if (!user) {
         throw new Error('Authentication failed. No user details returned.');
       }
-      if (user.is_active === false || user.status === 'Inactive') {
+      if (user.is_active === false || user.status === 'Inactive' || isAccountDeactivated(cleanEmail, user.id || user.user_id)) {
         throw new Error('Your account has been deactivated. Please contact your administrator.');
       }
 
@@ -152,7 +152,7 @@ export default function LoginForm({ isDarkMode = true }) {
       if (!user) {
         throw new Error('Authentication failed. No user details returned.');
       }
-      if (user.is_active === false || user.status === 'Inactive') {
+      if (user.is_active === false || user.status === 'Inactive' || isAccountDeactivated(cleanEmail, user.id || user.user_id)) {
         throw new Error('Your account has been deactivated. Please contact your administrator.');
       }
 
