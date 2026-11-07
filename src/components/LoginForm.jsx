@@ -59,8 +59,8 @@ export default function LoginForm({ isDarkMode = true }) {
   // Administrator Sign In states matching media_1791714229768_980157a3.png
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
-  const [adminId, setAdminId] = useState('');
-  const [adminAccessKey, setAdminAccessKey] = useState('');
+  const [adminId, setAdminId] = useState('ADM-001');
+  const [adminAccessKey, setAdminAccessKey] = useState('KEY-ADMIN-01');
   const [adminRememberMe, setAdminRememberMe] = useState(false);
   const [adminShowPassword, setAdminShowPassword] = useState(false);
   const [adminError, setAdminError] = useState('');
@@ -512,7 +512,27 @@ export default function LoginForm({ isDarkMode = true }) {
 
                 {/* Information hint box */}
                 <div className="p-3.5 rounded-xl border border-slate-800 bg-[#121214] text-xs text-slate-400 font-normal leading-relaxed text-left">
-                  Tip: Use default test accounts <span className="text-amber-400 font-mono">builder@gmail.com</span>, <span className="text-amber-400 font-mono">advisor@gmail.com</span>, or any account created via Sign up.
+                  {selectedRole === 'Administrator' ? (
+                    <span>
+                      Tip: Use administrator account <span className="text-amber-400 font-mono">admin@finregtech.io</span> (or <span className="text-amber-400 font-mono">admin@gmail.com</span>) with password <span className="text-amber-400 font-mono">Password123!</span> or <span className="text-amber-400 font-mono">password123</span>, or click{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setStep('admin-login');
+                          if (!adminId) setAdminId('ADM-001');
+                          if (!adminAccessKey) setAdminAccessKey('KEY-ADMIN-01');
+                        }}
+                        className="text-amber-400 underline font-semibold hover:text-amber-300 cursor-pointer inline"
+                      >
+                        Admin Login
+                      </button>{' '}
+                      below.
+                    </span>
+                  ) : (
+                    <span>
+                      Tip: Use default test accounts <span className="text-amber-400 font-mono">builder@gmail.com</span>, <span className="text-amber-400 font-mono">advisor@gmail.com</span>, or any account created via Sign up.
+                    </span>
+                  )}
                 </div>
 
                 {/* Remember Me & Forgot Password (DEF-02) */}
@@ -688,6 +708,42 @@ export default function LoginForm({ isDarkMode = true }) {
                     {adminError}
                   </div>
                 )}
+
+                {/* Quick-fill credentials badge */}
+                <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-left space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-amber-400">Admin Workspace Credentials:</span>
+                    <span className="text-[11px] text-slate-400">Click to autofill</span>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAdminEmail('admin@finregtech.io');
+                        setAdminPassword('Password123!');
+                        setAdminId('ADM-001');
+                        setAdminAccessKey('KEY-ADMIN-01');
+                        setAdminError('');
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-[#18181b] hover:bg-slate-800 text-amber-300 border border-amber-500/40 font-medium cursor-pointer transition-colors"
+                    >
+                      admin@finregtech.io (Password123!)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAdminEmail('admin@gmail.com');
+                        setAdminPassword('password123');
+                        setAdminId('ADM-001');
+                        setAdminAccessKey('KEY-ADMIN-01');
+                        setAdminError('');
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-[#18181b] hover:bg-slate-800 text-slate-200 border border-slate-700 font-medium cursor-pointer transition-colors"
+                    >
+                      admin@gmail.com (password123)
+                    </button>
+                  </div>
+                </div>
 
                 {/* Email Address */}
                 <div className="space-y-1.5 text-left">
