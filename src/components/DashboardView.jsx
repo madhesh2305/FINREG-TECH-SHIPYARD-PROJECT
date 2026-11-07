@@ -408,6 +408,12 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
             advisor_email: advEmail,
             email: advEmail,
             access_level: 'REGULATORY',
+            inviting_user: userName,
+            builder_name: userName,
+            builder_email: userEmail,
+            builder_organization: userProfile?.organization || 'FinRegTech ShipYard',
+            builder_role: userRoleTitle,
+            project_name: newProjectName,
           });
         } catch (advErr) {
           console.warn('[DashboardView] selectProjectAdvisor warning:', advErr.message);
@@ -2384,7 +2390,12 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
 
           {/* TAB: ADVISORS / EXPERTS VIEW (DEF-32) */}
           {activeTab === 'Advisors / Experts' && (
-            <AdvisorsExpertsView isDarkMode={isDarkMode} availableProjects={allProjects} activeProject={currentProject} />
+            <AdvisorsExpertsView
+              isDarkMode={isDarkMode}
+              availableProjects={allProjects}
+              activeProject={currentProject}
+              currentUser={userProfile || currentUser}
+            />
           )}
 
           {/* TAB: ADVISOR ADVICE VIEW (Matching uploaded image media_1791737929366_a3b12230.png) */}

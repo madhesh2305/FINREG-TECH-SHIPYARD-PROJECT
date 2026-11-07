@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Check, ArrowLeft, UserX, RefreshCw } from 'lucide-react';
+import { Search, Check, CheckCircle2, ArrowLeft, UserX, RefreshCw } from 'lucide-react';
 import {
   sendAdvisorInvitation,
   getAdvisors,
@@ -12,7 +12,7 @@ import {
 // Master advisors list initialized to empty array (ready for live registered advisors / backend data)
 const DEFAULT_ADVISORS = [];
 
-export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, availableProjects = [], activeProject }) {
+export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, availableProjects = [], activeProject, currentUser }) {
   const [activeSubTab, setActiveSubTab] = useState('Find Advisors'); // 'Find Advisors' | 'My Invited Advisors'
   const [searchQuery, setSearchQuery] = useState('');
   const [expertiseFilter, setExpertiseFilter] = useState('All expertise');
@@ -54,16 +54,39 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
       const localInvites = getLocalAdvisorInvitations();
       const allInvites = [...(Array.isArray(invites) ? invites : []), ...localInvites];
 
-      const pendingEmails = new Set(
+      // 1. Accepted invitations & project assignments
+      const acceptedEmails = new Set(
         allInvites
           .filter((inv) => {
-            const st = (inv.invitation_status || inv.status || 'PENDING').toUpperCase();
-            return st === 'PENDING' || st === 'ACTIVE' || st === 'INVITED';
+            const st = (inv.invitation_status || inv.status || '').toUpperCase();
+            return st === 'ACCEPTED';
           })
           .map((inv) => (inv.advisor_email || inv.email || '').toLowerCase().trim())
           .filter(Boolean)
       );
 
+      try {
+        const rawAssignments = localStorage.getItem('finreg_advisor_assignments');
+        if (rawAssignments) {
+          const assignments = JSON.parse(rawAssignments);
+          assignments.forEach((a) => {
+            if (a.email) acceptedEmails.add(a.email.toLowerCase().trim());
+          });
+        }
+      } catch (e) {}
+
+      // 2. Pending invitations (excluding already accepted)
+      const pendingEmails = new Set(
+        allInvites
+          .filter((inv) => {
+            const st = (inv.invitation_status || inv.status || 'PENDING').toUpperCase();
+            return st === 'PENDING' || st === 'INVITED';
+          })
+          .map((inv) => (inv.advisor_email || inv.email || '').toLowerCase().trim())
+          .filter((e) => Boolean(e) && !acceptedEmails.has(e))
+      );
+
+      // 3. Project members
       const memberEmails = new Set(
         (Array.isArray(members) ? members : [])
           .map((m) => (m.email || m.user_email || '').toLowerCase().trim())
@@ -74,9 +97,18 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
         setAdvisors(
           live.map((u) => {
             const emailLower = (u.email || u.contact_email || '').toLowerCase().trim();
-            const isMember = memberEmails.has(emailLower);
-            const isPending = pendingEmails.has(emailLower);
-            const isInvited = isMember || isPending;
+            const isAccepted = acceptedEmails.has(emailLower) || memberEmails.has(emailLower);
+            const isPending = !isAccepted && pendingEmails.has(emailLower);
+            const isInvited = isAccepted || isPending;
+            const isMember = isAccepted;
+
+            const displayStatus = isAccepted ? 'Accepted' : isPending ? 'Invited' : 'Available';
+            const statusColor = isAccepted
+              ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80'
+              : isPending
+              ? 'bg-amber-950/60 text-amber-300 border-amber-800/80'
+              : 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80';
+            const dotColor = isAccepted ? 'bg-emerald-400' : isPending ? 'bg-amber-400' : 'bg-emerald-500';
 
             return {
               id: u.advisor_profile_id || u.user_id,
@@ -92,14 +124,11 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
               specialty: u.specialization || u.professional_title || 'Regulatory Compliance & Advisory',
               firm: u.organization_name || u.firm || 'Independent Advisory',
               jurisdiction: u.jurisdiction || 'UK / EU',
-              status: isMember ? 'Active' : isInvited ? 'Invited' : 'Available',
-              statusColor: isMember
-                ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80'
-                : isInvited
-                ? 'bg-amber-950/60 text-amber-300 border-amber-800/80'
-                : 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
-              dotColor: isMember ? 'bg-emerald-500' : isInvited ? 'bg-amber-400' : 'bg-emerald-500',
+              status: displayStatus,
+              statusColor,
+              dotColor,
               isMember,
+              isAccepted,
               isPending,
               isInvited,
               bio: u.bio || 'Registered compliance advisor specializing in regulatory risk and governance.',
@@ -121,12 +150,12 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
     fetchLiveAdvisors();
   }, [fetchLiveAdvisors, activeSubTab]);
 
-  const invitedCount = advisors.filter((a) => a.isMember || a.isPending || a.isInvited).length;
+  const invitedCount = advisors.filter((a) => a.isAccepted || a.isMember || a.isPending || a.isInvited).length;
   const isLimitReached = invitedCount >= 2;
 
   // Filtering Logic
   const filteredAdvisors = advisors.filter((adv) => {
-    if (activeSubTab === 'My Invited Advisors' && !adv.isInvited && !adv.isPending && !adv.isMember) return false;
+    if (activeSubTab === 'My Invited Advisors' && !adv.isInvited && !adv.isPending && !adv.isMember && !adv.isAccepted) return false;
 
     const q = (searchQuery || '').trim().toLowerCase();
     const matchesSearch =
@@ -147,6 +176,7 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
       availabilityFilter === 'Any availability' ||
       adv.status === availabilityFilter ||
       (availabilityFilter === 'Invited' && (adv.status === 'Invited' || adv.isInvited || adv.isPending)) ||
+      (availabilityFilter === 'Accepted' && (adv.status === 'Accepted' || adv.isAccepted)) ||
       (availabilityFilter === 'Available' && adv.status === 'Available');
 
     return matchesSearch && matchesExpertise && matchesJurisdiction && matchesAvailability;
@@ -195,15 +225,30 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
       );
 
       // 2. Dispatch invitation via service (handles both PostgreSQL backend and persistent local storage)
+      let builderUser = currentUser;
+      if (!builderUser) {
+        try {
+          const raw = localStorage.getItem('finreg_current_user') || localStorage.getItem('currentUser');
+          if (raw) builderUser = JSON.parse(raw);
+        } catch (e) {}
+      }
+
       const projName = modalProject || targetProjectObj?.name || targetProjectObj?.project_name || 'AML Compliance Framework';
-      const invitingBuilder = targetProjectObj?.owner || targetProjectObj?.owner_name || activeProject?.owner || 'Jun Developer';
+      const invitingBuilderName = builderUser?.name || builderUser?.full_name || targetProjectObj?.owner || targetProjectObj?.owner_name || activeProject?.owner || 'Jun Developer';
+      const invitingBuilderEmail = builderUser?.email || 'builder@gmail.com';
+      const invitingBuilderOrg = builderUser?.organization || 'FinRegTech ShipYard';
+      const invitingBuilderRole = builderUser?.role || builderUser?.platform_role || 'Builder / Project Owner';
 
       await sendAdvisorInvitation(targetProjectId, {
         advisor_email: modalAdvisor.email,
         advisor_name: modalAdvisor.name,
         project_name: projName,
         project_id: targetProjectId,
-        inviting_user: invitingBuilder,
+        inviting_user: invitingBuilderName,
+        builder_name: invitingBuilderName,
+        builder_email: invitingBuilderEmail,
+        builder_organization: invitingBuilderOrg,
+        builder_role: invitingBuilderRole,
         access_level: modalRole?.toUpperCase().includes('READ') ? 'READ_ONLY' : 'CONTRIBUTOR',
         invitation_notes: modalMessage,
       });
@@ -247,7 +292,7 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
       const raw = localStorage.getItem('finreg_advisor_assignments');
       if (raw) {
         const assignments = JSON.parse(raw).filter(
-          (a) => a.advisorId !== adv.id && a.email !== adv.email
+          (a) => a.advisorId !== adv.id && a.email?.toLowerCase() !== adv.email?.toLowerCase()
         );
         localStorage.setItem('finreg_advisor_assignments', JSON.stringify(assignments));
       }
@@ -261,6 +306,8 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
               ...a,
               isInvited: false,
               isPending: false,
+              isAccepted: false,
+              isMember: false,
               status: 'Available',
               statusColor: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
               dotColor: 'bg-emerald-500',
@@ -756,7 +803,12 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
                     View profile
                   </button>
 
-                  {adv.isMember ? (
+                  {adv.isAccepted ? (
+                    <span className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border border-emerald-800/80 bg-emerald-950/60 text-emerald-400 shadow-xs">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Accepted</span>
+                    </span>
+                  ) : adv.isMember ? (
                     <button
                       type="button"
                       disabled

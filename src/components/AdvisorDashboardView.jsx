@@ -956,7 +956,7 @@ export default function AdvisorDashboardView({
                       <thead className="bg-[#121316] text-[11px] font-mono uppercase text-slate-400 border-b border-slate-800">
                         <tr>
                           <th className="px-5 py-3.5 font-bold">Project Name</th>
-                          <th className="px-5 py-3.5 font-bold">Inviting Builder</th>
+                          <th className="px-5 py-3.5 font-bold">Builder Credentials</th>
                           <th className="px-5 py-3.5 font-bold">Access Level</th>
                           <th className="px-5 py-3.5 font-bold">Date Received</th>
                           <th className="px-5 py-3.5 font-bold">Status</th>
@@ -968,6 +968,10 @@ export default function AdvisorDashboardView({
                           const invId = inv.id || inv.invitation_id || idx;
                           const isPending = (inv.invitation_status || inv.status || 'PENDING').toUpperCase() === 'PENDING';
                           const isAccepting = acceptingInviteId === (inv.id || inv.invitation_id);
+                          const bName = inv.builder_name || inv.inviting_user || inv.inviting_builder || 'Jun Developer';
+                          const bEmail = inv.builder_email || inv.created_by_email || 'builder@gmail.com';
+                          const bOrg = inv.builder_organization || 'FinRegTech ShipYard';
+                          const bRole = inv.builder_role || 'Builder / Project Owner';
 
                           return (
                             <tr key={invId} className="hover:bg-slate-800/30 transition-colors">
@@ -982,8 +986,30 @@ export default function AdvisorDashboardView({
                                   </p>
                                 )}
                               </td>
-                              <td className="px-5 py-4 text-slate-300 font-medium">
-                                {inv.inviting_user || inv.inviting_builder || inv.invited_by_name || inv.created_by_email || 'Project Builder'}
+                              <td className="px-5 py-4">
+                                <div className="space-y-1 text-left">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-6 h-6 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 font-bold text-[10px] flex items-center justify-center shrink-0">
+                                      {bName
+                                        .split(' ')
+                                        .filter(Boolean)
+                                        .map((n) => n[0])
+                                        .join('')
+                                        .slice(0, 2)
+                                        .toUpperCase()}
+                                    </div>
+                                    <span className="font-bold text-white text-xs">{bName}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 text-[11px] text-amber-400/90 font-mono">
+                                    <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                                    <span>{bEmail}</span>
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 flex items-center gap-1">
+                                    <span className="text-slate-300 font-medium">{bOrg}</span>
+                                    <span>·</span>
+                                    <span className="text-slate-400">{bRole}</span>
+                                  </div>
+                                </div>
                               </td>
                               <td className="px-5 py-4">
                                 <span className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-amber-400 font-mono text-[10px] uppercase font-bold">

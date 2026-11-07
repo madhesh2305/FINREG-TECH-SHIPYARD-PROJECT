@@ -317,12 +317,22 @@ export async function sendAdvisorInvitation(projectId, payload) {
     }
   }
 
+  const bName = payload.builder_name || payload.inviting_user || 'Jun Developer';
+  const bEmail = payload.builder_email || payload.inviting_email || 'builder@gmail.com';
+  const bOrg = payload.builder_organization || payload.organization || 'FinRegTech ShipYard';
+  const bRole = payload.builder_role || 'Builder / Project Owner';
+
   // Always record invitation locally to guarantee immediate state update and persistence
   const invitationRecord = {
     invitation_id: remoteRes?.invitation_id || `inv_${Date.now()}`,
     project_id: projectId,
     project_name: payload.project_name || `Project #${projectId}`,
-    inviting_user: payload.inviting_user || 'Project Builder',
+    inviting_user: bName,
+    inviting_builder: bName,
+    builder_name: bName,
+    builder_email: bEmail,
+    builder_organization: bOrg,
+    builder_role: bRole,
     advisor_email: email,
     advisor_name: payload.advisor_name || email.split('@')[0],
     access_level: accessLevel,
@@ -438,13 +448,23 @@ export async function getAdvisorInboxInvitations(advisorEmail = null) {
     }
 
     if (matches) {
+      const bName = inv.builder_name || inv.inviting_user || inv.inviting_builder || 'Jun Developer';
+      const bEmail = inv.builder_email || inv.created_by_email || 'builder@gmail.com';
+      const bOrg = inv.builder_organization || 'FinRegTech ShipYard';
+      const bRole = inv.builder_role || 'Builder / Project Owner';
+
       filtered.push({
         ...inv,
         id: invId,
         invitation_id: inv.invitation_id || invId,
         project_id: inv.project_id || 1,
         project_name: inv.project_name || inv.projectName || `Project #${inv.project_id || 1}`,
-        inviting_user: inv.inviting_user || inv.inviting_builder || inv.created_by_email || 'Project Builder',
+        inviting_user: bName,
+        inviting_builder: bName,
+        builder_name: bName,
+        builder_email: bEmail,
+        builder_organization: bOrg,
+        builder_role: bRole,
         access_level: inv.access_level || 'REGULATORY',
         invitation_status: inv.invitation_status || inv.status || 'PENDING',
         status: inv.status || inv.invitation_status || 'PENDING',
@@ -468,15 +488,23 @@ export async function acceptAdvisorInvitation(projectId, invitationId) {
     console.info('[advisorService] acceptAdvisorInvitation remote notice:', err.message);
   }
 
+  const rawUser = typeof localStorage !== 'undefined' ? (localStorage.getItem('finreg_current_user') || localStorage.getItem('currentUser')) : null;
+  const user = rawUser ? JSON.parse(rawUser) : null;
+  const advEmail = user?.email || 'advisor@gmail.com';
+  const advId = user?.user_id || user?.id || 2;
+
   // Update invitation status to ACCEPTED in local storage
   try {
     const list = getLocalAdvisorInvitations();
     const updated = list.map((inv) => {
       const currentId = inv.invitation_id || inv.id;
-      if (
-        String(currentId) === String(invitationId) ||
-        (inv.project_id && String(inv.project_id) === String(projectId))
-      ) {
+      const isIdMatch = invitationId && String(currentId) === String(invitationId);
+      const isProjMatch =
+        inv.project_id &&
+        String(inv.project_id) === String(projectId) &&
+        (!inv.advisor_email || inv.advisor_email.toLowerCase() === advEmail.toLowerCase());
+
+      if (isIdMatch || isProjMatch) {
         return {
           ...inv,
           invitation_status: 'ACCEPTED',
@@ -493,13 +521,9 @@ export async function acceptAdvisorInvitation(projectId, invitationId) {
   try {
     const raw = localStorage.getItem('finreg_advisor_assignments');
     const assignments = raw ? JSON.parse(raw) : [];
-    const rawUser = localStorage.getItem('finreg_current_user') || localStorage.getItem('currentUser');
-    const user = rawUser ? JSON.parse(rawUser) : null;
-    const advEmail = user?.email || 'advisor@gmail.com';
-    const advId = user?.user_id || user?.id || 2;
 
     const exists = assignments.some(
-      (a) => String(a.projectId) === String(projectId) && (a.email === advEmail || a.advisorId === advId)
+      (a) => String(a.projectId) === String(projectId) && (a.email?.toLowerCase() === advEmail.toLowerCase() || a.advisorId === advId)
     );
     if (!exists) {
       assignments.push({
@@ -507,6 +531,7 @@ export async function acceptAdvisorInvitation(projectId, invitationId) {
         advisorId: advId,
         email: advEmail,
         name: user?.full_name || user?.name || 'Advisor',
+        status: 'ACCEPTED',
         assigned_at: new Date().toISOString(),
       });
       localStorage.setItem('finreg_advisor_assignments', JSON.stringify(assignments));
