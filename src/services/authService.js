@@ -98,6 +98,45 @@ export function saveLocalAccount(email, password, user) {
 }
 
 /**
+ * Records an immutable security audit event into the platform audit trail
+ */
+export function logSecurityAuditEvent(event) {
+  try {
+    const raw = localStorage.getItem('finreg_admin_audit_logs');
+    const logs = raw ? JSON.parse(raw) : [];
+    const timestamp = new Date();
+    logs.unshift({
+      id: `LOG-${Date.now()}`,
+      audit_event_id: `AUD-${Date.now()}`,
+      created_at: timestamp.toISOString(),
+      timestamp: timestamp.toLocaleString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }),
+      status: event.status || 'SUCCESS',
+      result: (event.status || 'SUCCESS').toUpperCase() === 'BLOCKED' || (event.status || '').toUpperCase() === 'FAILED' ? 'Blocked' : 'Success',
+      user: event.actor_email || event.user || 'system',
+      actor_email: event.actor_email || event.user || 'system',
+      action: event.action || 'SYSTEM_EVENT',
+      affectedResource: event.affectedResource || event.resource || 'Platform',
+      resource: event.affectedResource || event.resource || 'Platform',
+      eventCategory: event.event_type || event.eventCategory || event.category || 'Access Control',
+      category: event.event_type || event.eventCategory || event.category || 'Access Control',
+      event_type: event.event_type || event.action || 'SYSTEM_EVENT',
+      relevantDetails: event.description || event.details || event.relevantDetails || 'Security event logged',
+      description: event.description || event.details || event.relevantDetails || 'Security event logged',
+      details: event.details || event.description || 'Security event logged',
+      ...event,
+    });
+    localStorage.setItem('finreg_admin_audit_logs', JSON.stringify(logs.slice(0, 200)));
+  } catch (_) {}
+}
+
+/**
  * Checks if an account has been deactivated by an Administrator
  */
 export function isAccountDeactivated(email, userId = null) {
@@ -207,6 +246,16 @@ export async function registerUser({ name, email, password, organization = '', r
 
   saveLocalAccount(cleanEmail, cleanPassword, createdUser);
   localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(createdUser));
+
+  logSecurityAuditEvent({
+    action: 'User registered',
+    event_type: 'Identity & Access',
+    actor_email: cleanEmail,
+    user: cleanEmail,
+    affectedResource: `User: ${cleanName} (${cleanEmail})`,
+    description: `New ${normalizedRole} account registered: ${cleanName}`,
+    status: 'SUCCESS',
+  });
 
   return { success: true, user: createdUser, access_token: token };
 }
@@ -318,6 +367,17 @@ export async function loginUser(email, password, roleHint = 'BUILDER') {
 
     saveLocalAccount(cleanEmail, cleanPassword, user);
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+
+    logSecurityAuditEvent({
+      action: accountRole === 'ADMIN' ? 'Admin login' : 'User authentication',
+      event_type: 'Access Control',
+      actor_email: cleanEmail,
+      user: cleanEmail,
+      affectedResource: accountRole === 'ADMIN' ? 'Admin Workspace Portal' : 'Authentication Gateway',
+      description: `${accountRole} signed in with verified backend session.`,
+      status: 'SUCCESS',
+    });
+
     return { access_token: token, token_type: data.token_type || 'bearer', user };
   }
 
@@ -374,6 +434,17 @@ export async function loginUser(email, password, roleHint = 'BUILDER') {
       status: 'Active',
     };
     localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(user));
+
+    logSecurityAuditEvent({
+      action: accountRole === 'ADMIN' ? 'Admin login' : 'User authentication',
+      event_type: 'Access Control',
+      actor_email: cleanEmail,
+      user: cleanEmail,
+      affectedResource: accountRole === 'ADMIN' ? 'Admin Workspace Portal' : 'Authentication Gateway',
+      description: `${accountRole} signed in with verified credentials.`,
+      status: 'SUCCESS',
+    });
+
     return { access_token: token, token_type: 'bearer', user };
   }
 
@@ -411,6 +482,16 @@ export async function loginUser(email, password, roleHint = 'BUILDER') {
   setToken(token);
   saveLocalAccount(cleanEmail, cleanPassword, standaloneUser);
   localStorage.setItem(CURRENT_USER_KEY, JSON.stringify(standaloneUser));
+
+  logSecurityAuditEvent({
+    action: finalRole === 'ADMIN' ? 'Admin login' : 'User authentication',
+    event_type: 'Access Control',
+    actor_email: cleanEmail,
+    user: cleanEmail,
+    affectedResource: finalRole === 'ADMIN' ? 'Admin Workspace Portal' : 'Authentication Gateway',
+    description: `${finalRole} session initialized for demo environment.`,
+    status: 'SUCCESS',
+  });
 
   return { access_token: token, token_type: 'bearer', user: standaloneUser };
 }

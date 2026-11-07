@@ -1,6 +1,6 @@
 import { apiCall } from './api';
 import { getLocalAccounts, normalizeRole } from './authService';
-import { isAccountDeactivated } from './adminService';
+import { isAccountDeactivated, recordAdminAuditLog } from './adminService';
 
 const DEFAULT_ADVISORS_LIST = [
   {
@@ -343,6 +343,18 @@ export async function sendAdvisorInvitation(projectId, payload) {
   };
   saveLocalAdvisorInvitation(invitationRecord);
 
+  if (recordAdminAuditLog) {
+    recordAdminAuditLog({
+      action: 'Invitation created',
+      event_type: 'Advisor Engagement',
+      actor_email: bEmail,
+      user: bEmail,
+      affectedResource: `Advisor: ${payload.advisor_name || email} (${email})`,
+      description: `Builder ${bName} issued regulatory review invitation for Project #${projectId}.`,
+      status: 'SUCCESS',
+    });
+  }
+
   return remoteRes || invitationRecord;
 }
 
@@ -537,6 +549,18 @@ export async function acceptAdvisorInvitation(projectId, invitationId) {
       localStorage.setItem('finreg_advisor_assignments', JSON.stringify(assignments));
     }
   } catch (_) {}
+
+  if (recordAdminAuditLog) {
+    recordAdminAuditLog({
+      action: 'Invitation created',
+      event_type: 'Advisor Engagement',
+      actor_email: advEmail,
+      user: advEmail,
+      affectedResource: `Project #${projectId}`,
+      description: `Advisor ${user?.full_name || user?.name || advEmail} accepted project invitation and joined project #${projectId}.`,
+      status: 'SUCCESS',
+    });
+  }
 
   return remoteRes || { success: true, status: 'ACCEPTED', invitation_id: invitationId, project_id: projectId };
 }

@@ -28,7 +28,8 @@ import {
   Database,
   Calendar,
   Plus,
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import { logoutUser, getRegisteredUsers } from '../services/authService';
 import { getProjects, updateProjectStatus } from '../services/projectService';
@@ -413,20 +414,40 @@ export default function AdminDashboardView({
   const [auditLogResultFilter, setAuditLogResultFilter] = useState('All results');
 
   const filteredAuditLogs = auditLogsList.filter((log) => {
+    const q = auditLogSearchQuery.trim().toLowerCase();
     const matchesSearch =
-      auditLogSearchQuery.trim() === '' ||
-      (log.user || '').toLowerCase().includes(auditLogSearchQuery.toLowerCase()) ||
-      (log.action || '').toLowerCase().includes(auditLogSearchQuery.toLowerCase()) ||
-      (log.affectedResource || '').toLowerCase().includes(auditLogSearchQuery.toLowerCase()) ||
-      (log.relevantDetails || '').toLowerCase().includes(auditLogSearchQuery.toLowerCase());
+      !q ||
+      (log.user || '').toLowerCase().includes(q) ||
+      (log.action || '').toLowerCase().includes(q) ||
+      (log.affectedResource || '').toLowerCase().includes(q) ||
+      (log.eventCategory || '').toLowerCase().includes(q) ||
+      (log.relevantDetails || '').toLowerCase().includes(q);
 
     const matchesAction =
       auditLogActionTypeFilter === 'All action types' ||
-      (log.action || '').toLowerCase() === auditLogActionTypeFilter.toLowerCase();
+      (() => {
+        const actNorm = (log.action || '').toLowerCase().replace(/_/g, ' ');
+        const catNorm = (log.eventCategory || '').toLowerCase().replace(/_/g, ' ');
+        const fNorm = auditLogActionTypeFilter.toLowerCase().replace(/_/g, ' ');
+
+        if (fNorm.includes('deactivate')) return actNorm.includes('deactivate');
+        if (fNorm.includes('role')) return actNorm.includes('role') || catNorm.includes('access');
+        if (fNorm.includes('login') || fNorm.includes('failure')) return actNorm.includes('login') || actNorm.includes('fail') || (log.result || '').toLowerCase() === 'blocked';
+        if (fNorm.includes('invitation')) return actNorm.includes('invit');
+        if (fNorm.includes('source')) return actNorm.includes('source') || catNorm.includes('regulatory');
+
+        return actNorm.includes(fNorm) || fNorm.includes(actNorm);
+      })();
 
     const matchesResult =
       auditLogResultFilter === 'All results' ||
-      (log.result || '').toLowerCase() === auditLogResultFilter.toLowerCase();
+      (() => {
+        const resNorm = (log.result || '').toLowerCase();
+        const fNorm = auditLogResultFilter.toLowerCase();
+        if (fNorm === 'success') return resNorm === 'success';
+        if (fNorm === 'blocked') return resNorm === 'blocked' || resNorm === 'failed';
+        return resNorm === fNorm;
+      })();
 
     const matchesDate =
       auditLogDateFilter.trim() === '' ||
@@ -499,23 +520,31 @@ export default function AdminDashboardView({
   // DEF-31: Fetch live admin audit events
   const fetchAdminAuditLogsData = async () => {
     try {
-      const data = await getAdminAuditEvents(auditLogActionTypeFilter);
+      const data = await getAdminAuditEvents();
       const list = Array.isArray(data) ? data : (data?.events || []);
       setAuditLogsList(
-        list.map((log, idx) => ({
-          id: log.id || log.event_id || idx,
-          timestamp: log.created_at ? new Date(log.created_at).toLocaleString() : (log.timestamp || 'Recent'),
-          user: log.actor_email || log.user_email || log.user || 'admin@finreg.internal',
-          action: log.action || log.event_type || 'SYSTEM_EVENT',
-          affectedResource: log.resource || log.affected_resource || log.project_name || 'Global',
-          eventCategory: log.event_type || log.category || 'Platform Lifecycle',
-          result: log.status || 'SUCCESS',
-          resultBadgeClass: (log.status || '').toUpperCase() === 'FAILED'
-            ? 'bg-rose-950/40 text-rose-300 border-rose-800/50'
-            : 'bg-emerald-950/40 text-emerald-300 border-emerald-800/50',
-          resultDotClass: (log.status || '').toUpperCase() === 'FAILED' ? 'bg-rose-500' : 'bg-emerald-400',
-          relevantDetails: log.description || log.details || log.action || 'Audit event logged in PostgreSQL',
-        }))
+        list.map((log, idx) => {
+          const isBlocked =
+            (log.result || log.status || '').toUpperCase() === 'FAILED' ||
+            (log.result || log.status || '').toUpperCase() === 'BLOCKED';
+
+          return {
+            id: log.id || log.event_id || idx,
+            timestamp: log.created_at
+              ? new Date(log.created_at).toLocaleString('en-GB')
+              : (log.timestamp || 'Recent'),
+            user: log.actor_email || log.user_email || log.user || 'admin@finregtech.io',
+            action: log.action || log.event_type || 'SYSTEM_EVENT',
+            affectedResource: log.affectedResource || log.resource || log.affected_resource || log.project_name || 'Platform',
+            eventCategory: log.eventCategory || log.event_type || log.category || 'Platform Governance',
+            result: isBlocked ? 'Blocked' : 'Success',
+            resultBadgeClass: isBlocked
+              ? 'bg-rose-950/40 text-rose-300 border-rose-800/50'
+              : 'bg-emerald-950/40 text-emerald-300 border-emerald-800/50',
+            resultDotClass: isBlocked ? 'bg-rose-500' : 'bg-emerald-400',
+            relevantDetails: log.relevantDetails || log.description || log.details || log.action || 'Audit event recorded in compliance log',
+          };
+        })
       );
     } catch (err) {
       console.warn('[AdminDashboardView] fetchAdminAuditLogsData error:', err.message);
@@ -527,10 +556,12 @@ export default function AdminDashboardView({
     fetchAdminInvitationsData();
   }, [advisorInvitationStatusFilter]);
 
-  // Re-fetch audit logs when filter changes
+  // Re-fetch audit logs when filter changes or when Audit Logs tab is activated
   useEffect(() => {
-    fetchAdminAuditLogsData();
-  }, [auditLogActionTypeFilter]);
+    if (activeTab === 'Audit Logs' || activeTab === 'Dashboard') {
+      fetchAdminAuditLogsData();
+    }
+  }, [auditLogActionTypeFilter, activeTab]);
 
   // Live admin metrics and users fetch from PostgreSQL backend
   useEffect(() => {
@@ -1867,13 +1898,26 @@ export default function AdminDashboardView({
           {/* TAB 7: AUDIT LOGS matching Image 4 (media_1791999494451_b654a5f6.png) */}
           {activeTab === 'Audit Logs' && (
             <div className="space-y-6 animate-fadeIn text-left">
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-                  Audit Logs
-                </h1>
-                <p className="text-xs sm:text-sm text-slate-400 mt-2 font-normal max-w-3xl leading-relaxed">
-                  Authorized platform audit events cannot be edited or deleted through the Admin interface.
-                </p>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+                    Audit Logs
+                  </h1>
+                  <p className="text-xs sm:text-sm text-slate-400 mt-2 font-normal max-w-3xl leading-relaxed">
+                    Authorized platform audit events cannot be edited or deleted through the Admin interface.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    fetchAdminAuditLogsData();
+                    showToast('Audit logs refreshed');
+                  }}
+                  className="self-start sm:self-auto px-3.5 py-2 rounded-lg border border-slate-700 bg-slate-800/80 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center gap-2 transition-colors cursor-pointer shadow-sm active:scale-95"
+                >
+                  <RefreshCw className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Refresh Logs</span>
+                </button>
               </div>
 
               {/* Filter controls row matching Image 4 */}

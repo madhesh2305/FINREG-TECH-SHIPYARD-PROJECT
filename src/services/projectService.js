@@ -297,6 +297,19 @@ export async function createProject(projectPayload) {
 
   const finalProject = backendProject ? normalizeProject(backendProject, projectPayload) : normProject;
   saveUserProject(finalProject);
+
+  if (recordAdminAuditLog) {
+    recordAdminAuditLog({
+      action: 'Project created',
+      event_type: 'Project Lifecycle',
+      actor_email: finalProject.ownerEmail || 'builder@gmail.com',
+      user: finalProject.ownerEmail || 'builder@gmail.com',
+      affectedResource: `Project: ${finalProject.name}`,
+      description: `New project "${finalProject.name}" created under ${finalProject.jurisdiction || 'UK / EU'} regulatory scope.`,
+      status: 'SUCCESS',
+    });
+  }
+
   return finalProject;
 }
 

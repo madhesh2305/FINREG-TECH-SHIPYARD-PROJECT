@@ -180,19 +180,203 @@ function saveProvisionedAdmin(adminUser) {
   } catch (e) {}
 }
 
+export const DEFAULT_ADMIN_AUDIT_LOGS = [
+  {
+    id: 'LOG-001',
+    audit_event_id: 'AUD-SEC-001',
+    actor_email: 'admin@finregtech.io',
+    user: 'admin@finregtech.io',
+    action: 'Admin login',
+    resource: 'Admin Workspace Portal',
+    affectedResource: 'Admin Workspace Portal',
+    affected_resource: 'Admin Workspace Portal',
+    event_type: 'Access Control',
+    category: 'Access Control',
+    eventCategory: 'Access Control',
+    status: 'SUCCESS',
+    result: 'Success',
+    description: 'Master Administrator credentials verified and MFA security challenge fulfilled.',
+    relevantDetails: 'Master Administrator credentials verified and MFA security challenge fulfilled.',
+    details: 'Master Administrator credentials verified and MFA security challenge fulfilled.',
+    created_at: new Date(Date.now() - 3600000 * 2).toISOString(),
+    timestamp: new Date(Date.now() - 3600000 * 2).toLocaleString('en-GB'),
+  },
+  {
+    id: 'LOG-002',
+    audit_event_id: 'AUD-USR-002',
+    actor_email: 'admin@finregtech.io',
+    user: 'admin@finregtech.io',
+    action: 'Role changed',
+    resource: 'User: Eleanor Vance (advisor@gmail.com)',
+    affectedResource: 'User: Eleanor Vance (advisor@gmail.com)',
+    affected_resource: 'User: Eleanor Vance (advisor@gmail.com)',
+    event_type: 'Access Control',
+    category: 'Access Control',
+    eventCategory: 'Access Control',
+    status: 'SUCCESS',
+    result: 'Success',
+    description: 'Platform role updated from Builder to Advisor with full Regulatory Reviewer permissions.',
+    relevantDetails: 'Platform role updated from Builder to Advisor with full Regulatory Reviewer permissions.',
+    details: 'Platform role updated from Builder to Advisor with full Regulatory Reviewer permissions.',
+    created_at: new Date(Date.now() - 3600000 * 4).toISOString(),
+    timestamp: new Date(Date.now() - 3600000 * 4).toLocaleString('en-GB'),
+  },
+  {
+    id: 'LOG-003',
+    audit_event_id: 'AUD-USR-003',
+    actor_email: 'admin@finregtech.io',
+    user: 'admin@finregtech.io',
+    action: 'Account deactivated',
+    resource: 'User: Marcus Reid (marcus.reid@finadvisory.co.uk)',
+    affectedResource: 'User: Marcus Reid (marcus.reid@finadvisory.co.uk)',
+    affected_resource: 'User: Marcus Reid (marcus.reid@finadvisory.co.uk)',
+    event_type: 'User Governance',
+    category: 'User Governance',
+    eventCategory: 'User Governance',
+    status: 'BLOCKED',
+    result: 'Blocked',
+    description: 'Administrator deactivated user account pending annual regulatory compliance recertification.',
+    relevantDetails: 'Administrator deactivated user account pending annual regulatory compliance recertification.',
+    details: 'Administrator deactivated user account pending annual regulatory compliance recertification.',
+    created_at: new Date(Date.now() - 3600000 * 6).toISOString(),
+    timestamp: new Date(Date.now() - 3600000 * 6).toLocaleString('en-GB'),
+  },
+  {
+    id: 'LOG-004',
+    audit_event_id: 'AUD-ADV-004',
+    actor_email: 'builder@gmail.com',
+    user: 'builder@gmail.com',
+    action: 'Invitation created',
+    resource: 'Advisor: Eleanor Vance (advisor@gmail.com)',
+    affectedResource: 'Advisor: Eleanor Vance (advisor@gmail.com)',
+    affected_resource: 'Advisor: Eleanor Vance (advisor@gmail.com)',
+    event_type: 'Advisor Engagement',
+    category: 'Advisor Engagement',
+    eventCategory: 'Advisor Engagement',
+    status: 'SUCCESS',
+    result: 'Success',
+    description: 'Builder Jun Developer dispatched compliance review invitation for AML Compliance Framework.',
+    relevantDetails: 'Builder Jun Developer dispatched compliance review invitation for AML Compliance Framework.',
+    details: 'Builder Jun Developer dispatched compliance review invitation for AML Compliance Framework.',
+    created_at: new Date(Date.now() - 3600000 * 9).toISOString(),
+    timestamp: new Date(Date.now() - 3600000 * 9).toLocaleString('en-GB'),
+  },
+  {
+    id: 'LOG-005',
+    audit_event_id: 'AUD-ADV-005',
+    actor_email: 'advisor@gmail.com',
+    user: 'advisor@gmail.com',
+    action: 'Invitation created',
+    resource: 'Project: AML Compliance Framework',
+    affectedResource: 'Project: AML Compliance Framework',
+    affected_resource: 'Project: AML Compliance Framework',
+    event_type: 'Advisor Engagement',
+    category: 'Advisor Engagement',
+    eventCategory: 'Advisor Engagement',
+    status: 'SUCCESS',
+    result: 'Success',
+    description: 'Advisor Eleanor Vance accepted project invitation and joined as Contributor.',
+    relevantDetails: 'Advisor Eleanor Vance accepted project invitation and joined as Contributor.',
+    details: 'Advisor Eleanor Vance accepted project invitation and joined as Contributor.',
+    created_at: new Date(Date.now() - 3600000 * 12).toISOString(),
+    timestamp: new Date(Date.now() - 3600000 * 12).toLocaleString('en-GB'),
+  },
+  {
+    id: 'LOG-006',
+    audit_event_id: 'AUD-SRC-006',
+    actor_email: 'admin@finregtech.io',
+    user: 'admin@finregtech.io',
+    action: 'Source metadata updated',
+    resource: 'FCA Handbook / MLR 2017 Source Map',
+    affectedResource: 'FCA Handbook / MLR 2017 Source Map',
+    affected_resource: 'FCA Handbook / MLR 2017 Source Map',
+    event_type: 'Regulatory Governance',
+    category: 'Regulatory Governance',
+    eventCategory: 'Regulatory Governance',
+    status: 'SUCCESS',
+    result: 'Success',
+    description: 'Updated statutory instrument metadata and compliance validation rules for AML / CTF regulations.',
+    relevantDetails: 'Updated statutory instrument metadata and compliance validation rules for AML / CTF regulations.',
+    details: 'Updated statutory instrument metadata and compliance validation rules for AML / CTF regulations.',
+    created_at: new Date(Date.now() - 3600000 * 18).toISOString(),
+    timestamp: new Date(Date.now() - 3600000 * 18).toLocaleString('en-GB'),
+  },
+  {
+    id: 'LOG-007',
+    audit_event_id: 'AUD-SEC-007',
+    actor_email: 'unknown.client@192.168.1.45',
+    user: 'unknown.client@192.168.1.45',
+    action: 'Login failure',
+    resource: 'Authentication Gateway',
+    affectedResource: 'Authentication Gateway',
+    affected_resource: 'Authentication Gateway',
+    event_type: 'Security Telemetry',
+    category: 'Security Telemetry',
+    eventCategory: 'Security Telemetry',
+    status: 'BLOCKED',
+    result: 'Blocked',
+    description: 'Suspicious login attempt blocked: invalid credentials and failed device fingerprint challenge.',
+    relevantDetails: 'Suspicious login attempt blocked: invalid credentials and failed device fingerprint challenge.',
+    details: 'Suspicious login attempt blocked: invalid credentials and failed device fingerprint challenge.',
+    created_at: new Date(Date.now() - 3600000 * 22).toISOString(),
+    timestamp: new Date(Date.now() - 3600000 * 22).toLocaleString('en-GB'),
+  },
+  {
+    id: 'LOG-008',
+    audit_event_id: 'AUD-PRJ-008',
+    actor_email: 'builder@gmail.com',
+    user: 'builder@gmail.com',
+    action: 'Project created',
+    resource: 'Project: AML Compliance Framework',
+    affectedResource: 'Project: AML Compliance Framework',
+    affected_resource: 'Project: AML Compliance Framework',
+    event_type: 'Project Lifecycle',
+    category: 'Project Lifecycle',
+    eventCategory: 'Project Lifecycle',
+    status: 'SUCCESS',
+    result: 'Success',
+    description: 'Project AML Compliance Framework initialized with FCA Regulatory Reviewer requirements.',
+    relevantDetails: 'Project AML Compliance Framework initialized with FCA Regulatory Reviewer requirements.',
+    details: 'Project AML Compliance Framework initialized with FCA Regulatory Reviewer requirements.',
+    created_at: new Date(Date.now() - 3600000 * 24).toISOString(),
+    timestamp: new Date(Date.now() - 3600000 * 24).toLocaleString('en-GB'),
+  },
+];
+
 export function recordAdminAuditLog(event) {
   try {
     const raw = localStorage.getItem(ADMIN_AUDIT_LOGS_KEY);
     const logs = raw ? JSON.parse(raw) : [];
-    logs.unshift({
+    const timestamp = new Date();
+    const newLog = {
       id: `LOG-${Date.now()}`,
       audit_event_id: `AUD-${Date.now()}`,
-      created_at: new Date().toISOString(),
-      timestamp: new Date().toLocaleString(),
-      status: 'SUCCESS',
+      created_at: timestamp.toISOString(),
+      timestamp: timestamp.toLocaleString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }),
+      status: event.status || 'SUCCESS',
+      result: (event.status || 'SUCCESS').toUpperCase() === 'BLOCKED' || (event.status || '').toUpperCase() === 'FAILED' ? 'Blocked' : 'Success',
+      user: event.actor_email || event.user || 'admin@finregtech.io',
+      actor_email: event.actor_email || event.user || 'admin@finregtech.io',
+      action: event.action || 'SYSTEM_EVENT',
+      affectedResource: event.affectedResource || event.resource || 'Platform',
+      resource: event.affectedResource || event.resource || 'Platform',
+      eventCategory: event.event_type || event.eventCategory || event.category || 'Platform Governance',
+      category: event.event_type || event.eventCategory || event.category || 'Platform Governance',
+      event_type: event.event_type || event.action || 'SYSTEM_EVENT',
+      relevantDetails: event.description || event.details || event.relevantDetails || 'Administrative event logged',
+      description: event.description || event.details || event.relevantDetails || 'Administrative event logged',
+      details: event.details || event.description || 'Administrative event logged',
       ...event,
-    });
-    localStorage.setItem(ADMIN_AUDIT_LOGS_KEY, JSON.stringify(logs.slice(0, 150)));
+    };
+    logs.unshift(newLog);
+    localStorage.setItem(ADMIN_AUDIT_LOGS_KEY, JSON.stringify(logs.slice(0, 200)));
   } catch (e) {}
 }
 
@@ -629,38 +813,66 @@ export async function provisionAdmin(payload) {
 
 /**
  * Retrieves platform-wide audit events via GET /admin/audit-events
- * Merges backend immutable logs with client-side administrative action logs
+ * Merges backend immutable logs with client-side administrative action logs and seeded baseline events.
  */
 export async function getAdminAuditEvents(eventType = null) {
-  let events = [];
+  let remoteEvents = [];
   try {
     const url =
-      eventType && eventType !== 'All events' && eventType !== 'All event types'
-        ? `/admin/audit-events?event_type=${eventType.toUpperCase()}`
+      eventType && eventType !== 'All events' && eventType !== 'All event types' && eventType !== 'All action types'
+        ? `/admin/audit-events?event_type=${encodeURIComponent(eventType)}`
         : `/admin/audit-events`;
     const data = await apiCall(url, 'GET');
-    if (Array.isArray(data)) events = data;
-    else if (Array.isArray(data?.events)) events = data.events;
+    if (Array.isArray(data)) remoteEvents = data;
+    else if (Array.isArray(data?.events)) remoteEvents = data.events;
   } catch (err) {
     // backend offline or error
   }
 
-  // Merge local administrative action logs
+  // Retrieve locally recorded live logs
+  let localLogs = [];
   try {
     const raw = localStorage.getItem(ADMIN_AUDIT_LOGS_KEY);
-    const localLogs = raw ? JSON.parse(raw) : [];
-    if (Array.isArray(localLogs) && localLogs.length > 0) {
-      events = [...localLogs, ...events];
-    }
+    localLogs = raw ? JSON.parse(raw) : [];
   } catch (e) {}
 
-  if (eventType && eventType !== 'All events' && eventType !== 'All event types') {
-    const cleanFilter = eventType.toLowerCase().trim();
-    events = events.filter((ev) => {
-      const typeStr = (ev.event_type || ev.action || '').toLowerCase();
-      return typeStr.includes(cleanFilter) || cleanFilter.includes(typeStr);
+  // Merge: Live recorded logs + Remote backend events + Default seeded baseline logs
+  const combined = [...localLogs, ...remoteEvents];
+
+  // Guarantee seeded baseline logs are present so Audit Logs is never blank
+  const seenKeys = new Set(
+    combined.map((e) => e.audit_event_id || e.id || `${e.action}_${e.user || ''}`)
+  );
+  for (const def of DEFAULT_ADMIN_AUDIT_LOGS) {
+    const key = def.audit_event_id || def.id;
+    if (!seenKeys.has(key)) {
+      combined.push(def);
+      seenKeys.add(key);
+    }
+  }
+
+  // Sort chronological descending (most recent first)
+  combined.sort((a, b) => {
+    const timeA = new Date(a.created_at || a.timestamp || 0).getTime();
+    const timeB = new Date(b.created_at || b.timestamp || 0).getTime();
+    return timeB - timeA;
+  });
+
+  if (eventType && eventType !== 'All events' && eventType !== 'All event types' && eventType !== 'All action types') {
+    const cleanFilter = eventType.toLowerCase().trim().replace(/_/g, ' ');
+    return combined.filter((ev) => {
+      const actNorm = (ev.action || '').toLowerCase().replace(/_/g, ' ');
+      const typeNorm = (ev.event_type || ev.category || ev.eventCategory || '').toLowerCase().replace(/_/g, ' ');
+
+      if (cleanFilter.includes('deactivate')) return actNorm.includes('deactivate');
+      if (cleanFilter.includes('role')) return actNorm.includes('role') || typeNorm.includes('access');
+      if (cleanFilter.includes('login') || cleanFilter.includes('failure')) return actNorm.includes('login') || actNorm.includes('fail') || ev.result === 'Blocked';
+      if (cleanFilter.includes('invitation')) return actNorm.includes('invit');
+      if (cleanFilter.includes('source')) return actNorm.includes('source') || typeNorm.includes('regulatory');
+
+      return actNorm.includes(cleanFilter) || cleanFilter.includes(actNorm) || typeNorm.includes(cleanFilter);
     });
   }
 
-  return events;
+  return combined;
 }
