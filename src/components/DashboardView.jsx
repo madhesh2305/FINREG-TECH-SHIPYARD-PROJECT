@@ -2442,7 +2442,13 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
 
           {/* TAB: TOOLS VIEW */}
           {activeTab === 'Tools' && (
-            <ToolsView isDarkMode={isDarkMode} />
+            <ToolsView 
+              isDarkMode={isDarkMode} 
+              activeProject={currentProject} 
+              projects={allProjects} 
+              currentUser={userProfile} 
+              onSelectProject={(proj) => setSelectedProject(proj)} 
+            />
           )}
 
           {/* TAB: SETTINGS VIEW */}
