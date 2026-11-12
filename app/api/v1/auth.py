@@ -2,6 +2,8 @@ from fastapi import APIRouter, Depends, Header, Request, status
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.identity import User
+from app.core.config import settings
+from app.core.rate_limit import RateLimiter
 from app.core.security import revoke_token
 from app.schemas.auth import (
     LoginRequest,
@@ -22,6 +24,22 @@ from app.services.auth_service import (
 from app.security.authentication import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+login_limiter = RateLimiter(
+    key="auth:login",
+    max_requests=lambda: settings.RATE_LIMIT_LOGIN_MAX,
+    window_seconds=lambda: settings.RATE_LIMIT_LOGIN_WINDOW_SECONDS
+)
+register_limiter = RateLimiter(
+    key="auth:register",
+    max_requests=lambda: settings.RATE_LIMIT_REGISTER_MAX,
+    window_seconds=lambda: settings.RATE_LIMIT_REGISTER_WINDOW_SECONDS
+)
+reset_limiter = RateLimiter(
+    key="auth:reset",
+    max_requests=lambda: settings.RATE_LIMIT_PASSWORD_RESET_MAX,
+    window_seconds=lambda: settings.RATE_LIMIT_PASSWORD_RESET_WINDOW_SECONDS
+)
 
 @router.post(
     "/logout",
@@ -49,7 +67,8 @@ def logout_endpoint(
     response_model=TokenResponse,
     status_code=status.HTTP_200_OK,
     summary="Authenticate User",
-    description="Authenticates platform users (BUILDER, ADVISOR, ADMIN) using email and password. Returns JWT bearer access token."
+    description="Authenticates platform users (BUILDER, ADVISOR, ADMIN) using email and password. Returns JWT bearer access token.",
+    dependencies=[Depends(login_limiter)]
 )
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     return authenticate_user(db=db, request=request)
@@ -59,7 +78,8 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     response_model=TokenResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Register New User",
-    description="Registers a new user (BUILDER, ADVISOR, ADMIN) and returns JWT bearer access token."
+    description="Registers a new user (BUILDER, ADVISOR, ADMIN) and returns JWT bearer access token.",
+    dependencies=[Depends(register_limiter)]
 )
 def register(request: RegisterRequest, db: Session = Depends(get_db)):
     return register_user(db=db, request=request)
@@ -82,7 +102,8 @@ def change_password_endpoint(
     response_model=PasswordResetResponse,
     status_code=status.HTTP_200_OK,
     summary="Request Password Reset",
-    description="Anti-enumeration safe password recovery endpoint reporting truthful delivery configuration status."
+    description="Anti-enumeration safe password recovery endpoint reporting truthful delivery configuration status.",
+    dependencies=[Depends(reset_limiter)]
 )
 def password_reset_endpoint(
     request: PasswordResetRequest,

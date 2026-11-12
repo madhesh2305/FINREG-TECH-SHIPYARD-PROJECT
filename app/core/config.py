@@ -34,6 +34,17 @@ class Settings(BaseSettings):
     RAG_SERVICE_URL: str = "http://127.0.0.1:8001"
     RAG_SERVICE_TIMEOUT_SECONDS: float = 35.0
 
+    # Security & Rate Limiting Configurations (Phase 1 Hardening)
+    RATE_LIMIT_ENABLED: bool = True
+    RATE_LIMIT_LOGIN_MAX: int = 10
+    RATE_LIMIT_LOGIN_WINDOW_SECONDS: int = 60
+    RATE_LIMIT_REGISTER_MAX: int = 10
+    RATE_LIMIT_REGISTER_WINDOW_SECONDS: int = 60
+    RATE_LIMIT_PASSWORD_RESET_MAX: int = 5
+    RATE_LIMIT_PASSWORD_RESET_WINDOW_SECONDS: int = 60
+    RATE_LIMIT_AI_QUERY_MAX: int = 30
+    RATE_LIMIT_AI_QUERY_WINDOW_SECONDS: int = 60
+
     model_config = SettingsConfigDict(
         env_file=[_backend_env, ".env"],
         env_file_encoding="utf-8",

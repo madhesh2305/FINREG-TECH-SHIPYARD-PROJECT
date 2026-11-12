@@ -12,6 +12,10 @@ from sqlalchemy.orm import sessionmaker, Session
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.core.config import settings
+
+# Disable rate limiting for existing bulk integration test suites by default
+# (Dedicated security test cases selectively re-enable this setting)
+settings.RATE_LIMIT_ENABLED = False
 from app.db.base import Base
 import app.models  # Register all domain models
 import app.db.session as db_session_module
