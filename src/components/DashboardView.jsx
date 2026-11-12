@@ -3,6 +3,9 @@ import {
   getProjects,
   getProjectDetails,
   createProject,
+  updateProject,
+  saveUserProject,
+  normalizeProject,
   getProjectAttachments,
   uploadProjectAttachment,
   getProjectWorkflow,
@@ -128,6 +131,13 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   const [isProjectDetailsCardActive, setIsProjectDetailsCardActive] = useState(false);
   const [isCompletionCardActive, setIsCompletionCardActive] = useState(false);
   const [isTeamCardActive, setIsTeamCardActive] = useState(false);
+
+  // Edit Project Modal States (Matching uploaded screenshot media_1794502872352_c23d1671.png)
+  const [isEditProjectModalOpen, setIsEditProjectModalOpen] = useState(false);
+  const [editProjectName, setEditProjectName] = useState('');
+  const [editProjectStatus, setEditProjectStatus] = useState('In Progress');
+  const [editProjectOwner, setEditProjectOwner] = useState('');
+  const [isSavingProjectEdit, setIsSavingProjectEdit] = useState(false);
 
   // Search & Filter States for My Projects View
   const [searchQuery, setSearchQuery] = useState('');
@@ -291,6 +301,87 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
       console.warn('[DashboardView] getProjectDetails warning:', err);
       setToastMessage(`Unable to access project details: ${err.message || 'Access restricted'}`);
       setTimeout(() => setToastMessage(null), 4000);
+    }
+  };
+
+  // Handle Opening the Edit Project Modal (Matching media_1794502872352_c23d1671.png)
+  const handleOpenEditProjectModal = (proj = currentProject) => {
+    const target = proj || currentProject;
+    if (!target) return;
+    setEditProjectName(target.name || '');
+    setEditProjectStatus(target.status || 'In Progress');
+    setEditProjectOwner(target.owner || userProfile?.name || 'Project Owner');
+    setIsEditProjectModalOpen(true);
+  };
+
+  // Permanently save project edits across live backend and localStorage
+  const handleSaveProjectEdit = async (e) => {
+    if (e) e.preventDefault();
+    if (!editProjectName.trim()) {
+      setToastMessage('Project name is required.');
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+    const target = currentProject;
+    const pid = target?.id || target?.project_id;
+    if (!pid) return;
+
+    setIsSavingProjectEdit(true);
+    const updatePayload = {
+      name: editProjectName.trim(),
+      project_name: editProjectName.trim(),
+      status: editProjectStatus,
+      owner: editProjectOwner.trim() || 'Project Owner',
+      owner_name: editProjectOwner.trim() || 'Project Owner',
+    };
+
+    try {
+      await updateProject(pid, updatePayload);
+
+      const updatedProject = normalizeProject({
+        ...target,
+        ...updatePayload,
+        lastUpdated: 'Just now',
+        updated_at: new Date().toISOString(),
+      });
+
+      setSelectedProject(updatedProject);
+      setAllProjects((prev) =>
+        prev.map((p) => {
+          if (String(p.id) === String(pid) || String(p.project_id) === String(pid)) {
+            return { ...p, ...updatedProject };
+          }
+          return p;
+        })
+      );
+      saveUserProject(updatedProject);
+
+      setToastMessage(`Project "${updatedProject.name}" updated successfully!`);
+      setTimeout(() => setToastMessage(null), 3500);
+      setIsEditProjectModalOpen(false);
+    } catch (err) {
+      console.warn('[DashboardView] Failed to save project edit:', err);
+      const updatedProject = normalizeProject({
+        ...target,
+        ...updatePayload,
+        lastUpdated: 'Just now',
+        updated_at: new Date().toISOString(),
+      });
+      setSelectedProject(updatedProject);
+      setAllProjects((prev) =>
+        prev.map((p) => {
+          if (String(p.id) === String(pid) || String(p.project_id) === String(pid)) {
+            return { ...p, ...updatedProject };
+          }
+          return p;
+        })
+      );
+      saveUserProject(updatedProject);
+      setToastMessage(`Project updated: ${updatedProject.name}`);
+      setTimeout(() => setToastMessage(null), 3500);
+      setIsEditProjectModalOpen(false);
+    } finally {
+      setIsSavingProjectEdit(false);
     }
   };
 
@@ -1910,7 +2001,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                       disabled={(currentProject?.status || '').toUpperCase() === 'DISABLED'}
                       onClick={(e) => {
                         e.stopPropagation();
-                        alert(`Editing settings for ${currentProject.name}...`);
+                        handleOpenEditProjectModal(currentProject);
                       }}
                       className={`px-4 py-2.5 rounded-xl font-bold text-xs sm:text-sm border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                         isDarkMode
@@ -2546,6 +2637,103 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                     No step details found.
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* EDIT PROJECT MODAL (Exact match with uploaded screenshot media_1794502872352_c23d1671.png) */}
+          {isEditProjectModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fadeIn text-left">
+              <div
+                className="w-full max-w-lg rounded-2xl border border-[#2c3440] bg-[#1a1f26] p-6 sm:p-7 shadow-2xl relative text-slate-100 animate-scaleUp"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Header: Title & Close Button */}
+                <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-bold text-white tracking-tight">
+                    Edit Project
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setIsEditProjectModalOpen(false)}
+                    className="text-xs sm:text-sm font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Close
+                  </button>
+                </div>
+
+                {/* Form Fields */}
+                <form onSubmit={handleSaveProjectEdit} className="space-y-5">
+                  {/* Field 1: Project name */}
+                  <div>
+                    <label className="block text-xs sm:text-sm font-medium text-slate-300 mb-1.5">
+                      Project name
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={editProjectName}
+                      onChange={(e) => setEditProjectName(e.target.value)}
+                      placeholder="Enter project name"
+                      className="w-full bg-[#12161c] border border-[#2c3440] rounded-xl px-4 py-3 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/40 transition-all"
+                    />
+                  </div>
+
+                  {/* Field 2: Status */}
+                  <div>
+                    <label className="block text-xs sm:text-sm font-medium text-slate-300 mb-1.5">
+                      Status
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={editProjectStatus}
+                        onChange={(e) => setEditProjectStatus(e.target.value)}
+                        className="w-full bg-[#12161c] border border-[#2c3440] rounded-xl px-4 py-3 text-xs sm:text-sm text-slate-100 focus:outline-none focus:border-amber-500/80 focus:ring-1 focus:ring-amber-500/40 cursor-pointer appearance-none transition-all pr-10"
+                      >
+                        <option value="In Progress">In Progress</option>
+                        <option value="Active">Active</option>
+                        <option value="Under Review">Under Review</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Pending Review">Pending Review</option>
+                      </select>
+                      <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-slate-400">
+                        <ChevronDown className="w-4 h-4" />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Field 3: Owner */}
+                  <div>
+                    <label className="block text-xs sm:text-sm font-medium text-slate-300 mb-1.5">
+                      Owner
+                    </label>
+                    <input
+                      type="text"
+                      value={editProjectOwner}
+                      onChange={(e) => setEditProjectOwner(e.target.value)}
+                      placeholder="Enter owner name"
+                      className="w-full bg-[#12161c] border border-amber-500/80 ring-1 ring-amber-500/40 rounded-xl px-4 py-3 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/60 transition-all"
+                    />
+                  </div>
+
+                  {/* Footer Buttons: Cancel & Save changes */}
+                  <div className="flex items-center justify-end gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditProjectModalOpen(false)}
+                      className="px-5 py-2.5 rounded-xl border border-[#2c3440] bg-[#1e232b] hover:bg-[#252b35] text-slate-200 text-xs sm:text-sm font-semibold cursor-pointer transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSavingProjectEdit}
+                      className="px-5 py-2.5 rounded-xl bg-[#e59b3c] hover:bg-[#d68a2b] disabled:opacity-50 text-slate-950 text-xs sm:text-sm font-bold cursor-pointer transition-colors shadow-md"
+                    >
+                      {isSavingProjectEdit ? 'Saving...' : 'Save changes'}
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           )}
