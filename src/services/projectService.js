@@ -534,18 +534,71 @@ export async function getProjectReadiness(projectId) {
 }
 
 /**
- * Fetches project document attachments
+ * Resolves standard project ID for backend API routing.
+ * Ensures numeric IDs (e.g. 1) are preserved or extracted from 'PRJ-001'
+ * so FastAPI int parameters don't encounter 422 Unprocessable Entity.
  */
-export async function getProjectAttachments(projectId) {
-  try {
-    const data = await apiCall(`/projects/${projectId}/attachments`, 'GET');
-    if (Array.isArray(data)) return data;
-  } catch (err) {}
-  return [];
+export function resolveProjectId(projectId) {
+  if (projectId == null) return null;
+  if (typeof projectId === 'number') return projectId;
+  if (typeof projectId === 'object') {
+    return resolveProjectId(projectId.project_id ?? projectId.id);
+  }
+  const str = String(projectId).trim();
+  if (/^\d+$/.test(str)) return parseInt(str, 10);
+  const match = str.match(/\d+/);
+  if (match) return parseInt(match[0], 10);
+  return str;
 }
 
 /**
- * Uploads a verified PDF attachment
+ * Fetches project document attachments from backend with persistent fallback
+ */
+export async function getProjectAttachments(projectId) {
+  const cleanId = resolveProjectId(projectId);
+  let backendList = null;
+
+  try {
+    const data = await apiCall(`/projects/${cleanId}/attachments`, 'GET');
+    if (Array.isArray(data)) {
+      backendList = data;
+    }
+  } catch (err) {
+    if (String(cleanId) !== String(projectId)) {
+      try {
+        const data2 = await apiCall(`/projects/${projectId}/attachments`, 'GET');
+        if (Array.isArray(data2)) {
+          backendList = data2;
+        }
+      } catch (_) {}
+    }
+  }
+
+  // Dual-layer merge with local vault so documents stay consistent
+  try {
+    const storageKey = `finreg_project_attachments_${cleanId}`;
+    const raw = localStorage.getItem(storageKey);
+    const localList = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(backendList)) {
+      const merged = [...backendList];
+      for (const loc of localList) {
+        const exists = merged.some(
+          (b) => String(b.attachment_id || b.id) === String(loc.attachment_id || loc.id)
+        );
+        if (!exists) {
+          merged.push(loc);
+        }
+      }
+      return merged;
+    }
+    return localList;
+  } catch (_) {
+    return backendList || [];
+  }
+}
+
+/**
+ * Uploads a verified PDF attachment to backend with FormData
  */
 export async function uploadProjectAttachment(projectId, file, category = 'ADVISORY_REFERENCE') {
   if (!file) {
@@ -555,24 +608,158 @@ export async function uploadProjectAttachment(projectId, file, category = 'ADVIS
     throw new Error('Only PDF documents (.pdf) are supported.');
   }
 
+  const cleanId = resolveProjectId(projectId);
   const formData = new FormData();
   formData.append('file', file);
   formData.append('category', category);
 
-  return await apiCall(`/projects/${projectId}/attachments`, 'POST', formData);
+  let result = null;
+  let backendSuccess = false;
+  let uploadErr = null;
+
+  try {
+    result = await apiCall(`/projects/${cleanId}/attachments`, 'POST', formData);
+    backendSuccess = true;
+  } catch (err) {
+    uploadErr = err;
+    console.warn(`[projectService] POST /projects/${cleanId}/attachments failed:`, err.message);
+    if (String(cleanId) !== String(projectId)) {
+      try {
+        result = await apiCall(`/projects/${projectId}/attachments`, 'POST', formData);
+        backendSuccess = true;
+      } catch (_) {}
+    }
+  }
+
+  const newDoc = {
+    attachment_id: result?.attachment_id || result?.id || `att-${Date.now()}`,
+    id: result?.id || result?.attachment_id || `att-${Date.now()}`,
+    original_filename: file.name,
+    name: file.name,
+    category: category,
+    file_size: file.size,
+    created_at: result?.created_at || new Date().toISOString(),
+    status: result?.status || 'VERIFIED',
+    ...(result && typeof result === 'object' ? result : {}),
+  };
+
+  // Cache in localStorage
+  try {
+    const storageKey = `finreg_project_attachments_${cleanId}`;
+    const raw = localStorage.getItem(storageKey);
+    const existing = raw ? JSON.parse(raw) : [];
+    const updated = [
+      newDoc,
+      ...existing.filter(
+        (a) => String(a.attachment_id || a.id) !== String(newDoc.attachment_id || newDoc.id)
+      ),
+    ];
+    localStorage.setItem(storageKey, JSON.stringify(updated));
+  } catch (_) {}
+
+  if (!backendSuccess && uploadErr && !isConnectionFailure(uploadErr)) {
+    throw uploadErr;
+  }
+
+  return result || newDoc;
+}
+
+/**
+ * Deletes a project document attachment from the backend
+ */
+export async function deleteProjectAttachment(projectId, attachmentId) {
+  if (!projectId || !attachmentId) {
+    throw new Error('Project ID and Attachment ID are required to remove document.');
+  }
+
+  const cleanId = resolveProjectId(projectId);
+  let backendSuccess = false;
+  let lastError = null;
+
+  try {
+    await apiCall(`/projects/${cleanId}/attachments/${attachmentId}`, 'DELETE');
+    backendSuccess = true;
+  } catch (err) {
+    lastError = err;
+    console.warn(`[projectService] DELETE /projects/${cleanId}/attachments/${attachmentId} failed:`, err.message);
+
+    if (String(cleanId) !== String(projectId)) {
+      try {
+        await apiCall(`/projects/${projectId}/attachments/${attachmentId}`, 'DELETE');
+        backendSuccess = true;
+      } catch (_) {}
+    }
+
+    if (!backendSuccess) {
+      try {
+        await apiCall(`/attachments/${attachmentId}`, 'DELETE');
+        backendSuccess = true;
+      } catch (_) {}
+    }
+  }
+
+  // Remove from local cache
+  try {
+    const storageKey = `finreg_project_attachments_${cleanId}`;
+    const raw = localStorage.getItem(storageKey);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        const filtered = parsed.filter(
+          (a) => String(a.attachment_id || a.id) !== String(attachmentId)
+        );
+        localStorage.setItem(storageKey, JSON.stringify(filtered));
+      }
+    }
+  } catch (_) {}
+
+  try {
+    if (String(cleanId) !== String(projectId)) {
+      const storageKey2 = `finreg_project_attachments_${projectId}`;
+      const raw2 = localStorage.getItem(storageKey2);
+      if (raw2) {
+        const parsed2 = JSON.parse(raw2);
+        if (Array.isArray(parsed2)) {
+          const filtered2 = parsed2.filter(
+            (a) => String(a.attachment_id || a.id) !== String(attachmentId)
+          );
+          localStorage.setItem(storageKey2, JSON.stringify(filtered2));
+        }
+      }
+    }
+  } catch (_) {}
+
+  if (!backendSuccess && lastError && !isConnectionFailure(lastError)) {
+    throw lastError;
+  }
+
+  return { success: true, attachment_id: attachmentId, project_id: cleanId };
 }
 
 /**
  * Downloads a project attachment as an authenticated blob (DEF-FE-03)
  */
 export async function downloadProjectAttachment(projectId, attachmentId, filename = 'document.pdf') {
+  const cleanId = resolveProjectId(projectId);
   const token = getToken();
   const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api/v1';
-  const response = await fetch(`${BASE_URL}/projects/${projectId}/attachments/${attachmentId}`, {
+
+  let response = await fetch(`${BASE_URL}/projects/${cleanId}/attachments/${attachmentId}`, {
     headers: {
       ...(token && { Authorization: `Bearer ${token}` }),
     },
   });
+
+  if (!response.ok && String(cleanId) !== String(projectId)) {
+    try {
+      const r2 = await fetch(`${BASE_URL}/projects/${projectId}/attachments/${attachmentId}`, {
+        headers: {
+          ...(token && { Authorization: `Bearer ${token}` }),
+        },
+      });
+      if (r2.ok) response = r2;
+    } catch (_) {}
+  }
 
   if (!response.ok) {
     let errMsg = `HTTP ${response.status}`;

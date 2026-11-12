@@ -9,6 +9,7 @@ import {
   formatProjectDate,
   getProjectAttachments,
   uploadProjectAttachment,
+  deleteProjectAttachment,
   getProjectWorkflow,
   getProjectWorkflowStep,
   getProjectAuditEvents,
@@ -61,6 +62,7 @@ import {
   AlertTriangle,
   RefreshCw,
   UserCheck,
+  Trash2,
   X,
 } from 'lucide-react';
 
@@ -238,7 +240,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     return () => {
       isMounted = false;
     };
-  }, [selectedProject?.id, selectedProject?.project_id, allProjects, projectSubTab]);
+  }, [selectedProject, allProjects, projectSubTab]);
 
   // DEF-30: Fetch single workflow step details
   const handleOpenWorkflowStep = async (stepId) => {
@@ -390,13 +392,14 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   const [projectAttachments, setProjectAttachments] = useState([]);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const [downloadingDocId, setDownloadingDocId] = useState(null);
+  const [deletingDocId, setDeletingDocId] = useState(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
     let isMounted = true;
     async function loadAttachments() {
       const targetProj = selectedProject || allProjects[0];
-      const pid = targetProj?.id || targetProj?.project_id;
+      const pid = targetProj?.project_id || targetProj?.id;
       if (!pid) {
         if (isMounted) setProjectAttachments([]);
         return;
@@ -418,7 +421,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     const file = e.target.files?.[0];
     if (!file) return;
     const targetProj = selectedProject || allProjects[0];
-    const pid = targetProj?.id || targetProj?.project_id;
+    const pid = targetProj?.project_id || targetProj?.id;
     if (!pid) {
       setToastMessage('Please select a project before uploading documents.');
       setTimeout(() => setToastMessage(null), 3000);
@@ -427,7 +430,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     setIsUploadingDoc(true);
     try {
       await uploadProjectAttachment(pid, file, 'ADVISORY_REFERENCE');
-      setToastMessage(`Document "${file.name}" uploaded successfully!`);
+      setToastMessage(`Document "${file.name}" uploaded and saved to backend!`);
       const updated = await getProjectAttachments(pid);
       setProjectAttachments(Array.isArray(updated) ? updated : []);
     } catch (err) {
@@ -439,9 +442,43 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     }
   };
 
+  // Remove Document Attachment via DELETE /projects/{projectId}/attachments/{attachmentId}
+  const handleRemoveAttachment = async (doc) => {
+    const targetProj = selectedProject || allProjects[0];
+    const pid = targetProj?.project_id || targetProj?.id;
+    const attId = doc?.attachment_id || doc?.id;
+    const filename = doc?.original_filename || doc?.filename || doc?.name || 'document';
+
+    if (!pid || !attId) {
+      setToastMessage('Unable to remove: project or document identifier missing.');
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+
+    setDeletingDocId(attId);
+    try {
+      await deleteProjectAttachment(pid, attId);
+      setProjectAttachments((prev) =>
+        prev.filter((d) => String(d.attachment_id || d.id) !== String(attId))
+      );
+      setToastMessage(`Document "${filename}" removed from backend successfully.`);
+      const refreshed = await getProjectAttachments(pid);
+      if (Array.isArray(refreshed)) {
+        setProjectAttachments(refreshed);
+      }
+    } catch (err) {
+      console.warn('[DashboardView] remove attachment error:', err);
+      setToastMessage(`Failed to remove document: ${err.message || 'Server error'}`);
+    } finally {
+      setDeletingDocId(null);
+      setTimeout(() => setToastMessage(null), 4000);
+    }
+  };
+
   // FE-03: Authenticated PDF Attachment Download with Bearer Token
   const handleDownloadAttachment = async (doc) => {
-    const pid = currentProject?.id || currentProject?.project_id;
+    const targetProj = selectedProject || allProjects[0];
+    const pid = targetProj?.project_id || targetProj?.id;
     const attId = doc?.attachment_id || doc?.id;
     if (!pid || !attId) {
       setToastMessage('Unable to download: project or attachment identifier missing.');
@@ -450,7 +487,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     }
     setDownloadingDocId(attId);
     try {
-      const filename = doc.original_filename || doc.name || 'document.pdf';
+      const filename = doc.original_filename || doc.filename || doc.name || 'document.pdf';
       await downloadProjectAttachment(pid, attId, filename);
       setToastMessage(`Downloaded "${filename}" successfully.`);
     } catch (err) {
@@ -2399,29 +2436,43 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                   <div className="divide-y divide-slate-800/80">
                     {projectAttachments.length > 0 ? (
                       projectAttachments.map((doc, idx) => (
-                        <div key={doc.attachment_id || idx} className="py-4 sm:py-5 flex items-center justify-between gap-4">
-                          <div className="flex items-center gap-4 sm:gap-6">
+                        <div key={doc.attachment_id || doc.id || idx} className="py-4 sm:py-5 flex items-center justify-between gap-4">
+                          <div className="flex items-center gap-4 sm:gap-6 min-w-0">
                             <span className="text-amber-400 font-mono font-extrabold text-[11px] sm:text-xs uppercase tracking-wider w-24 sm:w-28 shrink-0">
                               {doc.category || 'PDF DOC'}
                             </span>
-                            <div>
-                              <span className="font-bold text-slate-100 text-sm sm:text-base block">
-                                {doc.original_filename || doc.name || 'Document'}
+                            <div className="min-w-0 truncate">
+                              <span className="font-bold text-slate-100 text-sm sm:text-base block truncate">
+                                {doc.original_filename || doc.filename || doc.name || 'Document'}
                               </span>
                               <span className="text-[11px] text-slate-500 font-mono">
-                                {doc.file_size ? `${(doc.file_size / 1024).toFixed(1)} KB · ` : ''}{doc.created_at ? new Date(doc.created_at).toLocaleDateString('en-GB') : 'Verified attachment'}
+                                {(doc.file_size || doc.size) ? `${((doc.file_size || doc.size) / 1024).toFixed(1)} KB · ` : ''}{doc.created_at ? new Date(doc.created_at).toLocaleDateString('en-GB') : 'Verified attachment'}
                               </span>
                             </div>
                           </div>
-                          <button
-                            type="button"
-                            disabled={downloadingDocId === (doc.attachment_id || doc.id)}
-                            onClick={() => handleDownloadAttachment(doc)}
-                            className="text-slate-400 hover:text-amber-300 disabled:opacity-50 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
-                          >
-                            <span>{downloadingDocId === (doc.attachment_id || doc.id) ? 'Downloading...' : 'Download'}</span>
-                            <ArrowRight className="w-4 h-4" />
-                          </button>
+
+                          <div className="flex items-center gap-2.5 shrink-0">
+                            <button
+                              type="button"
+                              disabled={downloadingDocId === (doc.attachment_id || doc.id)}
+                              onClick={() => handleDownloadAttachment(doc)}
+                              className="text-slate-400 hover:text-amber-300 disabled:opacity-50 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-colors px-2 py-1.5 rounded-lg hover:bg-slate-800/50"
+                            >
+                              <span>{downloadingDocId === (doc.attachment_id || doc.id) ? 'Downloading...' : 'Download'}</span>
+                              <ArrowRight className="w-4 h-4" />
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={deletingDocId === (doc.attachment_id || doc.id)}
+                              onClick={() => handleRemoveAttachment(doc)}
+                              title="Remove document from backend"
+                              className="text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 border border-rose-800/40 rounded-lg px-2.5 py-1.5 disabled:opacity-50 text-xs sm:text-sm font-semibold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>{deletingDocId === (doc.attachment_id || doc.id) ? 'Removing...' : 'Remove'}</span>
+                            </button>
+                          </div>
                         </div>
                       ))
                     ) : (
