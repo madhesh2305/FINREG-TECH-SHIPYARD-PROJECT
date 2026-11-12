@@ -331,8 +331,8 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
       name: editProjectName.trim(),
       project_name: editProjectName.trim(),
       status: editProjectStatus,
-      owner: editProjectOwner.trim() || 'Project Owner',
-      owner_name: editProjectOwner.trim() || 'Project Owner',
+      owner: target.owner || editProjectOwner || 'Project Owner',
+      owner_name: target.owner || editProjectOwner || 'Project Owner',
     };
 
     try {
@@ -2702,17 +2702,17 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                     </div>
                   </div>
 
-                  {/* Field 3: Owner */}
+                  {/* Field 3: Owner (Disabled) */}
                   <div>
                     <label className="block text-xs sm:text-sm font-medium text-slate-300 mb-1.5">
                       Owner
                     </label>
                     <input
                       type="text"
+                      disabled
+                      readOnly
                       value={editProjectOwner}
-                      onChange={(e) => setEditProjectOwner(e.target.value)}
-                      placeholder="Enter owner name"
-                      className="w-full bg-[#12161c] border border-amber-500/80 ring-1 ring-amber-500/40 rounded-xl px-4 py-3 text-xs sm:text-sm text-slate-100 placeholder-slate-500 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500/60 transition-all"
+                      className="w-full bg-[#12161c]/60 border border-[#2c3440] rounded-xl px-4 py-3 text-xs sm:text-sm text-slate-400 cursor-not-allowed select-none focus:outline-none transition-all"
                     />
                   </div>
 
