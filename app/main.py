@@ -11,13 +11,15 @@ from app.api.v1.router import api_v1_router
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("finregtech_shipyard")
 
+is_production = settings.ENVIRONMENT.lower() == "production"
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     description="Enterprise-grade non-production backend for FinRegTech Shipyard – FCC Project Cockpit (Week 4 MVP). Implements strict role-based access control, PostgreSQL multi-schema persistence, and grounded regulatory intelligence.",
     version="0.4.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
-    openapi_url="/openapi.json"
+    docs_url=None if is_production else "/docs",
+    redoc_url=None if is_production else "/redoc",
+    openapi_url=None if is_production else "/openapi.json"
 )
 
 # CORS Configuration for Harshini's Next.js/React frontend
@@ -78,14 +80,15 @@ async def general_exception_handler(request: Request, exc: Exception):
 # Root landing endpoint / service index (resolves 404 on http://127.0.0.1:8000)
 @app.get("/", tags=["System"], summary="API Root & Service Index")
 def api_root():
+    is_prod = settings.ENVIRONMENT.lower() == "production"
     return {
         "service": settings.PROJECT_NAME,
         "status": "online",
         "environment": settings.ENVIRONMENT,
         "version": "0.4.0",
-        "docs_url": "/docs",
-        "redoc_url": "/redoc",
-        "openapi_url": "/openapi.json",
+        "docs_url": None if is_prod else "/docs",
+        "redoc_url": None if is_prod else "/redoc",
+        "openapi_url": None if is_prod else "/openapi.json",
         "health_check": "/health",
         "api_v1_base": settings.API_V1_STR
     }
@@ -125,7 +128,12 @@ def health_check():
 # Include API v1 Router
 app.include_router(api_v1_router, prefix=settings.API_V1_STR)
 
-# Mount OpenAPI JSON also under /api/v1/openapi.json for compatibility
+# Mount OpenAPI JSON also under /api/v1/openapi.json for compatibility (disabled in production)
 @app.get("/api/v1/openapi.json", include_in_schema=False)
 def api_v1_openapi():
+    if settings.ENVIRONMENT.lower() == "production":
+        raise StarletteHTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="OpenAPI documentation is disabled in production."
+        )
     return app.openapi()
