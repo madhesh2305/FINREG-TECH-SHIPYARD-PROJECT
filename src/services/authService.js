@@ -588,7 +588,8 @@ export async function getCurrentUser() {
 }
 
 /**
- * Signs out the current user and clears session token
+ * Signs out the current user and completely cleans up session storage
+ * (Item A-5: Purges all finreg_* keys to prevent cross-account data leakage)
  */
 export async function logoutUser() {
   try {
@@ -597,9 +598,31 @@ export async function logoutUser() {
   clearToken();
   clearApiCache();
   try {
-    localStorage.removeItem(CURRENT_USER_KEY);
-    localStorage.removeItem('currentUser');
-    localStorage.removeItem('finreg_projects');
+    // Preserve UI preferences
+    const preservedTheme = localStorage.getItem('theme');
+    const preservedDark = localStorage.getItem('isDarkMode');
+
+    // Collect all keys to remove (all finreg_* and auth/user keys)
+    const keysToRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (
+        key &&
+        (key.startsWith('finreg_') ||
+          key === CURRENT_USER_KEY ||
+          key === 'currentUser' ||
+          key === 'authToken' ||
+          key === 'token')
+      ) {
+        keysToRemove.push(key);
+      }
+    }
+
+    keysToRemove.forEach((k) => localStorage.removeItem(k));
+
+    // Restore UI theme preferences
+    if (preservedTheme) localStorage.setItem('theme', preservedTheme);
+    if (preservedDark) localStorage.setItem('isDarkMode', preservedDark);
   } catch (e) {}
 }
 

@@ -149,8 +149,12 @@ export default function AdvisorDashboardView({
   const fetchAssignedProjects = async () => {
     setIsLoadingProjects(true);
     try {
-      const live = await getProjects();
-      const mapped = Array.isArray(live) ? live.map((p) => ({
+      const [liveProjects, liveInvitations] = await Promise.all([
+        getProjects().catch(() => []),
+        getAdvisorInboxInvitations().catch(() => []),
+      ]);
+
+      const mapped = Array.isArray(liveProjects) ? liveProjects.map((p) => ({
         id: p.id || p.project_id,
         project_id: p.id || p.project_id,
         name: p.name || `Project ${p.id || p.project_id}`,
@@ -171,38 +175,31 @@ export default function AdvisorDashboardView({
           : 'Recently updated',
       })) : [];
 
-      // Merge projects from accepted invitations or local assignments
-      try {
-        const rawAssignments = localStorage.getItem('finreg_advisor_assignments');
-        const assignments = rawAssignments ? JSON.parse(rawAssignments) : [];
-        const currentEmail = (userProfile?.email || currentUser?.email || '').toLowerCase().trim();
-        const myAssignments = assignments.filter((a) => {
-          const aEmail = (a.email || '').toLowerCase().trim();
-          return !currentEmail || aEmail === currentEmail || (currentEmail.includes('advisor') && aEmail.includes('advisor'));
-        });
-
-        const seenIds = new Set(mapped.map((p) => String(p.id || p.project_id)));
-        for (const assign of myAssignments) {
-          const pid = assign.projectId || 'PRJ-001';
-          if (!seenIds.has(String(pid))) {
+      // Include projects from live accepted invitations without relying on stale localStorage
+      const seenIds = new Set(mapped.map((p) => String(p.id || p.project_id)));
+      if (Array.isArray(liveInvitations)) {
+        for (const inv of liveInvitations) {
+          const invStatus = (inv.status || inv.invitation_status || '').toUpperCase();
+          const pid = inv.project_id || inv.projectId;
+          if (invStatus === 'ACCEPTED' && pid && !seenIds.has(String(pid))) {
             seenIds.add(String(pid));
             mapped.push({
               id: pid,
               project_id: pid,
-              name: assign.projectName || `Project ${pid}`,
-              company: 'FinRegTech Platform',
+              name: inv.project_name || inv.projectName || `Project #${pid}`,
+              company: inv.builder_organization || 'FinRegTech Platform',
               domain: currentExpertise?.cleanDomain || 'Regulatory Advisory',
               nextAction: 'Review project requirements & provide compliance guidance',
               type: 'AML / CTF',
-              status: 'In Progress',
+              status: 'Active',
               statusColor: 'bg-emerald-950/40 text-emerald-400 border-emerald-800/50',
               dotColor: 'bg-emerald-400',
-              owner: 'Project Builder',
-              lastUpdated: 'Recently assigned',
+              owner: inv.builder_name || inv.inviting_builder || 'Project Builder',
+              lastUpdated: 'Recently accepted',
             });
           }
         }
-      } catch (_) {}
+      }
 
       setAssignedProjectsFullList(mapped);
     } catch (err) {
@@ -1488,6 +1485,11 @@ export default function AdvisorDashboardView({
                   </div>
 
                   {/* Action Buttons matching media_1791952687524_9321f5a4.png */}
+                  {(!activeProject?.id && !activeProject?.project_id) && (
+                    <p className="text-xs text-amber-400 font-semibold text-right pt-2">
+                      Please select an active assigned project from the header before submitting advice.
+                    </p>
+                  )}
                   <div className="flex items-center justify-end gap-3 pt-4">
                     <button
                       type="button"
@@ -1498,8 +1500,9 @@ export default function AdvisorDashboardView({
                     </button>
                     <button
                       type="button"
+                      disabled={!activeProject?.id && !activeProject?.project_id}
                       onClick={handleSubmitAdvice}
-                      className="px-6 py-2.5 rounded-md bg-[#e59b3c] hover:bg-[#d68a2b] active:scale-[0.99] text-slate-950 text-xs sm:text-sm font-bold cursor-pointer transition-colors shadow-md"
+                      className="px-6 py-2.5 rounded-md bg-[#e59b3c] hover:bg-[#d68a2b] disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.99] text-slate-950 text-xs sm:text-sm font-bold cursor-pointer transition-colors shadow-md"
                     >
                       Submit Advice
                     </button>

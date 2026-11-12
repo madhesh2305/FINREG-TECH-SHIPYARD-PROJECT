@@ -168,6 +168,9 @@ export default function AiRagFindingsView({
     try {
       const cmp = await compareAdvisorPositions({
         project_id: targetProjectId,
+        topic: compareTopic,
+        advisor_1_id: 'ADV-001',
+        advisor_2_id: 'ADV-002',
       });
       setCompareResult(cmp);
     } catch (err) {

@@ -5,7 +5,10 @@ const MOCK_AUDIT_EVENTS = [];
 /**
  * Fetches audit events for a project via GET /projects/{projectId}/audit-events
  */
-export async function getAuditEvents(projectId = 'PRJ-001') {
+export async function getAuditEvents(projectId = null) {
+  if (!projectId) {
+    return [];
+  }
   try {
     const data = await apiCall(`/projects/${projectId}/audit-events`, 'GET');
     return Array.isArray(data) ? data : [];

@@ -648,22 +648,28 @@ export async function updateUserStatus(userId, status, userEmail = null) {
 }
 
 /**
- * Fetches roles and permissions definitions via GET /admin/roles-permissions
+ * Fetches roles and permissions definitions via GET /admin/roles
+ * (Item A-6: Updated to live backend route GET /api/v1/admin/roles)
  * Returns comprehensive, authoritative role specifications if backend endpoint is unavailable.
  */
 export async function getRolesPermissions() {
   try {
-    const data = await apiCall('/admin/roles-permissions', 'GET');
+    const data = await apiCall('/admin/roles', 'GET');
     if (Array.isArray(data) && data.length > 0) return data;
     if (data?.roles && Array.isArray(data.roles) && data.roles.length > 0) return data.roles;
   } catch (err) {
-    // Expected fallback when backend doesn't implement /admin/roles-permissions
+    try {
+      const data = await apiCall('/admin/roles-permissions', 'GET');
+      if (Array.isArray(data) && data.length > 0) return data;
+      if (data?.roles && Array.isArray(data.roles) && data.roles.length > 0) return data.roles;
+    } catch (_) {}
   }
   return DEFAULT_PLATFORM_ROLES;
 }
 
 /**
- * Updates a user's platform role: PUT /admin/users/{userId}/role
+ * Updates a user's platform role: PATCH /admin/users/{userId}/role
+ * (Item A-6: Updated to live backend method PATCH)
  * Seamlessly manages role updates and audits them across both backend and client state.
  */
 export async function updateUserRole(userId, role, userEmail = null) {
@@ -671,10 +677,15 @@ export async function updateUserRole(userId, role, userEmail = null) {
   let backendUpdated = false;
 
   try {
-    await apiCall(`/admin/users/${userId}/role`, 'PUT', { role: normRole });
+    await apiCall(`/admin/users/${userId}/role`, 'PATCH', { role: normRole });
     backendUpdated = true;
   } catch (err) {
-    console.info(`[adminService] /admin/users/${userId}/role endpoint not present on backend. Applying role change locally.`);
+    try {
+      await apiCall(`/admin/users/${userId}/role`, 'PUT', { role: normRole });
+      backendUpdated = true;
+    } catch (_) {
+      console.info(`[adminService] /admin/users/${userId}/role endpoint not present on backend. Applying role change locally.`);
+    }
   }
 
   // Persist role override
@@ -741,7 +752,8 @@ export async function getAdminAdvisorInvitations(status = null) {
 }
 
 /**
- * Provisions a new company administrator: POST /admin/users/provision-admin
+ * Provisions a new company administrator: POST /admin/users
+ * (Item A-6: Updated to live backend route POST /api/v1/admin/users)
  * Ensures provisioned administrators are immediately active, searchable, and capable of logging in.
  */
 export async function provisionAdmin(payload) {
@@ -755,13 +767,23 @@ export async function provisionAdmin(payload) {
 
   let resData = null;
   try {
-    resData = await apiCall('/admin/users/provision-admin', 'POST', {
+    resData = await apiCall('/admin/users', 'POST', {
       email: cleanEmail,
       full_name: cleanName,
       password: cleanPassword,
+      role: 'ADMIN',
     });
   } catch (err) {
-    console.info('[adminService] Backend provision-admin endpoint not present or offline. Provisioning administrator locally.');
+    try {
+      resData = await apiCall('/admin/users/provision-admin', 'POST', {
+        email: cleanEmail,
+        full_name: cleanName,
+        password: cleanPassword,
+        role: 'ADMIN',
+      });
+    } catch (_) {
+      console.info('[adminService] Backend provision admin endpoint offline. Provisioning administrator locally.');
+    }
   }
 
   const newUserId = resData?.user_id || Date.now();

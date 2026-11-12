@@ -170,15 +170,22 @@ export async function getProjectMembers(projectId) {
  * Fetches eligible advisors for assignment: GET /projects/{projectId}/advisors/eligible
  * Guarantees newly signed up advisors are immediately discoverable for project creation
  */
-export async function getEligibleAdvisors(projectId = 1) {
+export async function getEligibleAdvisors(projectId = null) {
   let eligible = [];
-  try {
-    const data = await apiCall(`/projects/${projectId}/advisors/eligible`, 'GET');
-    if (Array.isArray(data) && data.length > 0) {
-      eligible = data;
+  if (projectId) {
+    try {
+      const data = await apiCall(`/projects/${projectId}/advisors/eligible`, 'GET');
+      if (Array.isArray(data) && data.length > 0) {
+        eligible = data;
+      }
+    } catch (err) {
+      console.info('[advisorService] getEligibleAdvisors fallback to /advisors');
     }
-  } catch (err) {
-    console.info('[advisorService] getEligibleAdvisors fallback to /advisors');
+  }
+
+  // If no projectId or endpoint didn't return list, fetch all platform advisors
+  if (eligible.length === 0) {
+    eligible = await getAdvisors();
   }
 
   // If backend returned eligible advisors, merge any signed-up local advisors as well
@@ -469,8 +476,8 @@ export async function getAdvisorInboxInvitations(advisorEmail = null) {
         ...inv,
         id: invId,
         invitation_id: inv.invitation_id || invId,
-        project_id: inv.project_id || 1,
-        project_name: inv.project_name || inv.projectName || `Project #${inv.project_id || 1}`,
+        project_id: inv.project_id || inv.projectId || null,
+        project_name: inv.project_name || inv.projectName || (inv.project_id ? `Project #${inv.project_id}` : 'Compliance Project'),
         inviting_user: bName,
         inviting_builder: bName,
         builder_name: bName,

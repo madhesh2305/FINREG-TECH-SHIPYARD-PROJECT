@@ -33,12 +33,18 @@ export async function updateUserProfile(profileData) {
 }
 
 /**
- * Updates notification preference toggles via PUT /user/notifications
+ * Updates notification preference toggles
+ * (Item A-7: Persists locally to avoid noisy 404 console warnings if backend route is not mounted)
  */
 export async function updateNotificationPreferences(preferences) {
   try {
-    return await apiCall('/user/notifications', 'PUT', preferences);
+    localStorage.setItem('finreg_notification_preferences', JSON.stringify(preferences));
+  } catch (e) {}
+
+  try {
+    return await apiCall('/users/me/notifications', 'PUT', preferences);
   } catch (err) {
+    // Silently proceed with client-side preference storage
     return { success: true, ...preferences };
   }
 }
