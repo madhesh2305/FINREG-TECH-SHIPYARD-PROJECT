@@ -18,9 +18,11 @@ export const DEFAULT_PLATFORM_PROJECTS = [
     assignedAdvisors: 'Eleanor Vance (Vance Legal LLP)',
     assigned_advisor: 'Eleanor Vance',
     creationDate: '15 Oct 2026',
+    created: '15 Oct 2026',
     created_at: '2026-10-15T09:30:00Z',
-    lastActivity: 'Today',
-    updated_at: new Date().toISOString(),
+    lastActivity: '22 Oct 2026',
+    lastUpdated: '22 Oct 2026',
+    updated_at: '2026-10-22T14:15:00Z',
     readiness: 'Active Review',
     accessBoundary: 'Platform isolation enforced; confidential specifications isolated within Builder workspace.',
     jurisdiction: 'United Kingdom (FCA)',
@@ -41,9 +43,11 @@ export const DEFAULT_PLATFORM_PROJECTS = [
     assignedAdvisors: 'Marcus Reid (FCC Consulting)',
     assigned_advisor: 'Marcus Reid',
     creationDate: '22 Oct 2026',
+    created: '22 Oct 2026',
     created_at: '2026-10-22T14:15:00Z',
-    lastActivity: 'Yesterday',
-    updated_at: new Date().toISOString(),
+    lastActivity: '24 Oct 2026',
+    lastUpdated: '24 Oct 2026',
+    updated_at: '2026-10-24T10:00:00Z',
     readiness: 'Under Review',
     accessBoundary: 'Platform isolation enforced; cross-project data filtered at database level.',
     jurisdiction: 'European Union (EBA / PSD2)',
@@ -78,10 +82,12 @@ export function getAllStoredProjects() {
     const raw = localStorage.getItem(USER_PROJECTS_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed.map((p) => normalizeProject(p));
+      }
     }
   } catch (e) {}
-  return DEFAULT_PLATFORM_PROJECTS;
+  return DEFAULT_PLATFORM_PROJECTS.map((p) => normalizeProject(p));
 }
 
 export function updateStoredProjectStatus(projectId, status) {
@@ -108,11 +114,13 @@ export function getUserProjects(userEmail = '') {
   try {
     const all = getAllStoredProjects();
     const cleanEmail = (userEmail || '').trim().toLowerCase();
-    if (!cleanEmail) return all;
-    return all.filter((p) => {
-      const pEmail = (p.ownerEmail || '').toLowerCase();
-      return !pEmail || pEmail === cleanEmail;
-    });
+    if (!cleanEmail) return all.map((p) => normalizeProject(p));
+    return all
+      .filter((p) => {
+        const pEmail = (p.ownerEmail || '').toLowerCase();
+        return !pEmail || pEmail === cleanEmail;
+      })
+      .map((p) => normalizeProject(p));
   } catch (e) {
     return [];
   }
@@ -131,6 +139,53 @@ export function saveUserProject(project) {
     }
     localStorage.setItem(USER_PROJECTS_STORAGE_KEY, JSON.stringify(all));
   } catch (e) {}
+}
+
+/**
+ * Standardizes project date formatting to clean European/British format (e.g. "15 Oct 2026").
+ * Preserves relative badges like "Just now", "Today", "Yesterday", and resolves undefined dates cleanly.
+ */
+export function formatProjectDate(dateVal, fallback = 'Recently') {
+  if (!dateVal) return fallback;
+  if (typeof dateVal === 'string') {
+    const trimmed = dateVal.trim();
+    const lower = trimmed.toLowerCase();
+    if (lower === 'just now' || lower === 'recently' || lower === 'today' || lower === 'yesterday') {
+      return trimmed;
+    }
+    // Matches "15 Oct 2026", "22 Sep 2026", "01 September 2026"
+    if (/^\d{1,2}\s+[A-Za-z]{3,}\s+\d{4}$/.test(trimmed)) {
+      return trimmed;
+    }
+    // Matches DD/MM/YYYY
+    const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (slashMatch) {
+      const day = parseInt(slashMatch[1], 10);
+      const month = parseInt(slashMatch[2], 10) - 1;
+      const year = parseInt(slashMatch[3], 10);
+      const d = new Date(year, month, day);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        });
+      }
+    }
+  }
+
+  try {
+    const d = new Date(dateVal);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: 'short',
+        year: 'numeric',
+      });
+    }
+  } catch (e) {}
+
+  return String(dateVal || fallback);
 }
 
 export function normalizeProject(p, fallbackPayload = {}) {
@@ -160,11 +215,18 @@ export function normalizeProject(p, fallbackPayload = {}) {
     ? 'bg-rose-400'
     : 'bg-amber-400';
 
-  const updatedDate = p.updated_at
-    ? new Date(p.updated_at).toLocaleDateString('en-GB')
-    : p.created_at
-    ? new Date(p.created_at).toLocaleDateString('en-GB')
-    : (p.lastUpdated || 'Recently');
+  // Ensure authentic created and updated dates, preventing hardcoded '01 Sep 2026' leaks
+  const rawCreated =
+    (p.created && p.created !== '01 Sep 2026' ? p.created : null) ||
+    p.created_at ||
+    p.creationDate ||
+    p.created ||
+    fallbackPayload.created_at ||
+    fallbackPayload.creationDate;
+  const createdDate = formatProjectDate(rawCreated, '15 Oct 2026');
+
+  const rawUpdated = p.updated_at || p.lastUpdated || fallbackPayload.updated_at;
+  const updatedDate = p.lastUpdated === 'Just now' ? 'Just now' : formatProjectDate(rawUpdated, createdDate);
 
   return {
     ...p,
@@ -182,7 +244,11 @@ export function normalizeProject(p, fallbackPayload = {}) {
     ownerEmail: (p.ownerEmail || fallbackPayload.ownerEmail || '').toLowerCase(),
     jurisdiction: p.profile?.jurisdiction || p.jurisdiction || fallbackPayload.jurisdiction || 'United Kingdom - FCA',
     description: p.profile?.description || p.description || fallbackPayload.description || 'Compliance regulatory project.',
-    lastUpdated: p.lastUpdated || updatedDate,
+    created_at: p.created_at || (rawCreated && !isNaN(new Date(rawCreated).getTime()) ? new Date(rawCreated).toISOString() : new Date().toISOString()),
+    created: createdDate,
+    creationDate: createdDate,
+    updated_at: p.updated_at || new Date().toISOString(),
+    lastUpdated: updatedDate,
   };
 }
 
@@ -220,10 +286,10 @@ export async function getProjects() {
         merged.unshift(saved);
       }
     }
-    return merged;
+    return merged.map((p) => normalizeProject(p));
   }
 
-  return userSaved;
+  return userSaved.map((p) => normalizeProject(p));
 }
 
 // Deprecated local storage bridges redirected to live API (DEF-28)
@@ -254,7 +320,7 @@ export async function getProjectDetails(projectId) {
   const found = userSaved.find(
     (p) => String(p.id) === String(projectId) || String(p.project_id) === String(projectId)
   );
-  if (found) return found;
+  if (found) return normalizeProject(found);
 
   return normalizeProject({
     id: projectId,
@@ -267,6 +333,8 @@ export async function getProjectDetails(projectId) {
  * Creates a new project in PostgreSQL with seamless user persistence.
  */
 export async function createProject(projectPayload) {
+  const nowIso = new Date().toISOString();
+  const formattedToday = formatProjectDate(nowIso);
   const normProject = normalizeProject({
     id: `PRJ-${Date.now().toString().slice(-4)}`,
     project_id: Date.now(),
@@ -280,9 +348,11 @@ export async function createProject(projectPayload) {
     ownerEmail: (projectPayload.ownerEmail || '').toLowerCase(),
     jurisdiction: projectPayload.jurisdiction || 'United Kingdom - FCA',
     description: projectPayload.description || 'Regulatory project created via Builder Dashboard.',
+    created_at: nowIso,
+    created: formattedToday,
+    creationDate: formattedToday,
+    updated_at: nowIso,
     lastUpdated: 'Just now',
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
   }, projectPayload);
 
   let backendProject = null;
@@ -328,6 +398,7 @@ export async function updateProject(projectId, updatePayload) {
   try {
     const all = getAllStoredProjects();
     const pidStr = String(projectId);
+    const nowIso = new Date().toISOString();
     const updated = all.map((p) => {
       if (String(p.id) === pidStr || String(p.project_id) === pidStr || String(p.project_code) === pidStr) {
         return normalizeProject({
@@ -341,7 +412,7 @@ export async function updateProject(projectId, updatePayload) {
           owner: updatePayload.owner || updatePayload.owner_name || p.owner,
           owner_name: updatePayload.owner || updatePayload.owner_name || p.owner,
           lastUpdated: 'Just now',
-          updated_at: new Date().toISOString(),
+          updated_at: nowIso,
         });
       }
       return p;

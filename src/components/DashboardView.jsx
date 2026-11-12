@@ -6,6 +6,7 @@ import {
   updateProject,
   saveUserProject,
   normalizeProject,
+  formatProjectDate,
   getProjectAttachments,
   uploadProjectAttachment,
   getProjectWorkflow,
@@ -291,12 +292,12 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
 
   // Open Project Details Page (fetches live details from API)
   const handleOpenProject = async (project) => {
-    setSelectedProject(project);
+    setSelectedProject(normalizeProject(project));
     setProjectSubTab('Overview');
     setActiveTab('Project Details');
     try {
       const details = await getProjectDetails(project.id || project.project_id);
-      if (details) setSelectedProject(details);
+      if (details) setSelectedProject(normalizeProject(details));
     } catch (err) {
       console.warn('[DashboardView] getProjectDetails warning:', err);
       setToastMessage(`Unable to access project details: ${err.message || 'Access restricted'}`);
@@ -1147,7 +1148,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                             <td className={`py-4 px-5 font-medium text-xs sm:text-sm ${
                               isDarkMode ? 'text-slate-300' : 'text-slate-600'
                             }`}>
-                              {project.lastUpdated}
+                              {formatProjectDate(project.lastUpdated || project.updated_at, 'Recently')}
                             </td>
                           <td className="py-4 px-5 text-right">
                             <button
@@ -1519,7 +1520,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                                 </span>
                               </td>
                               <td className="py-4 px-5 text-slate-600 dark:text-slate-300">
-                                {project.lastUpdated || 'Recently'}
+                                {formatProjectDate(project.lastUpdated || project.updated_at, 'Recently')}
                               </td>
                               <td className="py-4 px-5 font-medium text-slate-700 dark:text-slate-200">
                                 {project.owner || 'Project Owner'}
@@ -1990,7 +1991,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
 
                     {/* Metadata line */}
                     <p className="text-xs text-slate-400 mt-3 font-medium">
-                      Type: <span className="font-bold text-slate-700 dark:text-slate-300">{currentProject.type}</span> · Owner: <span className="font-bold text-slate-700 dark:text-slate-300">{currentProject.owner}</span> · Updated: <span className="font-bold text-slate-700 dark:text-slate-300">{currentProject.lastUpdated}</span>
+                      Type: <span className="font-bold text-slate-700 dark:text-slate-300">{currentProject.type}</span> · Owner: <span className="font-bold text-slate-700 dark:text-slate-300">{currentProject.owner}</span> · Updated: <span className="font-bold text-slate-700 dark:text-slate-300">{formatProjectDate(currentProject.lastUpdated || currentProject.updated_at, 'Recently')}</span>
                     </p>
                   </div>
 
@@ -2097,11 +2098,15 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                       </div>
                       <div className="py-3 flex items-center justify-between">
                         <span className="text-slate-500 dark:text-slate-300 font-medium">Last Updated</span>
-                        <span className="font-medium text-slate-700 dark:text-slate-200">{currentProject.lastUpdated}</span>
+                        <span className="font-medium text-slate-700 dark:text-slate-200">
+                          {formatProjectDate(currentProject.lastUpdated || currentProject.updated_at, 'Recently')}
+                        </span>
                       </div>
                       <div className="py-3 flex items-center justify-between">
                         <span className="text-slate-500 dark:text-slate-300 font-medium">Created</span>
-                        <span className="font-medium text-slate-700 dark:text-slate-200">{currentProject.created || '01 Sep 2026'}</span>
+                        <span className="font-medium text-slate-700 dark:text-slate-200">
+                          {formatProjectDate(currentProject.created || currentProject.creationDate || currentProject.created_at, '15 Oct 2026')}
+                        </span>
                       </div>
                       <div className="py-3 flex items-center justify-between">
                         <span className="text-slate-500 dark:text-slate-300 font-medium">Jurisdiction</span>
