@@ -40,7 +40,7 @@ def list_advisors(db: Session) -> List[AdvisorProfile]:
         if created_any:
             db.commit()
 
-    return (
+    raw_profiles = (
         db.query(AdvisorProfile)
         .join(User, User.user_id == AdvisorProfile.user_id)
         .join(Role, Role.role_id == User.role_id)
@@ -48,6 +48,14 @@ def list_advisors(db: Session) -> List[AdvisorProfile]:
         .order_by(AdvisorProfile.created_at.desc())
         .all()
     )
+    # Deduplicate by user_id to prevent duplicate advisor cards (UAT-DIR-01)
+    seen_users = set()
+    unique_profiles = []
+    for p in raw_profiles:
+        if p.user_id not in seen_users:
+            seen_users.add(p.user_id)
+            unique_profiles.append(p)
+    return unique_profiles
 
 def get_advisor_by_id(db: Session, advisor_id: int) -> AdvisorProfile:
     advisor = db.query(AdvisorProfile).filter(AdvisorProfile.advisor_profile_id == advisor_id).first()
@@ -225,6 +233,34 @@ def revoke_advisor_invitation(db: Session, project_id: int, invitation_id: int, 
         event_description=f"Invitation for {invitation.advisor_email} revoked by {actor.full_name}",
         old_values={"invitation_status": old_status},
         new_values={"invitation_status": "REVOKED"}
+    )
+
+    db.commit()
+    db.refresh(invitation)
+    return invitation
+
+
+def cancel_advisor_invitation(db: Session, project_id: int, invitation_id: int, actor: User) -> AdvisorInvitation:
+    """Withdraw or cancel a pending advisor invitation and log an audit event (UAT-INV-02, UAT-AUD-01)."""
+    invitation = db.query(AdvisorInvitation).filter(AdvisorInvitation.invitation_id == invitation_id).first()
+    if not invitation:
+        raise NotFoundError(f"Invitation with ID {invitation_id} not found")
+
+    verify_object_belongs_to_project(invitation.project_id, project_id, "Invitation")
+
+    now = datetime.now(timezone.utc)
+    invitation.invitation_status = "REVOKED"
+    invitation.revoked_at = now
+
+    log_audit_event(
+        db=db,
+        project_id=project_id,
+        actor_user_id=actor.user_id,
+        event_type="ADVISOR_INVITATION_CANCELLED",
+        entity_type="ADVISOR_INVITATION",
+        entity_id=invitation.invitation_id,
+        event_description=f"Advisor invitation for {invitation.advisor_email} cancelled by {actor.email}",
+        new_values={"invitation_status": "REVOKED", "cancelled_at": str(now)}
     )
 
     db.commit()

@@ -49,26 +49,26 @@ def get_project_readiness(
     dec_score = (accepted_decisions / total_decisions * 25) if total_decisions > 0 else 0.0
     readiness_pct = round(req_score + adv_score + dec_score)
 
-    readiness_status = "AUDIT_READY" if readiness_pct >= 80 else ("IN_PROGRESS" if readiness_pct >= 50 else "ACTION_REQUIRED")
+    readiness_status = "AUDIT_READY" if readiness_pct >= 80 else ("IN_PROGRESS" if readiness_pct >= 50 else ("NOT_STARTED" if (total_reqs + total_advice + total_decisions) == 0 else "ACTION_REQUIRED"))
 
     items = [
         {
             "category": "Regulatory Obligations",
             "metric": f"{completed_reqs} of {total_reqs} Requirements Completed",
             "completion_pct": round(completed_reqs / total_reqs * 100) if total_reqs > 0 else 0,
-            "status": "PASS" if completed_reqs == total_reqs and total_reqs > 0 else ("ACTION_REQUIRED" if total_reqs == 0 else "IN_PROGRESS")
+            "status": "PASS" if completed_reqs == total_reqs and total_reqs > 0 else ("NOT_STARTED" if total_reqs == 0 else "IN_PROGRESS")
         },
         {
             "category": "Advisor Governance & Review",
             "metric": f"{reviewed_advice} of {total_advice} Reviews Finalized",
             "completion_pct": round(reviewed_advice / total_advice * 100) if total_advice > 0 else 0,
-            "status": "PASS" if reviewed_advice == total_advice and total_advice > 0 else ("ACTION_REQUIRED" if total_advice == 0 else "IN_PROGRESS")
+            "status": "PASS" if reviewed_advice == total_advice and total_advice > 0 else ("NOT_STARTED" if total_advice == 0 else "IN_PROGRESS")
         },
         {
             "category": "Binding Compliance Decisions",
             "metric": f"{accepted_decisions} of {total_decisions} Decisions Ratified",
             "completion_pct": round(accepted_decisions / total_decisions * 100) if total_decisions > 0 else 0,
-            "status": "PASS" if accepted_decisions == total_decisions and total_decisions > 0 else ("ACTION_REQUIRED" if total_decisions == 0 else "IN_PROGRESS")
+            "status": "PASS" if accepted_decisions == total_decisions and total_decisions > 0 else ("NOT_STARTED" if total_decisions == 0 else "IN_PROGRESS")
         }
     ]
 

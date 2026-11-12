@@ -48,6 +48,32 @@ def test_advisor_invitation_lifecycle(client: TestClient, builder_auth_headers: 
     assert revoke_resp.status_code == 200
     assert revoke_resp.json()["invitation_status"] == "REVOKED"
 
+def test_advisor_invitation_cancel(client: TestClient, builder_auth_headers: dict):
+    unique_email = f"cancel.{uuid.uuid4().hex[:6]}@complianceexperts.co.uk"
+    payload = {
+        "advisor_email": unique_email,
+        "access_level": "REGULATORY",
+        "expiry_days": 7
+    }
+    create_resp = client.post("/api/v1/projects/1/advisor-invitations", json=payload, headers=builder_auth_headers)
+    assert create_resp.status_code == 201
+    inv_id = create_resp.json()["invitation_id"]
+
+    # Test POST cancel
+    cancel_resp = client.post(f"/api/v1/projects/1/advisor-invitations/{inv_id}/cancel", headers=builder_auth_headers)
+    assert cancel_resp.status_code == 200
+    assert cancel_resp.json()["invitation_status"] == "REVOKED"
+
+    # Test DELETE cancel on another invite
+    unique_email2 = f"del.{uuid.uuid4().hex[:6]}@complianceexperts.co.uk"
+    create_resp2 = client.post("/api/v1/projects/1/advisor-invitations", json={"advisor_email": unique_email2, "access_level": "REGULATORY"}, headers=builder_auth_headers)
+    assert create_resp2.status_code == 201
+    inv_id2 = create_resp2.json()["invitation_id"]
+
+    del_resp = client.delete(f"/api/v1/projects/1/advisor-invitations/{inv_id2}", headers=builder_auth_headers)
+    assert del_resp.status_code == 200
+    assert del_resp.json()["invitation_status"] == "REVOKED"
+
 def test_advisor_me_invitations_alias(client: TestClient, advisor_auth_headers: dict):
     response = client.get("/api/v1/advisors/me/invitations", headers=advisor_auth_headers)
     assert response.status_code == 200

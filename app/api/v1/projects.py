@@ -19,6 +19,27 @@ from app.services.project_service import (
 
 router = APIRouter(prefix="/projects", tags=["Project Management"])
 
+def _get_project_advisors(db: Session, project_id: int) -> List[str]:
+    from app.models.advisor import AdvisorInvitation
+    advisors = []
+    members = db.query(ProjectMember).join(User, User.user_id == ProjectMember.user_id).filter(
+        ProjectMember.project_id == project_id,
+        ProjectMember.member_status == "ACTIVE"
+    ).all()
+    for m in members:
+        if m.user and m.service_role != "OWNER":
+            advisors.append(m.user.full_name or m.user.email)
+    invs = db.query(AdvisorInvitation).filter(
+        AdvisorInvitation.project_id == project_id,
+        AdvisorInvitation.invitation_status.in_(["ACCEPTED", "PENDING"])
+    ).all()
+    for inv in invs:
+        u = db.query(User).filter(User.email.ilike(inv.advisor_email)).first()
+        name = (u.full_name if (u and u.full_name) else inv.advisor_email)
+        if name and name not in advisors:
+            advisors.append(name)
+    return advisors
+
 @router.get(
     "/summary",
     response_model=DashboardSummary,
@@ -57,7 +78,8 @@ def get_projects(
             created_at=p.created_at,
             updated_at=p.updated_at,
             profile=p.profile,
-            progress=calculate_project_progress(db=db, project_id=p.project_id)
+            progress=calculate_project_progress(db=db, project_id=p.project_id),
+            assigned_advisors=_get_project_advisors(db=db, project_id=p.project_id)
         )
         for p in projects
     ]
@@ -85,7 +107,8 @@ def create_new_project(
         created_at=project.created_at,
         updated_at=project.updated_at,
         profile=project.profile,
-        progress=0
+        progress=0,
+        assigned_advisors=_get_project_advisors(db=db, project_id=project.project_id)
     )
 
 from typing import List, Optional, Union
@@ -113,7 +136,8 @@ def get_project(
         created_at=project.created_at,
         updated_at=project.updated_at,
         profile=project.profile,
-        progress=calculate_project_progress(db=db, project_id=project.project_id)
+        progress=calculate_project_progress(db=db, project_id=project.project_id),
+        assigned_advisors=_get_project_advisors(db=db, project_id=project.project_id)
     )
 
 @router.patch(
@@ -141,7 +165,8 @@ def patch_project(
         created_at=project.created_at,
         updated_at=project.updated_at,
         profile=project.profile,
-        progress=calculate_project_progress(db=db, project_id=project.project_id)
+        progress=calculate_project_progress(db=db, project_id=project.project_id),
+        assigned_advisors=_get_project_advisors(db=db, project_id=project.project_id)
     )
 
 @router.get(

@@ -22,6 +22,7 @@ from app.services.advisor_service import (
     list_advisor_invitations,
     resend_advisor_invitation,
     revoke_advisor_invitation,
+    cancel_advisor_invitation,
     accept_advisor_invitation
 )
 
@@ -206,3 +207,36 @@ def accept_invitation(
         p = db.query(Project).filter(Project.project_code == str(projectId)).first()
         p_id = p.project_id if p else 1
     return accept_advisor_invitation(db=db, project_id=p_id, invitation_id=invitationId, actor=current_user)
+
+@router.post(
+    "/projects/{projectId}/advisor-invitations/{invitationId}/cancel",
+    response_model=AdvisorInvitationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Cancel Advisor Invitation",
+    description="Marks a pending invitation as CANCELLED (UAT-INV-02, UAT-AUD-01). Requires project member/owner."
+)
+def cancel_invitation_post(
+    projectId: Union[int, str],
+    invitationId: int,
+    current_user: User = Depends(get_current_user),
+    membership: ProjectMember = Depends(require_project_member),
+    db: Session = Depends(get_db)
+):
+    return cancel_advisor_invitation(db=db, project_id=membership.project_id, invitation_id=invitationId, actor=current_user)
+
+@router.delete(
+    "/projects/{projectId}/advisor-invitations/{invitationId}",
+    response_model=AdvisorInvitationResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Cancel/Delete Advisor Invitation (REST)",
+    description="Marks a pending invitation as CANCELLED via DELETE (UAT-INV-02, UAT-AUD-01). Requires project member/owner."
+)
+def cancel_invitation_delete(
+    projectId: Union[int, str],
+    invitationId: int,
+    current_user: User = Depends(get_current_user),
+    membership: ProjectMember = Depends(require_project_member),
+    db: Session = Depends(get_db)
+):
+    return cancel_advisor_invitation(db=db, project_id=membership.project_id, invitation_id=invitationId, actor=current_user)
+

@@ -76,6 +76,12 @@ class ProjectResponse(BaseModel):
     updated_at: datetime
     profile: Optional[ProjectProfileResponse] = None
     progress: int = 0
+    assigned_advisors: Optional[List[str]] = Field(default_factory=list)
+
+    @computed_field
+    @property
+    def advisors(self) -> List[str]:
+        return self.assigned_advisors or []
 
     @computed_field
     @property

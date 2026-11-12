@@ -65,7 +65,32 @@ def create_project(db: Session, request: ProjectCreate, creator: User) -> Projec
     db.add(owner_member)
     db.flush()
 
-    # 4. Generate audit event
+    # 4. Map baseline regulatory requirements from available sources (UAT-REG-01)
+    from app.models.regulatory import RegulatorySource
+    sources = db.query(RegulatorySource).filter(
+        (RegulatorySource.jurisdiction.ilike(f"%{request.jurisdiction}%")) |
+        (RegulatorySource.validation_status == "VALIDATED")
+    ).limit(3).all()
+    if not sources:
+        sources = db.query(RegulatorySource).limit(3).all()
+
+    for idx, src in enumerate(sources, start=1):
+        baseline_code = f"REQ-{project.project_code}-{idx:02d}"
+        baseline_req = RegulatoryRequirement(
+            project_id=project.project_id,
+            source_id=src.source_id,
+            requirement_code=baseline_code,
+            requirement_title=f"{src.source_title[:60]} Compliance Baseline",
+            requirement_text=src.relevance or src.applicability_rationale or "Establish source-traceable regulatory compliance baseline.",
+            applicability_status="APPLICABLE",
+            requirement_status="OPEN",
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc)
+        )
+        db.add(baseline_req)
+    db.flush()
+
+    # 5. Generate audit event
     log_audit_event(
         db=db,
         project_id=project.project_id,

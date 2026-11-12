@@ -287,3 +287,50 @@ def download_attachment(
         media_type="application/pdf",
         filename=attachment.original_filename
     )
+
+@router.delete(
+    "/{attachmentId}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete Project Attachment",
+    description="Deletes a project attachment from database and disk (UAT-DOC-01). Caller must be an active project member."
+)
+def delete_attachment(
+    projectId: Union[int, str],
+    attachmentId: int,
+    membership: ProjectMember = Depends(require_project_member),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    pid = membership.project_id
+    attachment = db.query(ProjectAttachment).filter(
+        ProjectAttachment.attachment_id == attachmentId,
+        ProjectAttachment.project_id == pid
+    ).first()
+
+    if not attachment:
+        raise NotFoundError("Attachment not found in this project")
+
+    # Remove file from disk if it exists
+    if attachment.storage_path and os.path.exists(attachment.storage_path):
+        try:
+            os.remove(attachment.storage_path)
+        except Exception:
+            pass
+
+    filename = attachment.original_filename
+    db.delete(attachment)
+
+    log_audit_event(
+        db=db,
+        project_id=pid,
+        actor_user_id=current_user.user_id,
+        event_type="PROJECT_ATTACHMENT_REMOVED",
+        entity_type="ATTACHMENT",
+        entity_id=attachmentId,
+        event_description=f"Attachment '{filename}' removed from Project {pid} by {current_user.full_name}",
+        old_values={"filename": filename, "attachment_id": attachmentId}
+    )
+
+    db.commit()
+    return None
+
