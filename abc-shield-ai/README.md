@@ -700,32 +700,102 @@ abc-shield-ai/
 
 ---
 
-## Execution & Testing
+## System Integration & Execution Guide
 
-### Start the FastAPI Server (Port 8001):
-```bash
-uvicorn api.main:app --reload --host 127.0.0.1 --port 8001
+### Architectural Roles & Integration Flow
+- **Main Project Root**: `D:\FInregTech Shipyard`
+- **AI/RAG Microservice**: `D:\FInregTech Shipyard\abc-shield-ai` (`http://127.0.0.1:8001`)
+- **Main Backend Gateway**: `D:\vishal-backend` (`http://127.0.0.1:8000`)
+- **Builder Frontend**: `C:\Users\askla\Downloads\Fin Proj (2)\Fin Proj` (`http://127.0.0.1:5173`)
+- **Git Branch**: `ai-rag` (tracking `origin/ai-rag`)
+
+**Integration Flow:**
+`Builder Frontend (5173)` → `Main Backend (8000)` → `AI/RAG Microservice (8001)` → `ChromaDB Vector Store (25 records)` → `Grounded Evidence` → `Main Backend (format_rag_response_for_frontend)` → `Builder Frontend (AiRagFindingsView.jsx)`
+
+---
+
+### Environment Variables & Configuration
+The AI/RAG microservice is configured via Pydantic settings in `config/settings.py` and optional `.env`:
+
+| Variable Name | Default Value | Description |
+| :--- | :--- | :--- |
+| `API_HOST` | `127.0.0.1` | Binding IP address for the AI/RAG service |
+| `API_PORT` | `8001` | Dedicated microservice port (avoids conflict with backend on 8000) |
+| `ENVIRONMENT` | `development` | Runtime environment mode |
+| `CHROMA_PERSIST_DIR` | `data/staging/madhesh_handover/step6/chroma_db` | Persistent ChromaDB storage path |
+| `CHROMA_COLLECTION_NAME` | `canonical_regulatory_records` | Active collection containing 25 canonical records |
+| `EMBEDDING_MODEL_NAME` | `all-MiniLM-L6-v2` | SentenceTransformer embedding model (384 dimensions) |
+| `RETRIEVAL_TOP_K` | `5` | Maximum number of evidence chunks retrieved |
+| `MIN_SIMILARITY_SCORE`| `0.35` | Minimum cosine similarity cutoff threshold |
+| `CORS_ORIGINS` | `8 origins` | Permitted browser origins (5173, 5174, 3000, 8000) |
+
+---
+
+### Service Startup Commands (Windows PowerShell)
+
+#### 1. Start AI/RAG Microservice (Port 8001):
+```powershell
+cd "D:\FInregTech Shipyard\abc-shield-ai"
+& ".\.venv\Scripts\python.exe" -m api.main
 ```
-*Note: The AI/RAG service runs on port `8001` by default to avoid conflict with the main backend service running on port `8000`.*
+*Lifespan automatically warms up SentenceTransformer `all-MiniLM-L6-v2` and verifies ChromaDB connectivity.*
 
-Interactive documentation is available at:
-- Swagger UI: `http://127.0.0.1:8001/docs`
-- ReDoc UI: `http://127.0.0.1:8001/redoc`
-
-### Primary Verification Suites:
-```bash
-# 1. Source-Control Approval & Fail-Closed Guardrails (25 tests)
-pytest tests/test_source_control_approval.py -v
-
-# 2. Fast-Track Step 6 Integration Smoke Tests (8 tests)
-pytest tests/test_fast_track_step6_smoke.py -v
-
-# 3. Fast-Track Step 4 Canonical RAG Acceptance Tests (15 tests)
-pytest tests/test_fast_track_step4_acceptance.py -v
+#### 2. Start Main ShipYard Backend (Port 8000):
+```powershell
+cd "D:\vishal-backend"
+& "D:\FInregTech Shipyard\.venv\Scripts\python.exe" -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-### Run Full Regression Suite (810 tests across all milestones):
-```bash
-pytest -q
+#### 3. Start Builder Frontend (Port 5173):
+```powershell
+& "D:\FInregTech Shipyard\.venv\Scripts\python.exe" -m http.server 5173 --directory "C:\Users\askla\Downloads\Fin Proj (2)\Fin Proj\dist"
 ```
+
+---
+
+### Health Check & API Endpoints
+
+#### AI/RAG Microservice (Port 8001):
+- `GET http://127.0.0.1:8001/health`: Root service health probe (HTTP 200)
+- `GET http://127.0.0.1:8001/api/v1/health`: Versioned health probe (HTTP 200)
+- `POST http://127.0.0.1:8001/api/v1/query`: Grounded regulatory query endpoint
+- `POST http://127.0.0.1:8001/api/v1/rag/analyze`: Builder & Gateway direct analysis alias
+- `POST http://127.0.0.1:8001/api/v1/compare`: Dual-advisor semantic advice comparison
+- `POST http://127.0.0.1:8001/api/v1/projects/{projectId}/compare-advice`: Gateway-scoped comparison route
+
+#### Main Backend Gateway (Port 8000):
+- `GET http://127.0.0.1:8000/health`: Root platform health (includes database & RAG status)
+- `GET http://127.0.0.1:8000/api/v1/rag/health`: Probes live RAG microservice on port 8001
+- `POST http://127.0.0.1:8000/api/v1/rag/analyze`: Authenticated, project-isolated RAG endpoint
+- `POST http://127.0.0.1:8000/api/v1/rag/compare`: Authenticated advisor comparison endpoint
+
+---
+
+### Canonical Corpus Verification (25 Records)
+- **Vector DB Directory**: `data/staging/madhesh_handover/step6/chroma_db`
+- **Active Collection**: `canonical_regulatory_records`
+- **Record Count**: Exactly **25 vectors**
+- **Unique Sources**: 5 (`EU-01`, `UK-01`, `UK-02`, `UK-03`, `UK-09`)
+- **Metadata Completeness**: 100% (0 missing required fields)
+- **Validation Status**: `Approved for RAG Integration - Pending SME Validation` (`is_approved_for_rag: False`)
+- **Seeding Script**: `scripts/seed_canonical_vectors.py` (idempotent, reproducible)
+
+---
+
+### Automated Test Execution & Results
+
+#### Full AI/RAG Regression Suite (887 tests):
+```powershell
+cd "D:\FInregTech Shipyard\abc-shield-ai"
+& ".\.venv\Scripts\pytest.exe" tests -q
+```
+**Result:** `887 passed in 38.16s` (100% pass rate).
+
+#### Main Backend Integration Test Suite (24 tests):
+```powershell
+cd "D:\vishal-backend"
+& "D:\FInregTech Shipyard\.venv\Scripts\pytest.exe" tests/test_rag_integration.py tests/test_rag_handover_endpoints.py -v
+```
+**Result:** `24 passed in 11.31s` (100% pass rate).
+
 
