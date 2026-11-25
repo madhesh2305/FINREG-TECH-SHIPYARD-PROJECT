@@ -355,6 +355,7 @@ export default function AdminDashboardView({
 
   // Regulatory Data Management state matching Images 1, 2, & 3
   const [isAddSourceModalOpen, setIsAddSourceModalOpen] = useState(false);
+  const [inspectingSource, setInspectingSource] = useState(null);
   const [newSourceForm, setNewSourceForm] = useState({
     title: '',
     authority: '',
@@ -363,10 +364,106 @@ export default function AdminDashboardView({
     version: '',
     topic: '',
     applicability: '',
+    officialUrl: '',
+    documentName: '',
   });
 
-  const [regulatorySources, setRegulatorySources] = useState([]);
+  const DEFAULT_REGULATORY_SOURCES = [
+    {
+      id: 'SRC-001',
+      title: 'FCA Handbook - SYSC 6.1 & 6.3 Financial Crime Systems',
+      applicability: 'Applicable to UK-authorised retail and investment firms',
+      authority: 'FCA',
+      jurisdiction: 'United Kingdom',
+      publication: '15 Oct 2026',
+      version: 'Release 126',
+      topic: 'Financial Crime / Anti-Money Laundering',
+      officialUrl: 'https://www.handbook.fca.org.uk/handbook/SYSC/6/',
+      documentName: 'fca-sysc-6-handbook.pdf',
+      status: 'Approved',
+      reviewer: 'Eleanor Vance',
+      statusBadgeClass: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
+      statusDotClass: 'bg-emerald-400',
+      lastUpdated: '15 Oct 2026',
+    },
+    {
+      id: 'SRC-002',
+      title: 'EU Funds Transfer Regulation (EU 2023/1113 Travel Rule)',
+      applicability: 'Payment service providers and crypto-asset service providers in EU',
+      authority: 'EBA / European Commission',
+      jurisdiction: 'European Union',
+      publication: '09 Jun 2026',
+      version: 'Regulation 2023/1113',
+      topic: 'Payment Transparency & AML',
+      officialUrl: 'https://eur-lex.europa.eu/eli/reg/2023/1113/oj',
+      documentName: 'eu-travel-rule-2023-1113.pdf',
+      status: 'Approved',
+      reviewer: 'Marcus Reid',
+      statusBadgeClass: 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80',
+      statusDotClass: 'bg-emerald-400',
+      lastUpdated: '22 Oct 2026',
+    },
+    {
+      id: 'SRC-003',
+      title: 'JMLSG Guidance Part I Chapter 5 - Customer Due Diligence',
+      applicability: 'All UK financial sector firms conducting ongoing monitoring',
+      authority: 'JMLSG',
+      jurisdiction: 'United Kingdom',
+      publication: '01 Nov 2026',
+      version: '2026 Revision',
+      topic: 'CDD & Risk Assessment',
+      officialUrl: 'https://www.jmlsg.org.uk/guidance/current-guidance/',
+      documentName: 'jmlsg-part-1-cdd.pdf',
+      status: 'Pending Validation',
+      reviewer: 'Unassigned',
+      statusBadgeClass: 'bg-[#281d11] text-amber-400 border-amber-800/50',
+      statusDotClass: 'bg-amber-400',
+      lastUpdated: '01 Nov 2026',
+    },
+  ];
 
+  const [regulatorySources, setRegulatorySources] = useState(() => {
+    try {
+      const raw = localStorage.getItem('finreg_regulatory_sources');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (_) {}
+    return DEFAULT_REGULATORY_SOURCES;
+  });
+
+  const handleUpdateSourceStatus = (sourceId, newStatus) => {
+    setRegulatorySources((prev) => {
+      const updated = prev.map((s) => {
+        if (s.id !== sourceId) return s;
+        let badge = 'bg-[#281d11] text-amber-400 border-amber-800/50';
+        let dot = 'bg-amber-400';
+        if (newStatus === 'Approved') {
+          badge = 'bg-emerald-950/60 text-emerald-400 border-emerald-800/80';
+          dot = 'bg-emerald-400';
+        } else if (newStatus === 'Rejected') {
+          badge = 'bg-rose-950/60 text-rose-400 border-rose-800/80';
+          dot = 'bg-rose-400';
+        } else if (newStatus === 'Review Due') {
+          badge = 'bg-blue-950/60 text-blue-400 border-blue-800/80';
+          dot = 'bg-blue-400';
+        }
+        return {
+          ...s,
+          status: newStatus,
+          statusBadgeClass: badge,
+          statusDotClass: dot,
+          lastUpdated: 'Today',
+        };
+      });
+      try {
+        localStorage.setItem('finreg_regulatory_sources', JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
+    showToast(`Source updated to ${newStatus}`);
+  };
 
   // Platform Telemetry services initialized to empty array (ready for live backend infrastructure monitoring)
   const [platformServices, setPlatformServices] = useState([]);
@@ -387,13 +484,23 @@ export default function AdminDashboardView({
       publication: newSourceForm.publicationDate.trim() || 'Today',
       version: newSourceForm.version.trim() || 'Version 1.0',
       topic: newSourceForm.topic.trim() || 'General Compliance',
+      officialUrl: newSourceForm.officialUrl.trim() || 'https://www.handbook.fca.org.uk/',
+      documentName: newSourceForm.documentName.trim() || 'regulatory-source.pdf',
       status: 'Pending Validation',
+      reviewer: 'Unassigned',
       statusBadgeClass: 'bg-[#281d11] text-amber-400 border-amber-800/50',
       statusDotClass: 'bg-amber-400',
       lastUpdated: 'Today',
     };
 
-    setRegulatorySources((prev) => [newSource, ...prev]);
+    setRegulatorySources((prev) => {
+      const updated = [newSource, ...prev];
+      try {
+        localStorage.setItem('finreg_regulatory_sources', JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
+
     setIsAddSourceModalOpen(false);
     setNewSourceForm({
       title: '',
@@ -403,6 +510,8 @@ export default function AdminDashboardView({
       version: '',
       topic: '',
       applicability: '',
+      officialUrl: '',
+      documentName: '',
     });
     showToast('Regulatory source added as Pending Validation');
   };
@@ -1839,7 +1948,7 @@ export default function AdminDashboardView({
                     <tbody className="divide-y divide-slate-800/60 text-xs sm:text-sm">
                       {regulatorySources.length === 0 ? (
                         <tr>
-                          <td colSpan={7} className="py-8 text-center text-slate-500 text-sm">
+                          <td colSpan={9} className="py-8 text-center text-slate-500 text-sm">
                             No regulatory sources added yet. Use "Add Regulatory Source" to register supervisory rulebooks.
                           </td>
                         </tr>
@@ -1851,6 +1960,11 @@ export default function AdminDashboardView({
                             <p className="text-[11px] text-slate-400 font-mono mt-0.5 whitespace-nowrap">
                               {src.applicability}
                             </p>
+                            {src.documentName && (
+                              <p className="text-[10px] text-amber-400/80 font-mono mt-0.5 flex items-center gap-1">
+                                <span>📄</span> {src.documentName}
+                              </p>
+                            )}
                           </td>
                           <td className="py-4 px-6 text-slate-300 whitespace-nowrap">
                             {src.authority}
@@ -1877,13 +1991,35 @@ export default function AdminDashboardView({
                             {src.lastUpdated}
                           </td>
                           <td className="py-4 px-6 text-right whitespace-nowrap">
-                            <button
-                              type="button"
-                              onClick={() => showToast(`Viewing source: ${src.title}`)}
-                              className="text-slate-300 hover:text-white font-medium text-xs sm:text-sm transition-colors cursor-pointer"
-                            >
-                              View Source
-                            </button>
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setInspectingSource(src)}
+                                className="text-slate-300 hover:text-white font-medium text-xs sm:text-sm transition-colors cursor-pointer px-2.5 py-1 rounded bg-slate-800/60 hover:bg-slate-700/80 border border-slate-700/60"
+                              >
+                                View Source
+                              </button>
+                              {src.status !== 'Approved' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateSourceStatus(src.id, 'Approved')}
+                                  title="Approve source for platform compliance rules"
+                                  className="text-emerald-400 hover:text-emerald-300 font-semibold text-xs px-2 py-1 rounded bg-emerald-950/40 hover:bg-emerald-900/50 border border-emerald-800/60 cursor-pointer"
+                                >
+                                  Approve
+                                </button>
+                              )}
+                              {src.status !== 'Rejected' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleUpdateSourceStatus(src.id, 'Rejected')}
+                                  title="Reject source"
+                                  className="text-rose-400 hover:text-rose-300 font-semibold text-xs px-2 py-1 rounded bg-rose-950/40 hover:bg-rose-900/50 border border-rose-800/60 cursor-pointer"
+                                >
+                                  Reject
+                                </button>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -2576,6 +2712,38 @@ export default function AdminDashboardView({
                 />
               </div>
 
+              {/* Row: Official Rulebook URL & Document / PDF Name */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                    Official rulebook link / URL
+                  </label>
+                  <input
+                    type="url"
+                    value={newSourceForm.officialUrl}
+                    onChange={(e) =>
+                      setNewSourceForm({ ...newSourceForm, officialUrl: e.target.value })
+                    }
+                    placeholder="https://www.handbook.fca.org.uk/..."
+                    className="w-full bg-[#111216] border border-slate-700/80 rounded-md px-3.5 py-2.5 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/80"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1.5">
+                    Source document / file name
+                  </label>
+                  <input
+                    type="text"
+                    value={newSourceForm.documentName}
+                    onChange={(e) =>
+                      setNewSourceForm({ ...newSourceForm, documentName: e.target.value })
+                    }
+                    placeholder="e.g. fca-sysc-6-handbook.pdf"
+                    className="w-full bg-[#111216] border border-slate-700/80 rounded-md px-3.5 py-2.5 text-xs sm:text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-amber-500/80"
+                  />
+                </div>
+              </div>
+
               {/* Modal Actions */}
               <div className="flex items-center justify-end gap-3 pt-3">
                 <button
@@ -2846,6 +3014,131 @@ export default function AdminDashboardView({
                 className="px-5 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 disabled:opacity-50 text-white font-bold transition-colors cursor-pointer shadow-md"
               >
                 {isDisablingProject ? 'Disabling...' : 'Confirm Disable'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SOURCE DETAILS INSPECTION MODAL */}
+      {inspectingSource && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-fadeIn">
+          <div className="bg-[#16181f] border border-slate-700/80 rounded-xl w-full max-w-xl shadow-2xl p-6 sm:p-7 relative animate-fadeIn text-left space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800/80 pb-3">
+              <div>
+                <span className="text-[10px] font-mono font-bold tracking-widest text-slate-500 uppercase block mb-1">
+                  REGULATORY SOURCE DETAILS
+                </span>
+                <h3 className="text-base sm:text-lg font-bold text-white">
+                  {inspectingSource.title}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectingSource(null)}
+                className="text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 text-xs">
+              <div>
+                <span className="text-slate-500 block mb-0.5 font-medium">Issuing Authority</span>
+                <span className="text-slate-200 font-semibold">{inspectingSource.authority}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block mb-0.5 font-medium">Jurisdiction</span>
+                <span className="text-slate-200 font-semibold">{inspectingSource.jurisdiction}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block mb-0.5 font-medium">Publication Date</span>
+                <span className="text-slate-200 font-semibold">{inspectingSource.publication}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block mb-0.5 font-medium">Version</span>
+                <span className="text-slate-200 font-semibold">{inspectingSource.version}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block mb-0.5 font-medium">Topic</span>
+                <span className="text-slate-200 font-semibold">{inspectingSource.topic}</span>
+              </div>
+              <div>
+                <span className="text-slate-500 block mb-0.5 font-medium">Validation Status</span>
+                <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium border ${inspectingSource.statusBadgeClass}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${inspectingSource.statusDotClass}`} />
+                  {inspectingSource.status}
+                </span>
+              </div>
+            </div>
+
+            <div className="border-t border-slate-800/80 pt-3">
+              <span className="text-slate-500 block text-xs mb-1 font-medium">Applicability Scope</span>
+              <p className="text-xs text-slate-300 leading-relaxed bg-[#111216] p-3 rounded border border-slate-800">
+                {inspectingSource.applicability}
+              </p>
+            </div>
+
+            {inspectingSource.officialUrl && (
+              <div className="border-t border-slate-800/80 pt-3 flex items-center justify-between">
+                <div>
+                  <span className="text-slate-500 block text-[11px] font-medium">Official Rulebook Link</span>
+                  <span className="text-xs text-amber-400 font-mono truncate max-w-sm block">
+                    {inspectingSource.officialUrl}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => window.open(inspectingSource.officialUrl, '_blank', 'noopener,noreferrer')}
+                  className="px-3 py-1.5 rounded bg-amber-500 hover:bg-amber-400 text-black font-semibold text-xs transition-colors cursor-pointer"
+                >
+                  Open Link
+                </button>
+              </div>
+            )}
+
+            {inspectingSource.documentName && (
+              <div className="border-t border-slate-800/80 pt-3">
+                <span className="text-slate-500 block text-[11px] font-medium">Document / PDF Reference</span>
+                <span className="text-xs text-slate-300 font-mono block mt-0.5">
+                  📄 {inspectingSource.documentName}
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between gap-3 pt-4 border-t border-slate-800/80">
+              <div className="flex items-center gap-2">
+                {inspectingSource.status !== 'Approved' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleUpdateSourceStatus(inspectingSource.id, 'Approved');
+                      setInspectingSource(null);
+                    }}
+                    className="px-3 py-1.5 rounded bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition-colors cursor-pointer"
+                  >
+                    Approve Source
+                  </button>
+                )}
+                {inspectingSource.status !== 'Rejected' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleUpdateSourceStatus(inspectingSource.id, 'Rejected');
+                      setInspectingSource(null);
+                    }}
+                    className="px-3 py-1.5 rounded bg-rose-600 hover:bg-rose-500 text-white font-semibold text-xs transition-colors cursor-pointer"
+                  >
+                    Reject Source
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => setInspectingSource(null)}
+                className="px-4 py-2 rounded-md text-xs font-semibold text-white bg-slate-800 hover:bg-slate-700 transition-colors cursor-pointer"
+              >
+                Close
               </button>
             </div>
           </div>

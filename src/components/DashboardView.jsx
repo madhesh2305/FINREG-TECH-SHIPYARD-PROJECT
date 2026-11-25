@@ -4,6 +4,7 @@ import {
   getProjectDetails,
   createProject,
   updateProject,
+  deleteProject,
   saveUserProject,
   normalizeProject,
   formatProjectDate,
@@ -388,6 +389,38 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
     }
   };
 
+  // Permanently delete/remove a project from backend and local cache
+  const handleDeleteProject = async (proj) => {
+    const target = proj || currentProject;
+    const pid = target?.id || target?.project_id;
+    if (!pid) return;
+
+    const confirmed = typeof window !== 'undefined'
+      ? window.confirm(`Are you sure you want to remove project "${target.name || pid}"? This will permanently delete the project.`)
+      : true;
+    if (!confirmed) return;
+
+    try {
+      await deleteProject(pid);
+      setToastMessage(`Project "${target.name || pid}" removed successfully.`);
+      const remaining = allProjects.filter(
+        (p) => String(p.id) !== String(pid) && String(p.project_id) !== String(pid)
+      );
+      setAllProjects(remaining);
+      if (remaining.length > 0) {
+        setSelectedProject(remaining[0]);
+      } else {
+        setSelectedProject(null);
+        setActiveTab('My Projects');
+      }
+    } catch (err) {
+      console.warn('[DashboardView] handleDeleteProject error:', err);
+      setToastMessage(`Failed to remove project: ${err.message || 'Server error'}`);
+    } finally {
+      setTimeout(() => setToastMessage(null), 3500);
+    }
+  };
+
   // Real Project Attachments (PDF uploads via backend /projects/{projectId}/attachments)
   const [projectAttachments, setProjectAttachments] = useState([]);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
@@ -638,8 +671,11 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
   const acceptedReviewsCount = dynamicAdviceList.filter((a) => a.status === 'Accepted').length;
   const clarificationReviewsCount = dynamicAdviceList.filter((a) => a.status === 'Needs Clarification').length;
 
-  // Metric Cards Config computed dynamically from live user projects
-  const activeCount = allProjects.filter((p) => p.status === 'In Progress').length;
+  // Metric Cards Config computed dynamically from live user projects (matches Active and In Progress)
+  const activeCount = allProjects.filter((p) => {
+    const s = String(p.status || p.rawStatus || '').toUpperCase();
+    return s === 'ACTIVE' || s === 'IN PROGRESS';
+  }).length;
   const metricsData = [
     { id: 'active', label: 'Active projects', val: String(activeCount).padStart(2, '0'), sub: `${allProjects.length} total projects` },
     { id: 'requirements', label: 'Open requirements', val: '00', sub: 'From project rulebooks' },
@@ -1562,18 +1598,31 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                               <td className="py-4 px-5 font-medium text-slate-700 dark:text-slate-200">
                                 {project.owner || 'Project Owner'}
                               </td>
-                              <td className="py-4 px-5 text-right">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleOpenProject(project);
-                                  }}
-                                  className="text-xs font-bold text-[#7c4a27] dark:text-amber-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
-                                >
-                                  <span>Open</span>
-                                  <ArrowRight className="w-3.5 h-3.5" />
-                                </button>
+                              <td className="py-4 px-5 text-right whitespace-nowrap">
+                                <div className="flex items-center justify-end gap-3">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenProject(project);
+                                    }}
+                                    className="text-xs font-bold text-[#7c4a27] dark:text-amber-400 hover:underline inline-flex items-center gap-1 cursor-pointer"
+                                  >
+                                    <span>Open</span>
+                                    <ArrowRight className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleDeleteProject(project);
+                                    }}
+                                    title="Delete project"
+                                    className="text-slate-400 hover:text-rose-400 p-1 rounded transition-colors cursor-pointer"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </td>
                             </tr>
                           ))
@@ -2032,7 +2081,7 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                     </p>
                   </div>
 
-                  {/* Top Right Action Buttons: Edit & Open Workflow */}
+                  {/* Top Right Action Buttons: Edit, Delete & Open Workflow */}
                   <div className="flex items-center gap-2.5 shrink-0 pt-2 md:pt-0">
                     <button
                       type="button"
@@ -2048,6 +2097,23 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
                       }`}
                     >
                       Edit
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteProject(currentProject);
+                      }}
+                      title="Remove this project"
+                      className={`px-3.5 py-2.5 rounded-xl font-bold text-xs sm:text-sm border transition-all cursor-pointer flex items-center gap-1.5 ${
+                        isDarkMode
+                          ? 'bg-rose-950/20 border-rose-900/40 text-rose-400 hover:bg-rose-950/40 hover:border-rose-700'
+                          : 'bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100 hover:border-rose-300'
+                      }`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Remove</span>
                     </button>
 
                     <button
@@ -2552,7 +2618,11 @@ export default function DashboardView({ isDarkMode, onToggleTheme, onSignOut, cu
 
           {/* TAB: REGULATORY REQUIREMENTS / REGULATORY SUPPORT VIEW */}
           {(activeTab === 'Regulatory Requirements' || activeTab === 'Regulatory Support') && (
-            <RegulatorySupportView isDarkMode={isDarkMode} initialRequirementId={targetRequirementId} />
+            <RegulatorySupportView
+              isDarkMode={isDarkMode}
+              initialRequirementId={targetRequirementId}
+              onNavigateTab={(tab) => setActiveTab(tab)}
+            />
           )}
 
           {/* TAB: ADVICE & DECISIONS VIEW (Matching media_1791738876275_cf9f871c.png) */}

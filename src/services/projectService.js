@@ -429,6 +429,64 @@ export async function updateProject(projectId, updatePayload) {
 }
 
 /**
+ * Deletes a project from PostgreSQL backend and removes it from user vault.
+ */
+export async function deleteProject(projectId) {
+  const cleanId = resolveProjectId(projectId);
+  let backendSuccess = false;
+  let lastError = null;
+
+  try {
+    await apiCall(`/projects/${cleanId}`, 'DELETE');
+    backendSuccess = true;
+  } catch (err) {
+    lastError = err;
+    console.warn(`[projectService] DELETE /projects/${cleanId} failed:`, err.message);
+    if (String(cleanId) !== String(projectId)) {
+      try {
+        await apiCall(`/projects/${projectId}`, 'DELETE');
+        backendSuccess = true;
+      } catch (_) {}
+    }
+  }
+
+  // Purge from local persistent storage
+  try {
+    const all = getAllStoredProjects();
+    const pidStr = String(projectId);
+    const cleanStr = String(cleanId);
+    const filtered = all.filter(
+      (p) =>
+        String(p.id) !== pidStr &&
+        String(p.project_id) !== pidStr &&
+        String(p.project_code) !== pidStr &&
+        String(p.id) !== cleanStr &&
+        String(p.project_id) !== cleanStr
+    );
+    localStorage.setItem(USER_PROJECTS_STORAGE_KEY, JSON.stringify(filtered));
+    localStorage.setItem('finreg_projects', JSON.stringify(filtered));
+  } catch (e) {}
+
+  if (recordAdminAuditLog) {
+    recordAdminAuditLog({
+      action: 'Project deleted',
+      event_type: 'Project Lifecycle',
+      actor_email: 'builder@gmail.com',
+      user: 'builder@gmail.com',
+      affectedResource: `Project: ${projectId}`,
+      description: `Project #${projectId} removed by builder.`,
+      status: 'SUCCESS',
+    });
+  }
+
+  if (!backendSuccess && lastError && !isConnectionFailure(lastError)) {
+    throw lastError;
+  }
+
+  return { success: true, project_id: projectId };
+}
+
+/**
  * Updates project lifecycle status: PATCH /admin/projects/{projectId}/status (DEF-38)
  * Gracefully synchronizes across live backend and user vault, and records platform audit log.
  */

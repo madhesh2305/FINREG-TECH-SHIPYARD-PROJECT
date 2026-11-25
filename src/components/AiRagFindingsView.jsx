@@ -194,15 +194,15 @@ export default function AiRagFindingsView({
               className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border ${
                 healthStatus.isOnline
                   ? 'border-emerald-800/60 bg-emerald-950/40 text-emerald-400'
-                  : 'border-amber-800/60 bg-amber-950/40 text-amber-300'
+                  : 'border-rose-800/60 bg-rose-950/40 text-rose-300'
               }`}
             >
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
-                  healthStatus.isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'
+                  healthStatus.isOnline ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'
                 }`}
               />
-              <span>{healthStatus.isOnline ? 'RAG Engine Active' : 'Standalone RAG Engine'}</span>
+              <span>{healthStatus.isOnline ? 'RAG Engine Active' : 'Service Unavailable (Port 8001 / 503)'}</span>
             </span>
           </div>
 
@@ -231,6 +231,21 @@ export default function AiRagFindingsView({
           </div>
         </div>
       </div>
+
+      {/* RAG Service Unavailable Diagnostic Banner */}
+      {!healthStatus.isOnline && (
+        <div className="p-4 rounded-xl border border-rose-800/80 bg-rose-950/30 text-rose-200 text-xs sm:text-sm flex items-start gap-3 animate-fadeIn">
+          <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-bold text-rose-300">
+              AI / RAG Microservice Unavailable (Port 8001 / HTTP 503)
+            </p>
+            <p className="text-slate-300 text-xs leading-relaxed">
+              The AI microservice at port 8001 is currently offline or unreachable via Gateway. Retrieval queries and live comparisons will fall back to local cached evidence until the service is restored.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* 2. MODE NAVIGATION TABS */}
       <div className="flex items-center justify-between border-b border-slate-800">
@@ -491,6 +506,23 @@ export default function AiRagFindingsView({
                     </div>
                   )}
                 </div>
+
+                {/* Grounding & Low-Confidence / Routing Notice */}
+                {(queryResult.status !== 'GROUNDED' || !queryResult.grounded) && (
+                  <div className="p-3.5 rounded-xl border border-amber-800/60 bg-amber-950/30 text-amber-200 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fadeIn">
+                    <div className="flex items-center gap-2.5">
+                      <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+                      <span>No grounded evidence found in active supervisory corpus. Routed to Human Review queue.</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTabMode('review')}
+                      className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-semibold shrink-0 cursor-pointer transition-colors"
+                    >
+                      Open Human Review Queue
+                    </button>
+                  </div>
+                )}
 
                 {/* 4 SUMMARY STATS (Section 3: Evidence summary) */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

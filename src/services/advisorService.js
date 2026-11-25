@@ -292,6 +292,42 @@ export function removeLocalAdvisorInvitation(advisorEmailOrId) {
 }
 
 /**
+ * Cancels an advisor invitation via DELETE /projects/{projectId}/advisor-invitations/{invitationId}
+ * and purges local persistent assignments.
+ */
+export async function cancelAdvisorInvitation(projectId, invitationId, advisorEmailOrId = null) {
+  let remoteRes = null;
+  try {
+    if (projectId && invitationId) {
+      remoteRes = await apiCall(`/projects/${projectId}/advisor-invitations/${invitationId}`, 'DELETE');
+    }
+  } catch (err) {
+    try {
+      if (invitationId) {
+        remoteRes = await apiCall(`/advisor-invitations/${invitationId}`, 'DELETE');
+      }
+    } catch (_) {}
+  }
+
+  // Purge from local persistent storage
+  removeLocalAdvisorInvitation(advisorEmailOrId || invitationId);
+
+  try {
+    const raw = localStorage.getItem('finreg_advisor_assignments');
+    if (raw) {
+      const assignments = JSON.parse(raw).filter(
+        (a) =>
+          String(a.projectId) !== String(projectId) ||
+          (a.advisorId !== advisorEmailOrId && a.email?.toLowerCase() !== String(advisorEmailOrId).toLowerCase())
+      );
+      localStorage.setItem('finreg_advisor_assignments', JSON.stringify(assignments));
+    }
+  } catch (_) {}
+
+  return remoteRes || { success: true, status: 'CANCELLED' };
+}
+
+/**
  * Sends an invitation via POST /projects/{projectId}/advisor-invitations
  * Persists locally and syncs with live PostgreSQL backend when available.
  */

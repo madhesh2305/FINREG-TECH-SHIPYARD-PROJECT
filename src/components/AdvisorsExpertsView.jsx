@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Search, Check, CheckCircle2, ArrowLeft, UserX, RefreshCw } from 'lucide-react';
 import {
   sendAdvisorInvitation,
+  cancelAdvisorInvitation,
   getAdvisors,
   getProjectAdvisorInvitations,
   getLocalAdvisorInvitations,
@@ -285,18 +286,16 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
   };
 
   // Cancel Invitation -> Removes advisor from "My Invited Advisors" and re-enables "Invite" button
-  const handleCancelInvitation = (adv) => {
-    // 1. Remove from local persistent storage
-    removeLocalAdvisorInvitation(adv.email || adv.id);
+  const handleCancelInvitation = async (adv) => {
+    const projId = activeProject?.project_id || activeProject?.id || 1;
+    const invId = adv.invitationId || adv.invitation_id || adv.id;
+
+    // 1. Cancel via backend API and remove from local persistent storage
     try {
-      const raw = localStorage.getItem('finreg_advisor_assignments');
-      if (raw) {
-        const assignments = JSON.parse(raw).filter(
-          (a) => a.advisorId !== adv.id && a.email?.toLowerCase() !== adv.email?.toLowerCase()
-        );
-        localStorage.setItem('finreg_advisor_assignments', JSON.stringify(assignments));
-      }
-    } catch (e) {}
+      await cancelAdvisorInvitation(projId, invId, adv.email || adv.id);
+    } catch (e) {
+      removeLocalAdvisorInvitation(adv.email || adv.id);
+    }
 
     // 2. Update state immediately
     setAdvisors((prevAdvisors) =>
@@ -618,8 +617,13 @@ export default function AdvisorsExpertsView({ isDarkMode, onInviteAdvisor, avail
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-amber-400' : ''}`} />
             <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
           </button>
-          <div className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-stone-100 dark:bg-[#161619] text-xs font-medium text-slate-600 dark:text-slate-400">
-            Advisor limit: <span className="font-bold text-slate-900 dark:text-slate-200">{invitedCount} / 2</span>
+          <div
+            title="Projects are limited to 2 concurrent advisors (including pending invitations and active members)"
+            className="px-3.5 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-stone-100 dark:bg-[#161619] text-xs font-medium text-slate-600 dark:text-slate-400 flex items-center gap-1.5"
+          >
+            <span>Advisor limit:</span>
+            <span className="font-bold text-slate-900 dark:text-slate-200">{invitedCount} / 2</span>
+            <span className="text-[10px] text-slate-400 hidden sm:inline">(max 2 active or pending)</span>
           </div>
         </div>
       </div>
