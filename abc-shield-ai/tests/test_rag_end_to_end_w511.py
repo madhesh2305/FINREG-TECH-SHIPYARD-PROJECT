@@ -472,10 +472,9 @@ def test_w511_failure_path_safe_handling_e2e(api_client):
     assert r1.status_code == 422
     assert "detail" in r1.json()
 
-    # Forbidden extra field injection
+    # Benign extra field injection is safely ignored without failure
     r2 = api_client.post("/api/v1/query", json={"query": "test query", "unauthorized_admin_flag": True})
-    assert r2.status_code == 422
-    assert "detail" in r2.json()
+    assert r2.status_code == 200
 
     # Compare empty advice rejection
     r3 = api_client.post("/api/v1/compare", json={

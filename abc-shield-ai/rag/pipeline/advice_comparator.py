@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 import uuid
 import re
 import logging
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from rag.retrieval.retriever import RegulatoryRetriever, RetrievalResult
 from rag.conflict.conflict_detector import ConflictDetector, ConflictFinding, ConflictType
@@ -31,7 +31,7 @@ logger = logging.getLogger(__name__)
 
 class AdvisorAdviceItem(BaseModel):
     """Advice record from an individual legal or compliance advisor."""
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     advice_id: str = Field(..., description="Unique advisor advice identifier (e.g. ADV-001).")
     advice_text: str = Field(..., min_length=1, max_length=4000, description="Natural language advice text from the advisor.")
@@ -40,16 +40,63 @@ class AdvisorAdviceItem(BaseModel):
 
 
 class AdviceComparisonRequest(BaseModel):
-    """Request payload for comparing two advisor advice records."""
-    model_config = ConfigDict(extra="forbid")
+    """Request payload for comparing two advisor advice records.
+
+    Supports two valid input formats:
+    1. Complete objects (Format A): advisor_1 and advisor_2 containing full advice_text.
+    2. ID-only references (Format B): advisor_1_id and advisor_2_id (resolved upstream by backend gateway).
+    """
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     comparison_id: Optional[str] = Field(None, description="Optional correlation comparison identifier.")
     request_id: Optional[str] = Field(None, description="Optional upstream request correlation identifier.")
     project_id: Optional[str] = Field(None, description="Optional workspace / tenant context.")
     requirement_ids: Optional[List[str]] = Field(None, description="Optional upstream requirement identifiers.")
-    advisor_1: AdvisorAdviceItem = Field(..., description="First advisor advice record.")
-    advisor_2: AdvisorAdviceItem = Field(..., description="Second advisor advice record.")
+    advisor_1: Optional[AdvisorAdviceItem] = Field(None, description="First advisor advice record with full advice_text.")
+    advisor_2: Optional[AdvisorAdviceItem] = Field(None, description="Second advisor advice record with full advice_text.")
+    advisor_1_id: Optional[str] = Field(None, description="First advisor identifier (for ID-only integration requests).")
+    advisor_2_id: Optional[str] = Field(None, description="Second advisor identifier (for ID-only integration requests).")
+    topic: Optional[str] = Field(None, description="Optional comparison topic.")
     context: Optional[Dict[str, Any]] = Field(None, description="Optional context hints (e.g. jurisdiction, regulatory_area).")
+
+    @model_validator(mode="after")
+    def validate_advisor_inputs(self) -> "AdviceComparisonRequest":
+        """Validate that either complete advisor objects or both advisor IDs are provided."""
+        has_obj1 = self.advisor_1 is not None
+        has_obj2 = self.advisor_2 is not None
+        has_complete_objects = has_obj1 and has_obj2
+
+        # Check partial advisor objects
+        if has_obj1 != has_obj2:
+            raise ValueError(
+                "Incomplete advisor objects provided: both advisor_1 and advisor_2 must be provided together."
+            )
+
+        # Check advisor IDs
+        has_id1 = self.advisor_1_id is not None
+        has_id2 = self.advisor_2_id is not None
+
+        if has_id1 != has_id2:
+            raise ValueError(
+                "Incomplete advisor IDs provided: both advisor_1_id and advisor_2_id must be provided together."
+            )
+
+        has_ids = False
+        if has_id1 and has_id2:
+            if not isinstance(self.advisor_1_id, str) or not self.advisor_1_id.strip():
+                raise ValueError("advisor_1_id must be a non-empty string.")
+            if not isinstance(self.advisor_2_id, str) or not self.advisor_2_id.strip():
+                raise ValueError("advisor_2_id must be a non-empty string.")
+            has_ids = True
+
+        if not has_complete_objects and not has_ids:
+            raise ValueError(
+                "Must provide either complete advisor objects (advisor_1 and advisor_2 with advice_text) "
+                "or advisor identifiers (advisor_1_id and advisor_2_id)."
+            )
+
+        return self
+
 
 
 # ==============================================================================
@@ -497,6 +544,12 @@ class AdviceComparator:
         top_k: int = 5,
     ) -> AdviceComparisonResult:
         """Execute advice comparison using a validated AdviceComparisonRequest model."""
+        if request.advisor_1 is None or request.advisor_2 is None:
+            raise ValueError(
+                f"Cannot execute advice comparison: bare advisor IDs provided "
+                f"(advisor_1_id='{request.advisor_1_id}', advisor_2_id='{request.advisor_2_id}') "
+                "without resolved advisor objects. The Main Backend Gateway must resolve advice records from PostgreSQL."
+            )
         return self.compare_advice(
             advisor_1=request.advisor_1,
             advisor_2=request.advisor_2,

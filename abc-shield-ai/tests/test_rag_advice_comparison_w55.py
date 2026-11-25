@@ -377,14 +377,15 @@ def test_w55_http_compare_endpoint(api_client):
 
 
 # ==============================================================================
-# 16. HTTP API route rejects unauthorized extra fields via extra="forbid"
+# 16. HTTP API route safely ignores benign extra fields via extra="ignore"
 # ==============================================================================
 def test_w55_http_compare_extra_forbid_enforced(api_client):
-    """Test 16: POST /api/v1/compare rejects extra top-level fields with HTTP 422."""
+    """Test 16: POST /api/v1/compare safely ignores extra top-level fields with HTTP 200."""
     payload = {
         "advisor_1": {"advice_id": "A1", "advice_text": "Advice 1"},
         "advisor_2": {"advice_id": "A2", "advice_text": "Advice 2"},
         "unauthorized_field": "injected_value",
     }
     response = api_client.post("/api/v1/compare", json=payload)
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json()["decision"] is None

@@ -384,13 +384,12 @@ def test_w59_security_approval_gating_fail_closed(grounded_generator):
 # ==============================================================================
 
 def test_w59_project_tenant_isolation_and_schema_guardrails():
-    """Test 12: Enforce extra='forbid' to prevent client payload bypass and enforce isolation."""
-    # Extra unexpected fields must raise ValidationError
-    with pytest.raises(ValidationError):
-        QueryRequest(
-            query="test query",
-            malicious_field="bypass_authorization",  # type: ignore[call-arg]
-        )
+    # Extra unexpected fields are safely ignored via extra='ignore'
+    req = QueryRequest(
+        query="test query",
+        malicious_field="bypass_authorization",  # type: ignore[call-arg]
+    )
+    assert not hasattr(req, "malicious_field")
 
     # Valid request with project_id
     valid_req = QueryRequest(

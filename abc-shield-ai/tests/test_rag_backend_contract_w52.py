@@ -167,17 +167,17 @@ def test_w52_invalid_whitespace_query_rejected(api_client):
 
 
 # ==============================================================================
-# 8. Unknown top-level field rejected
+# 8. Unknown top-level fields ignored safely
 # ==============================================================================
 def test_w52_unknown_top_level_field_rejected(api_client):
-    """Test 8: Unknown/unauthorized top-level fields are rejected via extra='forbid' with HTTP 422."""
+    """Test 8: Unknown/unauthorized top-level fields are safely ignored via extra='ignore' with HTTP 200."""
     # Attempting to inject arbitrary unauthorized fields
     payload_extra = {
         "query": "What is Section 1?",
         "unauthorized_field": "exploit_value",
     }
     resp = api_client.post("/api/v1/query", json=payload_extra)
-    assert resp.status_code == 422
+    assert resp.status_code == 200
 
     # Attempting to bypass server-side approval gate
     payload_approval = {
@@ -185,7 +185,8 @@ def test_w52_unknown_top_level_field_rejected(api_client):
         "is_approved_for_rag": True,
     }
     resp_appr = api_client.post("/api/v1/query", json=payload_approval)
-    assert resp_appr.status_code == 422
+    assert resp_appr.status_code == 200
+    assert resp_appr.json()["metadata"]["approved_evidence_count"] == 0
 
     # Attempting to inject client provider override
     payload_provider = {
@@ -193,7 +194,7 @@ def test_w52_unknown_top_level_field_rejected(api_client):
         "provider": "malicious_provider",
     }
     resp_prov = api_client.post("/api/v1/query", json=payload_provider)
-    assert resp_prov.status_code == 422
+    assert resp_prov.status_code == 200
 
 
 # ==============================================================================

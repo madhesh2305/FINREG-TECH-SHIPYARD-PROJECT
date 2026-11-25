@@ -48,12 +48,19 @@ def client():
 
 def test_default_settings_mode_is_canonical():
     """Test 1: Configuration defaults to canonical knowledge base mode and 25-vector collection."""
+    project_root = Path(__file__).resolve().parent.parent
+    expected_canonical_path = (project_root / "data" / "staging" / "madhesh_handover" / "step6" / "chroma_db").resolve()
+    expected_legacy_path = (project_root / "data" / "processed" / "chroma_db").resolve()
+
     assert settings.rag_knowledge_base_mode == "canonical"
     assert settings.chroma_collection_name == "canonical_regulatory_records"
-    assert Path(settings.chroma_persist_dir) == Path("data/staging/madhesh_handover/step6/chroma_db")
-    assert Path(settings.canonical_chroma_persist_dir) == Path("data/staging/madhesh_handover/step6/chroma_db")
+    assert Path(settings.chroma_persist_dir).resolve() == expected_canonical_path
+    assert Path(settings.canonical_chroma_persist_dir).resolve() == expected_canonical_path
+    assert Path(settings.chroma_persist_dir).is_absolute()
+    assert Path(settings.canonical_chroma_persist_dir).is_absolute()
     assert settings.canonical_chroma_collection_name == "canonical_regulatory_records"
-    assert Path(settings.legacy_chroma_persist_dir) == Path("data/processed/chroma_db")
+    assert Path(settings.legacy_chroma_persist_dir).resolve() == expected_legacy_path
+    assert Path(settings.legacy_chroma_persist_dir).is_absolute()
     assert settings.legacy_chroma_collection_name == "regulatory_records"
 
 
@@ -61,8 +68,12 @@ def test_dependency_injection_wires_canonical_vector_store():
     """Test 2: get_configured_vector_store() returns canonical store with exactly 25 vectors."""
     reset_grounded_generator()
     store = get_configured_vector_store()
+    project_root = Path(__file__).resolve().parent.parent
+    expected_canonical_path = (project_root / "data" / "staging" / "madhesh_handover" / "step6" / "chroma_db").resolve()
+
     assert store.collection_name == "canonical_regulatory_records"
-    assert Path(store.persist_dir) == Path("data/staging/madhesh_handover/step6/chroma_db")
+    assert Path(store.persist_dir).resolve() == expected_canonical_path
+    assert Path(store.persist_dir).is_absolute()
     stats = store.get_collection_stats()
     assert stats["total_vectors"] == 25
 

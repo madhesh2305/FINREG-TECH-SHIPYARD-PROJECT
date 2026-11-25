@@ -34,6 +34,40 @@ router = APIRouter(prefix="/api/v1", tags=["Regulatory Intelligence"])
         500: {"description": "Internal server error during pipeline execution"},
     },
 )
+@router.post(
+    "/rag/analyze",
+    response_model=StructuredAIResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Analyze regulatory compliance via RAG (Builder & Backend Integration)",
+    description=(
+        "Direct RAG analysis endpoint utilized by the Frontend Builder and Main Backend Gateway. "
+        "Evaluates regulatory questions against the knowledge base, returning grounded evidence, "
+        "citations, provenance, conflict detection, and human-review classification."
+    ),
+    responses={
+        200: {
+            "description": "Successful execution of the RAG analysis pipeline.",
+            "model": StructuredAIResponse,
+        },
+        422: {"description": "Validation error (e.g. empty, whitespace-only, or oversized query)"},
+        500: {"description": "Internal server error during pipeline execution"},
+    },
+)
+@router.post(
+    "/analyze",
+    response_model=StructuredAIResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Analyze regulatory compliance via RAG (Alias)",
+    description="Alias endpoint for regulatory intelligence analysis.",
+    responses={
+        200: {
+            "description": "Successful execution of the RAG analysis pipeline.",
+            "model": StructuredAIResponse,
+        },
+        422: {"description": "Validation error (e.g. empty, whitespace-only, or oversized query)"},
+        500: {"description": "Internal server error during pipeline execution"},
+    },
+)
 def execute_query(
     request: QueryRequest,
     generator: GroundedGenerator = Depends(get_grounded_generator),

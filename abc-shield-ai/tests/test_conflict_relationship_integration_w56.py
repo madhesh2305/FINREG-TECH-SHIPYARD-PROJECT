@@ -501,10 +501,10 @@ def test_w56_http_api_compare_serialization(api_client):
 
 
 # ==============================================================================
-# 20. REST API strict validation (extra="forbid")
+# 20. REST API extra fields safely ignored (extra="ignore")
 # ==============================================================================
 def test_w56_http_api_extra_forbid_rejection(api_client):
-    """Test 20: POST /api/v1/compare rejects injected extra fields with HTTP 422."""
+    """Test 20: POST /api/v1/compare safely ignores injected extra fields with HTTP 200."""
     payload = {
         "advisor_1": {"advice_id": "A1", "advice_text": "Advice 1"},
         "advisor_2": {"advice_id": "A2", "advice_text": "Advice 2"},
@@ -512,4 +512,5 @@ def test_w56_http_api_extra_forbid_rejection(api_client):
         "correct_advisor": "A1",
     }
     response = api_client.post("/api/v1/compare", json=payload)
-    assert response.status_code == 422
+    assert response.status_code == 200
+    assert response.json()["decision"] is None

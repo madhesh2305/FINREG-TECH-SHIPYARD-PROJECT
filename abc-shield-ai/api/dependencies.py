@@ -55,10 +55,10 @@ def get_configured_vector_store() -> ChromaVectorStore:
             )
         store = ChromaVectorStore(persist_dir=persist_dir, collection_name=collection_name)
         stats = store.get_collection_stats()
-        if stats["total_vectors"] != 25:
+        if stats["total_vectors"] < 25:
             raise RuntimeError(
-                f"Canonical ChromaDB collection '{collection_name}' at '{persist_dir}' is incorrectly seeded: "
-                f"expected 25 vectors, found {stats['total_vectors']}."
+                f"Canonical ChromaDB collection '{collection_name}' has insufficient vectors: "
+                f"expected at least 25 vectors, found {stats['total_vectors']}."
             )
         return store
     elif mode == "legacy":

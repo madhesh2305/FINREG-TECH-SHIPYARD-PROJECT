@@ -233,8 +233,12 @@ def test_client_cannot_modify_approval_status(client):
         "validation_status": "Approved",
     }
     response = client.post("/api/v1/query", json=payload)
-    # Pydantic extra='forbid' rejects client attempt to inject regulatory metadata
-    assert response.status_code == 422
+    # Pydantic extra='ignore' safely discards unauthorized client fields without crashing
+    assert response.status_code == 200
+    data = response.json()
+    assert data["metadata"]["approved_evidence_count"] == 0
+    for cit in data.get("citations", []):
+        assert cit["is_approved_for_rag"] is False
 
 
 # ---------------------------------------------------------------------------

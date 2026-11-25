@@ -19,9 +19,10 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from api.routes.health import router as health_router
-from api.routes.query import router as query_router
+from api.routes.query import router as query_router, execute_query
 from api.routes.compare import router as compare_router
 from api.dependencies import get_grounded_generator
+from rag.output.structured_response import StructuredAIResponse
 from config.settings import settings
 
 logger = logging.getLogger(__name__)
@@ -103,6 +104,10 @@ app.include_router(health_router)
 app.include_router(query_router)
 app.include_router(compare_router)
 
+# Register root-level fallback routes for Builder and Backend integration
+app.add_api_route("/rag/analyze", execute_query, methods=["POST"], response_model=StructuredAIResponse, include_in_schema=False)
+app.add_api_route("/analyze", execute_query, methods=["POST"], response_model=StructuredAIResponse, include_in_schema=False)
+
 
 # Global unhandled exception handler ensuring no internal stack traces or secrets leak to clients
 @app.exception_handler(Exception)
@@ -123,5 +128,5 @@ if __name__ == "__main__":
         "api.main:app",
         host=settings.api_host,
         port=settings.api_port,
-        reload=True,
+        reload=False,
     )

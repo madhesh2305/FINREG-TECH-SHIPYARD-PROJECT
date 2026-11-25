@@ -333,9 +333,9 @@ def test_w53_no_unsupported_frontend_fields_added():
     actual_fields = set(StructuredAIResponse.model_fields.keys())
     assert actual_fields == expected_fields, f"Unexpected fields added: {actual_fields - expected_fields}"
 
-    # Verify QueryRequest strictly forbids client extra fields
-    with pytest.raises(Exception):
-        QueryRequest(
-            query="test query",
-            unsupported_ui_state="draft",  # type: ignore
-        )
+    # Verify QueryRequest safely ignores client extra fields without crashing
+    req = QueryRequest(
+        query="test query",
+        unsupported_ui_state="draft",  # type: ignore
+    )
+    assert not hasattr(req, "unsupported_ui_state")
