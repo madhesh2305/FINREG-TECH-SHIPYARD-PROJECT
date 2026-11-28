@@ -9,6 +9,7 @@ from app.security.authentication import get_current_user
 from app.security.authorization import ProjectAccessGuard, require_platform_role, require_project_member, require_project_owner
 from app.services.project_service import (
     create_project,
+    delete_project,
     list_user_projects,
     get_project_by_id,
     update_project,
@@ -31,7 +32,7 @@ def _get_project_advisors(db: Session, project_id: int) -> List[str]:
             advisors.append(m.user.full_name or m.user.email)
     invs = db.query(AdvisorInvitation).filter(
         AdvisorInvitation.project_id == project_id,
-        AdvisorInvitation.invitation_status.in_(["ACCEPTED", "PENDING"])
+        AdvisorInvitation.invitation_status == "ACCEPTED"
     ).all()
     for inv in invs:
         u = db.query(User).filter(User.email.ilike(inv.advisor_email)).first()
@@ -207,3 +208,18 @@ def get_project_workflow_step(
             }
     from app.core.exceptions import NotFoundError
     raise NotFoundError(f"Workflow step '{stepId}' not found in project '{project.project_code}'")
+
+
+@router.delete(
+    "/{projectId}",
+    status_code=status.HTTP_200_OK,
+    summary="Delete Project",
+    description="Permanently removes a project and dependent records while preserving immutable audit history. Restricted to project OWNER."
+)
+def delete_project_endpoint(
+    projectId: Union[int, str],
+    membership: ProjectMember = Depends(require_project_owner),
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    return delete_project(db=db, project_id=membership.project_id, actor=current_user)

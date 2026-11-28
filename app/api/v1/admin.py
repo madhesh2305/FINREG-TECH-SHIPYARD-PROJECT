@@ -457,8 +457,18 @@ def list_admin_advisor_invitations(
                 expertise = prof.specialization
 
         status_str = inv.invitation_status.capitalize() if inv.invitation_status else "Pending"
-        badge_class = "bg-[#12281b] border-emerald-800/50 text-emerald-400" if status_str == "Accepted" else "bg-[#281d11] border-amber-800/50 text-amber-400"
-        dot_class = "bg-emerald-400" if status_str == "Accepted" else "bg-amber-400"
+        if status_str == "Accepted":
+            badge_class = "bg-[#12281b] border-emerald-800/50 text-emerald-400"
+            dot_class = "bg-emerald-400"
+            access_status = "Active"
+        elif status_str in ("Revoked", "Expired"):
+            badge_class = "bg-[#2c1518] border-rose-800/50 text-rose-400"
+            dot_class = "bg-rose-400"
+            access_status = status_str
+        else:
+            badge_class = "bg-[#281d11] border-amber-800/50 text-amber-400"
+            dot_class = "bg-amber-400"
+            access_status = "Pending Acceptance"
 
         results.append({
             "id": f"INV-{str(inv.invitation_id).zfill(3)}",
@@ -473,7 +483,7 @@ def list_admin_advisor_invitations(
             "status": status_str,
             "statusBadgeClass": badge_class,
             "statusDotClass": dot_class,
-            "accessStatus": "Active" if status_str == "Accepted" else "Pending Acceptance"
+            "accessStatus": access_status
         })
     return results
 
@@ -518,3 +528,44 @@ def list_admin_audit_events(
             created_at=e.created_at
         ))
     return results
+
+
+@router.get(
+    "/regulatory-sources",
+    status_code=status.HTTP_200_OK,
+    summary="List Regulatory Sources for Admin Review",
+    description="Returns all regulatory sources with lifecycle status, provenance, and reviewer metadata. Restricted to ADMIN."
+)
+def list_admin_regulatory_sources(
+    validation_state: Optional[str] = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    current_user: User = Depends(require_platform_role("ADMIN")),
+    db: Session = Depends(get_db)
+):
+    from app.services.regulatory_service import list_regulatory_sources
+    items, total = list_regulatory_sources(
+        db=db,
+        validation_state=validation_state,
+        page=page,
+        page_size=page_size,
+    )
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.patch(
+    "/regulatory-sources/{sourceId}/validate",
+    status_code=status.HTTP_200_OK,
+    summary="Admin Validate Regulatory Source",
+    description="Approve, Reject, or Request Changes on a regulatory source with reviewer and reason persisted to audit log. Restricted to ADMIN."
+)
+def admin_validate_regulatory_source(
+    sourceId: int,
+    payload: dict,
+    current_user: User = Depends(require_platform_role("ADMIN")),
+    db: Session = Depends(get_db)
+):
+    from app.schemas.regulatory import RegulatorySourceValidationRequest
+    from app.services.regulatory_service import validate_regulatory_source
+    req = RegulatorySourceValidationRequest(**payload)
+    return validate_regulatory_source(db=db, source_id=sourceId, request=req, reviewer=current_user)

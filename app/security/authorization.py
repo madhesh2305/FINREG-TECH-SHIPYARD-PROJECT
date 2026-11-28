@@ -52,12 +52,12 @@ class ProjectAccessGuard:
         ).first()
 
         if not membership:
-            # Check if user has an active or pending advisor invitation for this project
+            # Grant project access ONLY if the user has an explicitly ACCEPTED invitation
             from app.models.advisor import AdvisorInvitation
             invitation = db.query(AdvisorInvitation).filter(
                 AdvisorInvitation.project_id == project.project_id,
                 AdvisorInvitation.advisor_email.ilike(current_user.email.strip()),
-                AdvisorInvitation.invitation_status.in_(["PENDING", "ACCEPTED"])
+                AdvisorInvitation.invitation_status == "ACCEPTED"
             ).first()
 
             if invitation:

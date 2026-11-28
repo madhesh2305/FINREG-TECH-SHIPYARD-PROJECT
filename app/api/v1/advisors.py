@@ -14,6 +14,7 @@ from app.schemas.advisor import (
 )
 from app.security.authentication import get_current_user
 from app.security.authorization import require_project_member, require_project_owner
+from app.core.exceptions import NotFoundError
 from app.services.advisor_service import (
     list_advisors,
     get_advisor_by_id,
@@ -23,7 +24,8 @@ from app.services.advisor_service import (
     resend_advisor_invitation,
     revoke_advisor_invitation,
     cancel_advisor_invitation,
-    accept_advisor_invitation
+    accept_advisor_invitation,
+    get_project_advisor_slot_summary
 )
 
 router = APIRouter(tags=["Advisors & Invitations"])
@@ -188,6 +190,31 @@ def revoke_invitation(
 ):
     return revoke_advisor_invitation(db=db, project_id=membership.project_id, invitation_id=invitationId, actor=current_user)
 
+@router.get(
+    "/projects/{projectId}/advisor-summary",
+    status_code=status.HTTP_200_OK,
+    summary="Get Project Advisor Counts & 2-Advisor Limit Summary",
+    description="Returns separated directory count, pending invitations, accepted advisors, and occupied slots under the 2-advisor policy."
+)
+def get_project_advisor_summary(
+    projectId: Union[int, str],
+    membership: ProjectMember = Depends(require_project_member),
+    db: Session = Depends(get_db)
+):
+    slot_summary = get_project_advisor_slot_summary(db=db, project_id=membership.project_id)
+    directory_count = db.query(AdvisorProfile).count()
+    return {
+        "project_id": membership.project_id,
+        "directory_advisors_count": directory_count,
+        "active_advisors_count": slot_summary["active_advisors"],
+        "pending_invitations_count": slot_summary["pending_invitations"],
+        "occupied_advisor_slots": slot_summary["occupied_slots"],
+        "remaining_advisor_slots": slot_summary["remaining_slots"],
+        "max_advisors": slot_summary["max_advisors"],
+        "counts_rule": slot_summary["counts_rule"],
+    }
+
+
 @router.post(
     "/projects/{projectId}/advisor-invitations/{invitationId}/accept",
     response_model=AdvisorInvitationResponse,
@@ -205,7 +232,9 @@ def accept_invitation(
     if not p_id:
         from app.models.project import Project
         p = db.query(Project).filter(Project.project_code == str(projectId)).first()
-        p_id = p.project_id if p else 1
+        if not p:
+            raise NotFoundError(f"Project '{projectId}' not found")
+        p_id = p.project_id
     return accept_advisor_invitation(db=db, project_id=p_id, invitation_id=invitationId, actor=current_user)
 
 @router.post(
@@ -213,13 +242,13 @@ def accept_invitation(
     response_model=AdvisorInvitationResponse,
     status_code=status.HTTP_200_OK,
     summary="Cancel Advisor Invitation",
-    description="Marks a pending invitation as CANCELLED (UAT-INV-02, UAT-AUD-01). Requires project member/owner."
+    description="Marks an advisor invitation as REVOKED and revokes project access (UAT-INV-02, UAT-AUD-01). Requires project OWNER."
 )
 def cancel_invitation_post(
     projectId: Union[int, str],
     invitationId: int,
     current_user: User = Depends(get_current_user),
-    membership: ProjectMember = Depends(require_project_member),
+    membership: ProjectMember = Depends(require_project_owner),
     db: Session = Depends(get_db)
 ):
     return cancel_advisor_invitation(db=db, project_id=membership.project_id, invitation_id=invitationId, actor=current_user)
@@ -229,13 +258,13 @@ def cancel_invitation_post(
     response_model=AdvisorInvitationResponse,
     status_code=status.HTTP_200_OK,
     summary="Cancel/Delete Advisor Invitation (REST)",
-    description="Marks a pending invitation as CANCELLED via DELETE (UAT-INV-02, UAT-AUD-01). Requires project member/owner."
+    description="Marks an advisor invitation as REVOKED via DELETE and revokes project access (UAT-INV-02, UAT-AUD-01). Requires project OWNER."
 )
 def cancel_invitation_delete(
     projectId: Union[int, str],
     invitationId: int,
     current_user: User = Depends(get_current_user),
-    membership: ProjectMember = Depends(require_project_member),
+    membership: ProjectMember = Depends(require_project_owner),
     db: Session = Depends(get_db)
 ):
     return cancel_advisor_invitation(db=db, project_id=membership.project_id, invitation_id=invitationId, actor=current_user)

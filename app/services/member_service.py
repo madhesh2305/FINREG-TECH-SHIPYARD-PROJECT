@@ -29,6 +29,11 @@ def add_project_member(db: Session, project_id: int, request: MemberCreate, acto
     if target_user.role and target_user.role.role_name == "ADVISOR" and request.service_role == "OWNER":
         raise ForbiddenError("Platform ADVISOR cannot be assigned the project OWNER role")
 
+    # Enforce 2-advisor limit consistently on non-OWNER project membership additions
+    if request.service_role != "OWNER":
+        from app.services.advisor_service import assert_advisor_slot_available
+        assert_advisor_slot_available(db, project_id, target_email=target_user.email)
+
     # Determine canonical scope
     service_scope = request.service_scope or ROLE_TO_DEFAULT_SCOPE.get(request.service_role, "PROJECT_SUPPORT")
 
@@ -147,6 +152,19 @@ def revoke_project_member(db: Session, project_id: int, member_id: int, actor: U
 
     old_status = member.member_status
     member.member_status = "REVOKED"
+
+    # Keep advisor invitations in sync when a non-OWNER advisor member is revoked
+    if member.service_role != "OWNER" and member.user and member.user.email:
+        from app.models.advisor import AdvisorInvitation
+        now = datetime.now(timezone.utc)
+        matching_invs = db.query(AdvisorInvitation).filter(
+            AdvisorInvitation.project_id == project_id,
+            AdvisorInvitation.advisor_email.ilike(member.user.email.strip()),
+            AdvisorInvitation.invitation_status.in_(["PENDING", "ACCEPTED"]),
+        ).all()
+        for inv in matching_invs:
+            inv.invitation_status = "REVOKED"
+            inv.revoked_at = now
 
     log_audit_event(
         db=db,
